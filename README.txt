@@ -873,3 +873,95 @@ FORGE GLOW (v5_54)
     and the pulse in animPlayer(). 2D versions: fgBody() / fgWeapon() above drawPlayerE() in web/index.html.
   - REBUILD (build.bat) and hard-refresh (Ctrl+F5).
 
+
+
+v5_143  Qi regen on Ring and Necklace
+    New special stat "Qi regen" (% of max Qi per second), only on Ring and Necklace. It is added to the base regen (3 + 0.1 per level per second).
+    Per piece: grade x 0.05% x rarity roll (Common .6-.9, Rare .9-1.2, Epic 1.2-1.6, Legendary 1.6-2.2) + 0.01% per forge level.
+    Examples: Common grade 1 +0 = 0.04%/s, Legendary grade 12 +0 = 1.14%/s, forge +100 adds 1.0%/s. Total from gear is capped at QRG_CAP (6%/s).
+    Tune in web/index.html: GEAR (ring / neck, qrg:[per grade, per forge level]), SPECIAL, QRG_CAP, qrgVal().
+    Old rings / necklaces get the mid roll of their rarity for their grade when the save loads (addQrg). Shown in the bag, forge, inspect and the stats panel ("Qi regen (gear)").
+
+v5_143  Admin commands for forge level
+    /forge                    show the forge level of every slot
+    /forge [slot|all] 0-100   set the forge level (one slot, or all; "/forge 50" = all slots)
+    /forgereset [slot|all]    set the forge level back to +0 (no argument = all slots)
+    Slots: wpn wpn2 robe ear neck ring brace glove belt legs boot (also: weapon, blade, necklace, boots, gloves ...). The level belongs to the slot,
+    so it works with or without an item worn; wpn / robe set the Blade / Robe level. Admin only, like the other commands (the server forwards them to the client).
+
+
+v5_143  Buff tooltip + exponential forge
+    Buff icons (top-left, under the HP bar): hover with the mouse (or tap on a phone) to see the buff name, its description with the live numbers and the seconds left,
+    in a see-through panel. Buffs: ATK Boost, Veil, Damage Reduction, Eagle Eye, Spirits, Shield. Code: bfTip* functions and #bftip in web/index.html.
+    Forge bonus is now exponential from +10: up to +10 every level counts as 1 step of bonus (as before); above that each level counts FORGE_EXP (1.04) times more than the
+    level before it. forgeEff(lv) in web/index.html gives the number of steps and is used for gear, the Blade / Robe, the forge window, the bag and player inspect.
+    Steps:  +10 = 10 | +20 = 22.5 | +30 = 41 | +50 = 109 | +70 = 258 | +100 = 871 (linear before: 10 / 20 / 30 / 50 / 70 / 100).
+    Tune FORGE_EXP_FROM and FORGE_EXP next to CORE_FORGED (FORGE_EXP 1 = old linear). Note: gear Qi regen is also forge-scaled and is capped by QRG_CAP (6%/s).
+
+
+v5_143  Max Qi reduced by 25%
+    QI_MUL 2 -> 1.5 in web/index.html: max Qi is now (60 + 4 x level) x class bonus x 1.5 (25% less than the doubled pool of v5_123). Qi regeneration, skill costs and potion percentages
+    are unchanged, so Qi regen is relatively a third stronger and gear Qi regen (% of max Qi) gives 25% fewer Qi per second than before. Set QI_MUL to 2 to undo, 1 for half.
+
+
+v5_143  Forge window shows the real gain
+    The forge window now shows "Forge gain: +X ATK ..." (green) for the next level instead of the growth percentage. From +10 it adds "Every level above +10 gives more than the last."
+    Example Blade: +9 -> +10 = +1.26 ATK, +11 -> +12 = +1.36, +20 -> +21 = +1.94, +50 -> +51 = +6.29, +99 -> +100 = +42.99. Code: forgeGain() in web/index.html.
+
+
+v5_148  Percent forge (forge 0 vs +100 no longer huge)
+    The forge bonus of ATK / DEF / HP is no longer a flat amount (that gave x200 power at level 1 and x1.7 at level 1000). It is now a PERCENTAGE of your level + gear stats,
+    so it is the same at any character level, and it follows a curve: bonus = 40% x (forge / 100) ^ 2 for a full set (every slot at that forge level).
+    Each slot, and the Blade / Robe, gets its share of the 40% (its old per-level weight). Starting Blade only (+100) = about +16% ATK, Robe only = about +20% DEF / +16% HP.
+    Full set: +10 = +0.4% | +30 = +3.6% | +50 = +10% | +70 = +19.6% | +90 = +32.4% | +100 = +40% (ATK, DEF and HP). Total power, forge 0 -> +100 with a full set: about x1.4 at every level.
+    % stats (crit, attack speed, damage boosts, Qi regen ...) use the same curve: FORGE_PCT_REF = 140 steps at +100 (was 871). Full +100 set: about +7% crit chance, +8.4% attack speed, +5.6% crit ATK DMG, +2.8% Qi regen.
+    The forge window, bag, item text and player inspect show the % ("+X% ATK (forge)", "Forge gain: +X% ATK"). Forge levels in saves are unchanged. Other players' Power uses the same formula.
+    Tune in web/index.html next to forgeFrac(): FORGE_MAX_PCT (.40), FORGE_CURVE (2; 1 = linear, higher = more back-loaded), FORGE_PCT_REF (140). FORGE_EXP is gone.
+
+
+v5_149  Spirit Summoner skill cooldowns x0.5
+    Every Spirit Summoner skill (attacks, Soul Mend, Soul Harvest, summons) now has half its final cooldown (after the +6 s and the 2x on healing skills): SUMMONER_CD_MUL = 0.5 in web/index.html, right after SKILL_CD_ADD.
+    Average cooldown: Summoner 16.3 s -> 8.2 s (Night Blade 12.0, Storm Archer 13.1, Cultivator 14.6, Iron Guardian 15.6). Fastest skill 5 s (Soul Burst), Soul Mend 13 s, Wolves 9 s, Phantom Guardian 10 s, Spirit Bomb 7 s.
+    Other classes, Qi costs, and the spirits' / wolves' own attack speed are unchanged. 1 = same as the other classes.
+
+
+v5_150  Spirit Summoner max Qi +25%
+    The Summoner's max Qi class bonus is 1.3 -> 1.625 (x1.25 on top of the old +30%, so +62.5% over the base pool): CLB[4].qi in web/index.html. The class description now says "+62.5% max Qi".
+    Max Qi = (60 + 4 x level) x 1.625 x QI_MUL (1.5). Example: level 1 = 156 Qi (was 125), level 1000 = 9,896 Qi (was 7,917). Regen, skill costs and potions are percent based / unchanged. Other classes unchanged.
+
+
+v5_151  Msg button removed from the top bar
+    The envelope "Msg" button (top-right icon row) is gone. Private chat still opens with the I key and the /w name message command; the unread badge that sat on that button is no longer shown.
+
+
+v5_152  Moving is never blocked by casting
+    A move input (WASD / arrows / joystick, or tapping / clicking the ground) cancels the cast pose at once, and a skill cast while you are moving does not root you at all (no cast pose, no stop).
+    Before, every cast rooted you for 0.6 s (1.0 s for long skills) and auto-cast chained the roots (0.45 s between casts), so you could hardly walk with auto skills on. Damage, Qi cost and cooldown of the skill are unchanged
+    (they happen when you cast). Auto skills keep firing while you run, so ranged classes can kite. Standing still still plays the cast pose and roots you as before. Code: wantsMove() and the P.cast lines in web/index.html.
+
+
+v5_153  Auto skills pause while you move; casting roots you again
+    Replaces the "no root while moving" part of v5_152. Auto-cast skills do NOT fire while you steer (WASD / arrows / joystick): stop moving and they cast again. Casting a skill roots you again (0.6 s, 1.0 s for long skills, as before),
+    but a move input still cancels the cast pose at once, so you are never stuck: you walk away whenever you want, and auto skills stay paused until you stop. Tap / click-to-move also cancels the cast.
+    Code: wantsMove() in web/index.html (auto-cast loop checks it; useSkill roots again).
+
+
+v5_154  Cast pose is not cancelled by moving
+    A move input no longer ends the cast pose: the pose plays to the end (0.6 s, 1.0 s for long skills), then you walk (hold the key / joystick and you start moving as soon as it ends). Tap / click-to-move also waits.
+    Still true from v5_153: auto skills do not cast while you steer with keys / joystick, and casting roots you. Dodge still cancels a cast. Removed: the P.cast=0 on move input (v5_152).
+
+
+v5_155  Shorter cast pose
+    Casting roots you for 0.3 s (was 0.6 s), and 0.5 s for the long skills (was 1.0 s): CAST_T and CAST_T_LONG in web/index.html. Everything else from v5_154 is unchanged.
+
+
+v5_156  Skill slots R and T are priority skills
+    The skills in slot 13 (R) and slot 14 (T) can be cast at any moment when you press the key, click or tap the button: they ignore the short global lock (0.45 s after any cast, also after a dodge) and interrupt a cast pose in progress.
+    Cooldown and Qi cost still apply (and the hub rules). Slots R and T never auto-cast (as before), and a priority cast still starts the normal cast pose and global lock, so auto skills wait a moment after it. Code: 'prio' in useSkill() in web/index.html.
+
+
+v5_157  Bigger monster and boss leash
+    A chasing monster gives up and walks home when you are further than LOSE from it, or when it is further than LEASH from its spawn point.
+    Normal monsters: lose 650 -> 1000, leash 520 -> 800.  Bosses: lose 2400 -> 3600, leash 3000 -> 4500.
+    The multiplayer SERVER (game.go) used 650 / 520 for every monster including bosses, so online bosses reset much sooner than the solo client; the server now has separate boss values (monLose, monLeash, bossLose, bossLeash).
+    Keep them equal to MON_LOSE / MON_LEASH / BOSS_LOSE / BOSS_LEASH in web/index.html. Aggro radius (190, boss 300) is unchanged. REBUILD (build.bat) for the server change and hard-refresh (Ctrl+F5).

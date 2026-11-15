@@ -32,6 +32,11 @@ const (
 	viewR       = 1800.0
 	monHpPerLv  = 0.005
 
+	// v5_157 monster / boss LEASH (keep equal to MON_LOSE / MON_LEASH / BOSS_LOSE / BOSS_LEASH in web/index.html): a chasing monster gives up and returns home when you are
+	// further than *Lose from it, or when it is further than *Leash from its home. Was 650 / 520 for every monster (the client had 2400 / 3000 for bosses in solo only).
+	monLose, monLeash   = 1000.0, 800.0
+	bossLose, bossLeash = 3600.0, 4500.0
+
 	// PvP: right-clicking another player flags you for pvpFlagSecs; every PvP hit (given or taken) refreshes it.
 	pvpFlagSecs = 30.0
 	pvpMult     = 0.5  // player-vs-player damage multiplier (keep equal to PVP_MULT in web/index.html). v5_71: 0.4 -> 0.5 (gear was halved)
@@ -489,7 +494,7 @@ func (r *Realm) simMon(m *Mon, dt float64) {
 	if m.state == 1 {
 		t := m.target
 		if t == nil || t.gone || t.realm != r || !t.hunted() ||
-			dist(t.x, t.y, m.x, m.y) > 650 || dist(m.x, m.y, m.hx, m.hy) > 520 {
+			dist(t.x, t.y, m.x, m.y) > leashLose(m.boss) || dist(m.x, m.y, m.hx, m.hy) > leashHome(m.boss) {
 			m.state = 2
 			m.target = nil
 		}
@@ -1547,4 +1552,18 @@ func (h *Hub) command(p *Player, r *Realm, line string) {
 	default:
 		p.send(jsonBytes(map[string]interface{}{"t": "cmd", "m": line}))
 	}
+}
+
+func leashLose(boss bool) float64 {
+	if boss {
+		return bossLose
+	}
+	return monLose
+}
+
+func leashHome(boss bool) float64 {
+	if boss {
+		return bossLeash
+	}
+	return monLeash
 }
