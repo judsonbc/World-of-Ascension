@@ -1,3 +1,107 @@
+TAP TO MOVE OPTION (phones) (v5_134)
+  - New checkbox in the Menu window (phone mode only): 'Tap to move'. On (default, as before): tapping the ground walks your hero there. Off: tapping the ground does nothing and the joystick is the only way to walk. Tapping monsters (select / double tap to attack), ore veins, other players and the shop still works either way, and turning it off cancels a walk already in progress.
+  - The choice is saved with your character (same place as 'Fight back' and 'Auto-use potions'). The option is hidden on desktop, where clicking to move is unchanged.
+
+SKILL COOLDOWNS +3 s MORE (v5_133)
+  - Every skill of every class has 3 more seconds of cooldown (SKILL_CD_ADD in web/index.html is now 6: the +3 s from v5_123 plus this +3 s). It applies to all five classes and to every tier, and the skill book, the cooldown overlay on the buttons and casting all use the new value.
+
+FORGE STRIKE ANIMATION (v5_132)
+  - Forging now takes 1 second: a progress bar between the current and the next level (+5 [====    ] +6) fills while the Forge button shows 'Forging...'. The result (success or failure) and the cost are applied when the bar is full, then the SUCCESS / FAILED popup shows.
+  - While the strike runs you cannot start another one or switch to another piece. Nothing is spent until the bar finishes, so closing the game during the second loses nothing. Costs and success chances are unchanged.
+
+FORGE WINDOW REDESIGN (v5_131)
+  - The Lotus Forge now looks like the Bag window. Left: your avatar (3D, drag to rotate, or 2D) with the equipped gear in slots on both sides, each showing its forge level. Right: tap a piece and its name, rarity / grade, forge level (+N -> +N+1), current stats, next-level stats, per-level bonus, ore / coin cost, success chance and the Forge button.
+  - The starting Blade and Robe are slots too (Primary Weapon, Robe). Empty slots can be tapped and show which boss drop they need. Your coins and ore are shown at the top right; a cost you cannot pay is shown in red and the Forge button is disabled.
+  - Forging rules are unchanged (same cost, same chances, a failed strike burns the materials and keeps the level, SUCCESS / FAILED popup, hub only, O key, tap outside or Close to leave). Works in landscape and portrait on phones.
+
+SKILLS OUT OF RANGE IN ATTACK MODE (v5_130)
+  - In attack mode (auto-hunt, F, or any selected / clicked target) an attack skill is no longer cast when the target is outside THAT skill's real reach. Nothing is spent and no cooldown starts. The reach comes from a new table (web/index.html skillReach) that mirrors what each skill really hits:
+    Whirling Blade / Burst 120 (+14 per tier from tier 0), Life Drain 170, Blade Dance 120+8/tier, Earthquake 160+12/tier, War Cry 240, Retaliation 150+8/tier, Soul Burst 140+10/tier, Wraith Wail 240, Soul Harvest 200,
+    Ghost Chains 400, Seismic Wave 420, Umbral Rush 280+10/tier, Shadow Step 420, Reaper's Mark 200, Blood Fang 170, Venom Needle, Heavy Strike / Hundred Cuts / Shield Bash 170, Crescent Cleave / Hammer Smash 200, Leaping Slash 360,
+    bolts / kunai / arrows by flight distance, Explosive / Storm Arrow, Arrow Rain, Thunder Trap, Spirit Bomb 520, Meteor 450, Chain Lightning 600. (the target's body radius is counted for area, line and bolt skills)
+  - Before, auto-hunt used one general check (420 / 480, 300 for bursts), so Whirling Blade (radius 120) and other short-reach skills fired at targets they could not touch.
+  - Manual casts in attack mode show 'target is out of range' (throttled). Heals, shields and buffs are unchanged. Manual casts outside attack mode keep the v5_122 behaviour.
+
+SKILL COOLDOWNS +3 s (v5_123)
+  - Every skill of every class has 3 seconds more cooldown (web/index.html SKILL_CD_ADD = 3, applied after the heal-skill cooldown multiplier). The skill book, the cooldown overlay on the buttons and casting all use the new value.
+
+MAX QI x2 (v5_123)
+  - Every player now has double max Qi (web/index.html QI_MUL = 2; Spirit Summoner keeps its 1.3x class bonus on top). Qi regeneration, skill costs and potion percentages are unchanged (Mana Potion restores 40% of the bigger pool).
+
+SCREEN SAVER (v5_123)
+  - The automatic screen saver now starts after 5 minutes without activity (was 15 seconds), only while auto-hunt / auto-mine is on. Any click, tap, key press, mouse wheel or drag (joystick, camera) resets the timer; moving the mouse cursor without clicking does not.
+
+SKILLS OUTSIDE ATTACK MODE (v5_122)
+  - AUTO-CAST fires a skill as soon as it is ready. Removed the extra rules that kept skills from firing (minimum distances for Shadow Step / Leap / Rush, enemy counts for Quake / Wail / Roar / Nova, boss-only buffs, strict HP limits). Still held back: out of the skill's own range, a buff that is still running, healing at (almost) full HP, and Gale (emergency escape only).
+  - Casting by hand never needs a target in range any more: with nothing in reach the skill still fires (single-target / melee skills strike toward where you face, Shadow Step and Leap dash forward, area skills around you just go off) and costs Qi / starts its cooldown. Auto-hunt keeps its range checks so it does not waste Qi.
+  - Attack skills can be cast any time (button or hotkey), not only while attacking. If nothing is targeted or selected and a monster is inside that skill's reach, the nearest monster is selected and the skill aims at it (arrows, volleys, piercing shots, rush, shockwave, etc. no longer fly off in the facing direction). It does not start auto-attacking. Heals, buffs and the safe-hub rules are unchanged.
+
+PHONE MENU + TUTORIAL CARD FIXES (v5_121 / PC menu fix)
+  - PC: the Menu window's four buttons (View, Screen saver, How to play, Log out) are now small, two per row, and stick to the bottom of the menu, so Log out is always visible (the menu also scrolls if the window is extremely short).
+  - The 3D/2D ("View") and Landscape buttons moved from the left icon strip into the Menu window (Landscape is shown on phones only).
+  - Menu (gear icon) on phones: much more compact in portrait and landscape. No more 1.3x zoom; the keyboard-shortcut rows are hidden on phones;
+    Screen saver / How to play / Log out are three small buttons on one row. In landscape the Log out button was below the bottom of the screen: it now always fits (and the menu can be scrolled by finger if a screen is extremely short).
+  - Tutorial card: if it had been dragged in portrait, turning the phone left it off the screen. Rotating now puts it back, resizing keeps it inside the screen, and in landscape it is smaller so Next / End tutorial are never cut off.
+
+IN-GAME STEP-BY-STEP TUTORIAL (v5_120)
+  - New: a short guided tutorial for new players. It only covers the essentials, in 11 steps: your hero (HP / Qi), moving, leaving the safe hub, selecting a monster, fighting it, rewards and levels,
+    skills, dodge, potions + Home Scroll, fighting other players (PvP), and a last card listing the handy buttons.
+  - It watches what the player really does and moves on by itself when the step is done (walked far enough, left the hub, selected a monster, killed one, cast a skill, dodged). Every step has "Skip step",
+    "End tutorial" is always there, the card can be minimised with the "-" button and dragged by its header. A pulsing gold ring points at the part of the screen the step is about.
+    Texts are different for PC (keys, mouse) and phones (joystick, taps, DODGE pad). The PvP step is information only: it never turns PvP mode on for the player.
+  - Offered once per account, 2 s after the first start, to players below Lv 10 ("Start tutorial" / "No thanks"). Veterans are not asked. Replay any time: Menu > "How to play (tutorial)".
+    The done flag is kept per account in this browser (localStorage key woa_tut1_<email>); to see the offer again run  WOA_TUTORIAL.reset()  in the browser console.
+  - web/tutorial.js (NEW): the whole tutorial. It never changes game state; it reads it through a small read-only bridge.
+  - web/index.html: (1) window.WOA_API read-only bridge at the end of the main script (P, SCD, EQ, AUTH, started, MP, PHONE, inTown, pvpOnly, say),
+    (2) <script src="tutorial.js"> after the main script, (3) tutorial.js added to the preloader file list.
+  - web/sw.js: tutorial.js added to the cached core files. No server (Go) changes.
+  - REBUILD (build.bat) and hard-refresh. The saved copy refreshes itself because the files changed.
+
+COMBAT MUSIC AND EFFECTS NOW REALLY READY AFTER THE LOADING SCREEN (v5_119)
+  - Report: combat background music and the effects were not loaded yet when the game started. Cause: the sounds were built one after another (calm, then combat = the longest, then 20 effects) and the
+    loading screen stopped waiting after 12 s, so on a real phone the first start opened with only the calm music ready.
+  - web/audio.js: sounds are now built several at a time (up to 3, each on its own audio thread), the loading screen only waits for what is REQUIRED (calm, combat and ONE variant of every effect),
+    and the second variant of each effect is made afterwards in the background and saved too. Progress is weighted by real work (combat counts more than one effect), so the % on the bar is honest.
+  - web/index.html (loading screen): waits until the sounds are really ready (cap 90 s instead of 12 s). After 15 s a "Continue now (sound will follow)" button appears for slow phones. The generic
+    "Taking longer than usual" warning no longer fires while sounds are still being prepared.
+  - First start on a device: sounds are built and saved (see v5_118). Every later start loads them from the saved copy and the loading screen does not wait for sound.
+  - If you press "Continue now" early, the unfinished sounds keep being built and saved, so the next start is quicker.
+  - REBUILD (build.bat) and hard-refresh. The saved copy refreshes itself because audio.js changed.
+
+SOUNDS PREPARED ON THE LOADING SCREEN + SAVED ON THE DEVICE (v5_118)
+  - Report: at game start the music and effects took about 5 s to begin (the sounds were being rendered then). Now the work is done on the loading screen.
+  - web/audio.js starts preparing the sounds as soon as the page loads. The loading screen has a new step, "Preparing sounds...", that waits for them (progress bar 74-92 %), so the sound is ready when the game starts.
+    The wait is capped at 12 s: on a very slow phone the game opens anyway and the remaining sounds finish in the background (they are saved as they complete, so the next start is faster).
+  - FIRST start on a device: the sounds are rendered (the screen says "first start only") and the finished samples (about 14-20 MB) are saved in the browser's IndexedDB storage ("woa-audio").
+    LATER starts: the saved samples are read back in about 0.1-0.3 s and nothing is rendered, so the loading screen does not wait for sound at all.
+  - The saved copy is tagged with a hash of the whole audio.js source: any change to audio.js refreshes it by itself on the next start (nothing to delete by hand).
+  - If the browser has no IndexedDB (some private modes) or blocks it, the sounds are simply rendered on every start, as in v5_116. If the saved copy cannot be read it is rendered again.
+  - To force a fresh render: clear this site's data in the browser settings.
+  - Phones still need one touch before any sound can play (browser rule); the first tap after loading starts the music instantly.
+  - REBUILD (build.bat) and hard-refresh.
+
+BUTTONS NOT CLICKABLE WHILE THE JOYSTICK IS HELD (v5_117)
+  - Report (phone): while moving with the joystick, some action buttons did nothing. Cause: skill slots, Attack, Dodge and the potion buttons react on pointerdown and always worked, but every other
+    control (Auto, Mine, Land, menu / bag / book icons, ...) waits for the browser's 'click', and phones often send no 'click' for a tap made while another finger is already down.
+  - Fix (web/index.html, right after the joystick code): a tap on a button, icon, label or checkbox made while another finger is down (or released while one is still down) now fires the click itself on release.
+    The browser's own click for that tap is swallowed so nothing runs twice. Drags, releases off the button and normal single-finger taps behave exactly as before.
+  - If one specific button still does not respond while walking, tell me its name: it may use its own handler instead of 'click'.
+  - REBUILD (build.bat) and hard-refresh.
+
+NO SOUND IN SCREEN SAVER + PRE-RENDERED MUSIC / EFFECTS = LESS LAG (v5_116)
+  - Screen saver: while the dark saver screen is on, ALL sound is off (music and effects), and the audio engine is put to sleep (less CPU and battery). Sliding to unlock brings the sound back.
+    (web/index.html saverOn / saverOff call SND.hush(true / false); web/audio.js hush().)
+  - Lag / cut-outs on phones: the music and skill sounds used to be synthesised live (hundreds of oscillators per second); on a phone that stalled the page, and the engine dropped new notes once 360 voices were busy.
+    Now (web/audio.js) every sound is rendered ONCE, about 2.5 s after the page loads, with an OfflineAudioContext (off the main thread, in small slices so nothing stalls):
+      - calm music: one seamless 29 s loop; combat music: a seamless 30 s loop (2 passes, so the crash cymbal and tom fill variants are kept)
+      - each skill-cast sound: 2 variants, picked at random and pitch-shifted +-3 % per cast, so repeats do not sound identical
+    From then on the game only plays finished samples, which costs almost nothing. Music and effects may be silent for the first few seconds after a fresh page load while this runs; the loading screen is not affected.
+  - Audio latency hint changed from 'interactive' to 'playback': larger audio buffers, so phones no longer crackle or cut out under load (effects start a few ms later).
+  - Fallback: if the browser has no OfflineAudioContext, or a render fails, the previous live synthesis is used automatically.
+  - Memory: about 20 MB of audio samples are kept in RAM. Volume sliders work as before.
+  - Skill-cast effects are the only effects on purpose (swing / hit / crit etc. are silenced no-ops in the SFX table of web/audio.js).
+  - REBUILD (build.bat) and hard-refresh; the service worker cache refreshes itself because audio.js and index.html changed.
+
 PVP HITS FROM WHERE THE ATTACKER IS NOT (v5_83)
   - Report: a player attacks (damages) even though it is not there. Causes: (1) the server accepted a PvP hit from anyone up to 1500 units away (the client alone
     decided the range), so a hit could land from far outside the attacker's real reach; (2) other players are drawn ~0.12 s behind plus network delay, so a player
