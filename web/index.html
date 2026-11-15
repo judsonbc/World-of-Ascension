@@ -123,6 +123,11 @@ html.phone #statsWin h4{margin-bottom:1px}html.phone #statsWin hr{margin:1px 0}h
 #stats b{color:#fff;font-weight:700}
 #buffs{display:flex;gap:calc(3*var(--u));min-height:calc(22*var(--u))}
 .bf{position:relative;width:calc(22*var(--u));height:calc(22*var(--u));display:grid;place-items:center;border:calc(1*var(--u)) solid #c9b27a;background:#15202a;font-size:calc(12*var(--u));border-radius:calc(3*var(--u))}
+.bf{pointer-events:auto;cursor:help}
+/* v5_143 buff tooltip: name + description, see-through panel */
+#bftip{position:fixed;z-index:40;pointer-events:none;max-width:calc(230*var(--u));padding:calc(6*var(--u)) calc(9*var(--u));border-radius:calc(7*var(--u));background:rgba(8,14,20,.5);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);border:1px solid rgba(232,224,202,.28);box-shadow:0 2px 10px rgba(0,0,0,.35);color:var(--paper);font:500 calc(11*var(--u))/1.35 var(--body);text-shadow:0 1px 2px #000}
+#bftip b{display:block;font:700 calc(12*var(--u)) var(--body);margin-bottom:calc(2*var(--u))}
+#bftip small{display:block;font-size:inherit;color:rgba(232,224,202,.85)}
 .bf em{position:absolute;right:calc(1*var(--u));bottom:0;font:700 calc(8*var(--u)) var(--body);font-style:normal;color:#fff;text-shadow:0 0 calc(2*var(--u)) #000,0 calc(1*var(--u)) calc(1*var(--u)) #000}
 #bagCur,#fgCur{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px}
 #bagCur .chip,#fgCur .chip{padding:3px 10px;border-radius:99px;border:1px solid var(--line);font:600 12px var(--body);gap:6px}
@@ -588,6 +593,7 @@ html.phone #wh.modal{padding:6px}
 #forge .bagbtns .btn{flex:1}
 #fgInfo{display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 10px;border:1px solid #1f3a64;border-radius:8px;background:rgba(10,20,38,.6)}
 #fgInfo .fgn{font-size:16px;font-weight:700}#fgInfo .fgl{font:400 22px var(--display);color:#f3dfa0;letter-spacing:.04em}
+#fgInfo .fgg{color:#7fe0a0;font-weight:700}
 #fgInfo .fgs{font-size:12px;line-height:1.4;color:var(--mist)}#fgInfo .fgs b{color:#e8e0ca;font-weight:600}
 #fgInfo .fgbr{display:flex;align-items:center;gap:8px;font:600 12px var(--body);color:#f3dfa0}#fgInfo .fgbar{flex:1;height:12px;border-radius:99px;background:#07101f;border:1px solid #2a4a7a;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.6)}#fgInfo .fgbar i{display:block;width:0;height:100%;border-radius:99px;background:linear-gradient(90deg,#c98a2b,#ffe9a8);box-shadow:0 0 10px rgba(255,214,120,.7)}#fgInfo .fgbar.go i{animation:fgfill 1s linear forwards}@keyframes fgfill{from{width:0}to{width:100%}}
 #fgInfo .fgc{display:flex;gap:6px;flex-wrap:wrap;font-size:12px}#fgInfo .fgc span{padding:2px 9px;border-radius:99px;border:1px solid var(--line)}#fgInfo .fgc span.no{border-color:#d9503f;color:#ff8a7a}
@@ -774,6 +780,7 @@ html.phone .wdcard .wdnote{display:none}
       <hr>
       <span>Max HP</span><b id="swHp"></b>
       <span>Max Qi</span><b id="swQi"></b>
+      <span title="Qi regenerated per second from Ring and Necklace (grade, rarity and forge level), as % of max Qi. On top of the base regen.">Qi regen (gear)</span><b id="swQrg"></b>
       <span>ATK</span><b id="swAtk"></b>
       <span>DEF</span><b id="swDef"></b>
       <span>Damage reduction</span><b id="swRed"></b>
@@ -845,7 +852,6 @@ html.phone .wdcard .wdnote{display:none}
       <button class="ic" id="bForge" type="button" title="Lotus Forge (O)">&#9874;<span class="lb">Forge</span></button>
       <button class="ic" id="bWorld" type="button" title="World Gate (G)">&#127760;<span class="lb">World</span></button>
       <button class="ic" id="bBook" type="button" title="Skill book (K)">&#128214;<span class="lb">Skills</span></button>
-      <button class="ic" id="bPchat" type="button" title="Private chat (I)"><span>&#9993;</span><span class="bd" id="pcN" style="display:none">0</span><span class="lb">Msg</span></button>
       <button class="ic" id="bWare" type="button" title="Warehouse (H, in a hub)">&#128230;<span class="lb">Store</span></button>
       <button class="ic" id="bBag" type="button" title="Bag (B)">&#127890;<span class="lb">Bag</span></button>
       <button class="ic" id="bMap" type="button" title="Minimap (M)">&#9906;<span class="lb">Map</span></button>
@@ -1241,9 +1247,9 @@ const CLASSES=[
  {n:'Night Blade',d:'Shadow assassin: teleport strikes, poison, blade storms and speed. +10% crit chance, -10% max HP.'},
  {n:'Iron Guardian',d:'Armored bruiser: shields, damage reduction and ground-shaking slams. +25% max HP, +40% DEF, +10% move speed, -35% PvP damage from enemies in melee range.'},
  {n:'Storm Archer',d:'Long-range marksman: piercing arrows, volleys, traps and speed. Gale Step empowers your next arrows (+40%). +15% crit chance, +10% move speed.'},
- {n:'Spirit Summoner',d:'Spirit caller: wolves (up to 3) and a guardian spirit that focus your target, soul blasts and soul healing. +30% max Qi, -5% max HP.'}];
+ {n:'Spirit Summoner',d:'Spirit caller: wolves (up to 3) and a guardian spirit that focus your target, soul blasts and soul healing. +62.5% max Qi, -5% max HP.'}];
 /* passive class bonuses: crit = extra crit chance, hp / def / qi / spd = multipliers */
-const CLB=[{},{crit:.10,hp:.9},{hp:1.25,def:1.4,spd:1.1},{crit:.15,spd:1.1},{qi:1.3,hp:.95}];
+const CLB=[{},{crit:.10,hp:.9},{hp:1.25,def:1.4,spd:1.1},{crit:.15,spd:1.1},{qi:1.625,hp:.95}];
 const CLS_ORDER=[[['pierce'],['nova'],['mend','heal'],['meteor'],['chain'],['might'],['drain'],['fan'],['strike'],['cleave'],['leap'],['flurry']],
  [['kunai'],['shadowstep'],['venom'],['bladestorm'],['smoke'],['execute'],['siphon'],['rush']],
  [['bash'],['bulwark'],['quake'],['roar'],['counter'],['hammer'],['ironskin'],['shockwave']],
@@ -1279,6 +1285,9 @@ const SKILL_HEAL_MUL=.5,HEAL_CD_MUL=2,HEAL_SKILL_T={heal:1,mend:1,drain:1,siphon
 for(const q of SKILLS)if(HEAL_SKILL_T[q.t])q.cd*=HEAL_CD_MUL;
 const SKILL_CD_ADD=6; /* v5_123 +3 s, v5_133 +3 s more (total +6 s): every skill of every class has this much extra cooldown (skill book, cooldown overlay and casting all read q.cd) */
 for(const q of SKILLS)q.cd+=SKILL_CD_ADD;
+/* v5_149 Spirit Summoner (class 4): every skill (attack, heal, summon) has half the final cooldown, so it is the fastest class (avg ~8.2 s; others 12-15.6 s). 1 = same as the other classes. */
+const SUMMONER_CD_MUL=.5;
+for(const q of SKILLS)if(q.c===4)q.cd=Math.round(q.cd*SUMMONER_CD_MUL*10)/10;
 const NSLOT=14,AUTO_SLOTS=12, /* slots 1-12 can auto-cast; R and T (13, 14) never do */
   SCD=new Array(SKILLS.length).fill(0),EQ=[0,1,2,MELEE[0],-1,-1,-1,-1,-1,-1,-1,-1,-1,-1];
 /* per-slot auto-cast switch (used while auto-hunting). Drag a skill slot upward to flip it. */
@@ -1302,8 +1311,8 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const GEAR_DROP_CHANCE=1;
 const GEAR=[
  {k:'ear',n:'Earrings',ic:'E',st:{crit:[1,.4],cdb:[2,.3],pab:[1.5,.25],bsa:[1.5,.25]}},
- {k:'ring',n:'Ring',ic:'R',st:{atk:[8,5],acc:[.8,.25],bab:[2,.3],mab:[1.5,.25]}},
- {k:'neck',n:'Necklace',ic:'N',st:{hp:[50,30],cdr:[1,.3],bdr:[1,.3],mdr:[.8,.25]}},
+ {k:'ring',n:'Ring',ic:'R',st:{atk:[8,5],acc:[.8,.25],bab:[2,.3],mab:[1.5,.25],qrg:[.05,.01]}},
+ {k:'neck',n:'Necklace',ic:'N',st:{hp:[50,30],cdr:[1,.3],bdr:[1,.3],mdr:[.8,.25],qrg:[.05,.01]}},
  {k:'glove',n:'Gloves',ic:'G',st:{aspd:[.5,.5],acc:[1,.4],bab:[1.5,.3],bsd:[.8,.25]}},
  {k:'boot',n:'Boots',ic:'B',st:{def:[3,2],spd:[.1,.15],eva:[.6,.2],pdr:[.8,.25]}},
  {k:'legs',n:'Legguards',ic:'L',st:{def:[4,2.5],hp:[20,12],eva:[.5,.15],mdr:[.8,.25]}},
@@ -1314,7 +1323,7 @@ const GEAR=[
  {k:'wpn',n:'Primary Weapon',ic:'P',st:{atk:[12,7],acc:[.8,.25],cdb:[1.5,.25],mab:[1.2,.2]},core:'wlv'},
  {k:'wpn2',n:'Secondary Weapon',ic:'S',st:{atk:[5,3],aspd:[.3,.25],cev:[.6,.2],pab:[1.5,.25]}},
  {k:'robe',n:'Robe',ic:'O',st:{def:[5,6],hp:[40,40],cdr:[1,.3],bdr:[1,.3]},core:'alv'}];
-const STAT_LBL={crit:'% crit chance',atk:' ATK',hp:' HP',aspd:'% attack speed',def:' DEF',spd:'% move speed',eva:'% evasion',acc:' accuracy',cev:'% crit EVA',cdb:'% crit ATK DMG',cdr:'% crit DMG reduction',bab:'% bash ATK DMG',bdr:'% bash DMG reduction',pab:'% PvP ATK DMG',pdr:'% PvP DMG reduction',mab:'% monster ATK DMG',mdr:'% monster DMG reduction',bsa:'% boss ATK DMG',bsd:'% boss DMG reduction'};
+const STAT_LBL={crit:'% crit chance',atk:' ATK',hp:' HP',aspd:'% attack speed',def:' DEF',spd:'% move speed',eva:'% evasion',acc:' accuracy',cev:'% crit EVA',cdb:'% crit ATK DMG',cdr:'% crit DMG reduction',bab:'% bash ATK DMG',bdr:'% bash DMG reduction',pab:'% PvP ATK DMG',pdr:'% PvP DMG reduction',mab:'% monster ATK DMG',mdr:'% monster DMG reduction',bsa:'% boss ATK DMG',bsd:'% boss DMG reduction',qrg:'% Qi regen / sec'};
 /* Boss gear is RANDOM. Rarity decides how many stats an item has and how strong the rolls are:
    Common = slot stat only, low roll | Rare = +1 random stat | Epic = +2 | Legendary = +3 and the best rolls.
    lo/hi = roll multiplier range, ex = extra random stats, w = drop weight (%), cls = bag colour class.
@@ -1324,6 +1333,9 @@ const RAR=[
  {n:'Rare',c:'#5aa9ff',cls:'',lo:.9,hi:1.2,ex:1,w:28},
  {n:'Epic',c:'#c07bff',cls:'pu',lo:1.2,hi:1.6,ex:2,w:13},
  {n:'Legendary',c:'#ffb02e',cls:'leg',lo:1.6,hi:2.2,ex:3,w:4}];
+/* v5_143 SPECIAL stat: Qi regen (% of max Qi per second), Ring + Necklace only. Value per grade; not in STATBASE so it never rolls as a random extra on other gear.
+   Not touched by the global gear / forge multipliers (the numbers in GEAR are the real ones). Total from gear is capped at QRG_CAP. */
+const SPECIAL={qrg:.05},QRG_CAP=6;
 const STATBASE={crit:1,atk:8,hp:50,aspd:.5,def:3,spd:.1,eva:.8,acc:1.2,cev:.8,cdb:2,cdr:1,bab:2,bdr:1,pab:1.5,pdr:1,mab:1.5,mdr:.8,bsa:1.2,bsd:.8}; /* value per grade of an extra stat (before the .7 extra-stat factor) */
 /* ---------- STAT BALANCE (tune here) ----------
    Power now comes from three sources that should stay in proportion at any stage: LEVEL ~55%, GEAR ~25%, FORGE ~20%
@@ -1333,24 +1345,26 @@ const STATBASE={crit:1,atk:8,hp:50,aspd:.5,def:3,spd:.1,eva:.8,acc:1.2,cev:.8,cd
    FORGE_MULT      scales every forge-per-level bonus (gear, Blade and Robe). */
 const GEAR_MULT_FLAT=.5,GEAR_MULT_PCT=.2,FORGE_MULT=.18,FORGE_MULT_PCT=.08,FLAT_STATS={atk:1,hp:1,def:1},GEAR_VER=5; /* v5_73: lowered again (flat .8->.5, % .35->.2, flat forge .3->.18, % forge .15->.08). v5_71: gear roughly halved (flat 1.6->.8, % 0.7->.35, flat forge .6->.3, % forge .3->.15). v5_69: 2.8->1.6, 1.8->.7 */
 const GEAR_OLD={3:[1.6,.7],4:[.8,.35]}; /* [flat, %] item scale of each earlier gear version: a save with that gv holds rolled stats on it and is scaled by new/old */
-const gearMul=k=>FLAT_STATS[k]?GEAR_MULT_FLAT:GEAR_MULT_PCT;
-const gearMulFrom=v=>k=>FLAT_STATS[k]?GEAR_MULT_FLAT/GEAR_OLD[v][0]:GEAR_MULT_PCT/GEAR_OLD[v][1];
+const gearMul=k=>SPECIAL[k]?1:FLAT_STATS[k]?GEAR_MULT_FLAT:GEAR_MULT_PCT;
+const gearMulFrom=v=>k=>SPECIAL[k]?1:FLAT_STATS[k]?GEAR_MULT_FLAT/GEAR_OLD[v][0]:GEAR_MULT_PCT/GEAR_OLD[v][1];
 const r2=v=>Math.round(v*100)/100;
-for(const q of GEAR)for(const k in q.st)q.st[k]=[r2(q.st[k][0]*gearMul(k)),r2(q.st[k][1]*(FLAT_STATS[k]?FORGE_MULT:FORGE_MULT_PCT))];
+for(const q of GEAR)for(const k in q.st)q.st[k]=[r2(q.st[k][0]*gearMul(k)),r2(q.st[k][1]*(SPECIAL[k]?1:FLAT_STATS[k]?FORGE_MULT:FORGE_MULT_PCT))];
 for(const k in STATBASE)STATBASE[k]=r2(STATBASE[k]*gearMul(k));
 const BLADE_ATK=7*FORGE_MULT,ROBE_DEF=6*FORGE_MULT,ROBE_HP=40*FORGE_MULT; /* Blade / Robe forge bonus per level */
 const rd1=v=>Math.max(.1,Math.round(v*10)/10);
 function rollRarity(){let t=rnd()*100;for(let i=0;i<RAR.length;i++){t-=RAR[i].w;if(t<0)return i}return 0}
 function rollGear(q,g,f,r){
   const A=RAR[r],st={},lf=.85+.3*clamp(f,0,1),roll=()=>(A.lo+rnd()*(A.hi-A.lo))*lf;
-  for(const k of Object.keys(q.st))st[k]=rd1(g*q.st[k][0]*roll());
+  for(const k of Object.keys(q.st))st[k]=SPECIAL[k]?r2(Math.max(.01,g*q.st[k][0]*roll())):rd1(g*q.st[k][0]*roll());
   const pool=Object.keys(STATBASE).filter(k=>!(k in st));
   for(let i=0;i<A.ex&&pool.length;i++){const k=pool.splice(Math.floor(rnd()*pool.length),1)[0];st[k]=rd1(g*STATBASE[k]*.7*roll())}
   return {slot:q.k,g,r,st,col:A.c};
 }
-const gearScore=o=>{let v=0;for(const k in o.st)v+=o.st[k]/STATBASE[k];return v};
+const gearScore=o=>{let v=0;for(const k in o.st)v+=o.st[k]/(STATBASE[k]||SPECIAL[k]||1);return v};
 /* old saves have no rolled stats: they become Common items with the old fixed stats */
-function fixGear(o,q){if(o.g>0&&(!o.st||typeof o.st!=='object')){o.r=0;o.st={};for(const k of Object.keys(q.st))o.st[k]=o.g*q.st[k][0]}if(!(o.r>=0&&o.r<RAR.length))o.r=0;if(!o.st)o.st={}}
+function fixGear(o,q){if(o.g>0&&(!o.st||typeof o.st!=='object')){o.r=0;o.st={};for(const k of Object.keys(q.st))o.st[k]=o.g*q.st[k][0]}if(!(o.r>=0&&o.r<RAR.length))o.r=0;if(!o.st)o.st={};addQrg(o,q)}
+/* v5_143 old rings / necklaces have no Qi regen: give them the mid roll of their rarity for their grade (forge level adds on top by itself) */
+function addQrg(o,q){if(o.g>0&&q&&q.st.qrg&&!('qrg' in o.st)){const A=RAR[o.r|0];o.st.qrg=r2(Math.max(.01,o.g*q.st.qrg[0]*(A.lo+A.hi)/2))}}
 
 /* ---------- player ---------- */
 const P={x:C,y:C+110,r:14,lvl:1,exp:0,hp:100,qi:60,coins:0,gold:0,ore:0,wlv:0,alv:0,
@@ -1359,17 +1373,37 @@ P.gear={};for(const g of GEAR){P.gear[g.k]={g:0,lv:0,r:0,st:{}};if(g.core)Object
 P.cls=0;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.recent=[];
 /* the core slots (weapon / robe) already add their ATK / DEF / HP forge bonus in atkVal / defVal / maxHp; every other stat gets it here */
 const CORE_FORGED={atk:1,def:1,hp:1};
-function gearStat(key){let v=0;for(const q of GEAR){const o=P.gear[q.k],a=q.st[key];if(o.g>0){v+=o.st[key]||0;if(a&&!(q.core&&CORE_FORGED[key]))v+=o.lv*a[1]}}return v}
+/* v5_148 PERCENT FORGE (replaces the v5_143 exponential flat forge). The forge no longer adds a flat amount of ATK / HP / DEF: that was huge at level 1 (+100 gave x200 power)
+   and still too strong at level 1000. Now the bonus is a PERCENTAGE of the character's level + gear stats, so it is the same at any character level, and it follows a curve:
+   fraction(forge) = (forge / 100) ^ FORGE_CURVE.  A full set at +100 gives +FORGE_MAX_PCT (40%) ATK, DEF and HP; the Blade / Robe / each slot gets its share (its old per-level weight).
+   Example (curve 2, 40% for a full set): +10 = 0.4% | +30 = 3.6% | +50 = 10% | +70 = 19.6% | +90 = 32.4% | +100 = 40%. Low forge adds little, high forge adds more.
+   % stats (crit, attack speed, damage boosts ...) use the same curve: forgeEff(lv) = fraction x FORGE_PCT_REF 'steps' of their per-level value (+100 = FORGE_PCT_REF steps; was 871).
+   Tune FORGE_MAX_PCT, FORGE_CURVE (1 = linear, higher = more back-loaded) and FORGE_PCT_REF here. */
+const fg2=v=>Math.round(v*100)/100;
+const FORGE_MAX_PCT=.40,FORGE_CURVE=2,FORGE_PCT_REF=140;
+const forgeFrac=lv=>Math.pow(clamp(lv|0,0,FORGE_MAX)/FORGE_MAX,FORGE_CURVE); /* 0..1 along the forge curve */
+const forgeEff=lv=>forgeFrac(lv)*FORGE_PCT_REF; /* 'steps' of per-level bonus for the % stats */
+const forgeGain=lv=>forgeFrac(lv+1)-forgeFrac(lv); /* fraction of the curve the NEXT forge level adds */
+const FLAT_W={};for(const k in FLAT_STATS){FLAT_W[k]=0;for(const q of GEAR)if(q.st[k])FLAT_W[k]+=q.st[k][1]} /* total per-level weight of every slot for ATK / HP / DEF */
+const slotFlatPctF=(q,k,fr)=>q.st[k]?FORGE_MAX_PCT*q.st[k][1]/FLAT_W[k]*fr:0; /* this slot's share of the % bonus for a curve fraction */
+const slotFlatPct=(q,k,lv)=>slotFlatPctF(q,k,forgeFrac(lv));
+function flatForgePct(k,slot){let t=0;for(const q of GEAR){const o=slot(q);if(o&&(q.core||o.g>0))t+=slotFlatPct(q,k,o.lv)}return t} /* total % bonus (0.4 = +40%) of ATK / HP / DEF; the Blade / Robe slots always count */
+const forgeP=k=>flatForgePct(k,q=>P.gear[q.k]);
+const GQ={};for(const q of GEAR)GQ[q.k]=q;
+/* forge % text of the Blade / Robe (core slots) for a curve fraction */
+const corePctArr=(q,fr)=>q.k==='wpn'?['+'+fg2(slotFlatPctF(q,'atk',fr)*100)+'% ATK']:['+'+fg2(slotFlatPctF(q,'def',fr)*100)+'% DEF','+'+fg2(slotFlatPctF(q,'hp',fr)*100)+'% HP'];
+function gearStat(key){let v=0;for(const q of GEAR){const o=P.gear[q.k],a=q.st[key];if(o.g>0){v+=o.st[key]||0;if(a&&!FLAT_STATS[key])v+=forgeEff(o.lv)*a[1]}}return v} /* v5_148 ATK / HP / DEF forge is a % (forgeP), the other stats keep a per-level add */
 const gearName=(q,o)=>RAR[o.r|0].n+' '+TIER[o.g-1]+' '+q.n;
 const critChance=()=>Math.min(.75,.15+P.lvl*.0001+gearStat('crit')/100+(CLB[P.cls].crit||0)+(P.ceT>0?.25:0));
 const atkCd=()=>.55/(1+Math.min(60,gearStat('aspd'))/100);
 const moveSpd=()=>200*(1+Math.min(25,gearStat('spd'))/100)*(P.spdMul||1)*(P.vlT>0?1.35:1)*(CLB[P.cls].spd||1);
 const realmIdx=()=>Math.floor((P.lvl-1)/10);
 const realmName=i=>i<REALMS.length?REALMS[i]:'Sovereign Tier '+(i-REALMS.length+1);
-const maxHp=()=>Math.round((100+P.lvl*32+P.alv*ROBE_HP+gearStat('hp'))*(1+realmIdx()*.1)*(CLB[P.cls].hp||1));
-const QI_MUL=2; /* v5_123: every player has 2x max Qi */
+const maxHp=()=>Math.round((100+P.lvl*32+gearStat('hp'))*(1+forgeP('hp'))*(1+realmIdx()*.1)*(CLB[P.cls].hp||1));
+const qrgVal=()=>Math.min(QRG_CAP,gearStat('qrg')); /* v5_143 gear Qi regen, % of max Qi per second */
+const QI_MUL=1.5; /* v5_143: max Qi reduced by 25% (was 2 since v5_123 = 2x max Qi). 1 = base pool, 2 = the old doubled pool */
 const maxQi=()=>Math.round((60+P.lvl*4)*(CLB[P.cls].qi||1)*QI_MUL);
-const atkVal=()=>Math.round((10+P.lvl*3.5+P.wlv*BLADE_ATK+gearStat('atk'))*(1+realmIdx()*.12)*(1+(P.bfT>0?P.bf:0)));
+const atkVal=()=>Math.round((10+P.lvl*3.5+gearStat('atk'))*(1+forgeP('atk'))*(1+realmIdx()*.12)*(1+(P.bfT>0?P.bf:0)));
 /* DEF now grows with level (3 per level, +4% per realm) and armor level. Shared defense curve (keep equal to pDef* in game.go):
    reduction = def / (def + PDEF_K + attackerLevel*PDEF_K_LV), capped at PDEF_CAP. The ATTACKER's level is in the formula, so
    the same DEF protects less against a higher-level monster or player. */
@@ -1381,7 +1415,7 @@ const MON_ATK_MUL=3;
 const monGap=(mLv,pLv)=>{const g=mLv-pLv;return g>=0?1+Math.min(3,g*.03):Math.max(.4,1+g*.01)};
 /* level gap, you hitting a monster: monsters above your level shrug off more damage (x1/(1+0.03*gap), down to x0.2) */
 const atkGap=(mLv,pLv)=>{const g=mLv-pLv;return g>0?Math.max(.2,1/(1+g*.03)):1};
-const defVal=()=>Math.round((P.lvl*3+P.alv*ROBE_DEF+gearStat('def'))*(1+realmIdx()*.04)*(CLB[P.cls].def||1));
+const defVal=()=>Math.round((P.lvl*3+gearStat('def'))*(1+forgeP('def'))*(1+realmIdx()*.04)*(CLB[P.cls].def||1));
 /* ---------- EVASION + ACCURACY ----------
    Evasion: % chance to dodge a monster / player hit completely (base 5% + gear, capped at EVA_CAP). An attacker above your level pierces it:
    -EVA_LV_PEN %-points of dodge per level above you.
@@ -1656,8 +1690,8 @@ function load(){
     if(!s)return false;
     P.lvl=Math.min(MAXLV,Math.max(1,s.lvl|0));P.exp=s.exp|0;P.coins=s.coins|0;P.ore=s.ore|0;P.wlv=s.wlv|0;P.alv=s.alv|0;applyLook(s.sk===undefined?(parseInt(localStorage.getItem(lookKey())||'0',10)||0):s.sk);
     const gm=s.gv===GEAR_VER?()=>1:GEAR_OLD[s.gv]?gearMulFrom(s.gv):gearMul; /* older saves: rolled stats were on the old scale, bring them to the new one (v3 saves are already scaled, so only the ratio is applied) */
-    if(s.gear&&typeof s.gear==='object')for(const q of GEAR){const o=s.gear[q.k];if(o){const t=P.gear[q.k];t.g=clamp(o.g|0,0,NW);t.lv=clamp(o.lv|0,0,FORGE_MAX);t.r=clamp(o.r|0,0,RAR.length-1);t.st={};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE){const v=+o.st[k];if(v>=0&&v<1e6)t.st[k]=r2(v*gm(k))}fixGear(t,q)}}
-    const parseGear=(arr,cap)=>{const out=[];if(Array.isArray(arr))for(const o of arr.slice(0,cap)){const q=o&&GEAR.find(z=>z.k===o.slot);if(!q)continue;const it={slot:q.k,g:clamp(o.g|0,1,NW),r:clamp(o.r|0,0,RAR.length-1),st:{}};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE){const v=+o.st[k];if(v>=0&&v<1e6)it.st[k]=r2(v*gm(k))}it.col=RAR[it.r].c;it.u=bagUid++;out.push(it)}return out};
+    if(s.gear&&typeof s.gear==='object')for(const q of GEAR){const o=s.gear[q.k];if(o){const t=P.gear[q.k];t.g=clamp(o.g|0,0,NW);t.lv=clamp(o.lv|0,0,FORGE_MAX);t.r=clamp(o.r|0,0,RAR.length-1);t.st={};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE||k in SPECIAL){const v=+o.st[k];if(v>=0&&v<1e6)t.st[k]=r2(v*gm(k))}fixGear(t,q)}}
+    const parseGear=(arr,cap)=>{const out=[];if(Array.isArray(arr))for(const o of arr.slice(0,cap)){const q=o&&GEAR.find(z=>z.k===o.slot);if(!q)continue;const it={slot:q.k,g:clamp(o.g|0,1,NW),r:clamp(o.r|0,0,RAR.length-1),st:{}};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE||k in SPECIAL){const v=+o.st[k];if(v>=0&&v<1e6)it.st[k]=r2(v*gm(k))}addQrg(it,q);it.col=RAR[it.r].c;it.u=bagUid++;out.push(it)}return out};
     P.bag=parseGear(s.bag,200);P.wh=parseGear(s.wh,WH_CAP);
     if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;
     let wi=s.wi|0;if(s.wv!==2&&wi<=10)wi++; /* older saves: world numbers started at 0 for Ashen Reach */
@@ -1751,7 +1785,9 @@ function dropGear(m){
     takeGear(it);
   }
 }
-function statTxt(st,lv,q){return Object.keys(st).map(k=>{const v=st[k]+(q&&q.st[k]?lv*q.st[k][1]:0);return '+'+Math.round(v*10)/10+STAT_LBL[k]}).join(', ')}
+const fmtSt=(k,v)=>SPECIAL[k]?Math.round(v*100)/100:Math.round(v*10)/10;
+function statArr(st,lv,q){const a=[];for(const k of Object.keys(st)){const f=q&&q.st[k];if(f&&FLAT_STATS[k]){a.push('+'+fmtSt(k,st[k])+STAT_LBL[k]);const p=slotFlatPct(q,k,lv)*100;if(p>0)a.push('+'+fg2(p)+'% '+STAT_LBL[k].trim()+' (forge)')}else a.push('+'+fmtSt(k,st[k]+(f?forgeEff(lv)*f[1]:0))+STAT_LBL[k])}return a}
+function statTxt(st,lv,q){return statArr(st,lv,q).join(', ')}
 const BAG_CAP=50,WH_CAP=100;let bagUid=1; /* bag holds 50 slots; the hub Warehouse holds 100 spare gear pieces */
 const bagArr=()=>P.bag||(P.bag=[]);
 const whArr=()=>P.wh||(P.wh=[]);
@@ -1787,8 +1823,8 @@ function aimT(){const t=P.target&&!P.target.dead?P.target:null;if(t)return t;con
 /* v5_82 Iron Guardian: all its attack skills and buffs only fire when the target is in real melee reach (body sizes + IG_PAD), the same reach as the normal attack,
    by hand and in auto-hunt. Before, Bash / Hammer reached 170-200 units and Earthquake / War Cry / Seismic Wave / the buffs triggered on enemies much farther away. */
 const IG_PAD=40,IG_DMG_T={bash:1,hammer:1,quake:1,roar:1,counter:1,shockwave:1},IG_AUTO_T={bash:1,hammer:1,quake:1,roar:1,counter:1,shockwave:1,bulwark:1,ironskin:1};
-const CAST_T=.6,CAST_T_LONG=1.0,CAST_NOROOT={shadowstep:1,rush:1,gale:1,leap:1},CAST_LONG={meteor:1,spiritbomb:1,rain:1,quake:1,hammer:1,wail:1,wolves:1,guardian:1,roar:1,eagle:1,bulwark:1,volley:1};
-const BOSS_LEASH=3000,BOSS_LOSE=2400;
+const CAST_T=.3,CAST_T_LONG=.5, /* v5_155 cast pose halved (was .6 / 1.0) */ CAST_NOROOT={shadowstep:1,rush:1,gale:1,leap:1},CAST_LONG={meteor:1,spiritbomb:1,rain:1,quake:1,hammer:1,wail:1,wolves:1,guardian:1,roar:1,eagle:1,bulwark:1,volley:1};
+const BOSS_LEASH=4500,BOSS_LOSE=3600,MON_LEASH=800,MON_LOSE=1000; /* v5_157 leash enlarged (keep equal to monLeash / monLose / bossLeash / bossLose in game.go): was boss 3000 / 2400, monster 520 / 650 */
 const MELEE_SKILL_RANGE=200,MELEE_RANGED_T={pierce:1,fan:1,meteor:1,chain:1,drain:1,kunai:1,venom:1};
 const AIM_REACH={shadowstep:420,rush:420,shockwave:420,execute:200,siphon:170,bash:170,hammer:200}; /* v5_122 reach used to pick a target for a skill cast with no target */
 /* v5_122 manual casts never need a target in range: nothing in reach -> the skill still fires (toward where you face; dashes move you forward) and costs Qi / starts its cooldown.
@@ -1826,7 +1862,8 @@ function useSkill(i,auto){
   const s=SKILLS[id],t=s.t,tr=s.tier;
   /* v5_90 no attacking in the safe hub: ranged classes cannot cast anything; every class loses its damaging skills (heals / shields / buffs still work) */
   if(inTown()&&(P.cls>=3||(s.m>0&&!HEAL_SKILL_T[t]))){if(!(P.hubSkMsg>0)){say('You cannot attack or use attack skills inside the safe hub.','#8d9aa2');P.hubSkMsg=2}return false}
-  if(SCD[id]>0||P.qi<skCost(s)||P.skLock>0)return false; /* one skill at a time: short global lock after any cast; the basic attack is NOT blocked by it */
+  const prio=!auto&&i>=AUTO_SLOTS; /* v5_156 slots R and T (13, 14) are PRIORITY skills: pressed / clicked / tapped by hand they cast at any moment - they ignore the short global lock and interrupt a cast pose in progress */
+  if(SCD[id]>0||P.qi<skCost(s)||(P.skLock>0&&!prio))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack is NOT blocked by it */
   /* v5_122 skills work outside attack mode too: when nothing is targeted or selected and a monster is inside THIS skill's reach, the nearest one is selected
      (target frame shows it, you do not start auto-attacking) and the skill aims at it. Heals / buffs and the hub rules are unchanged. */
   if(!aimT()&&s.m>0&&!HEAL_SKILL_T[t]&&!inTown()){const e=nearest(AIM_REACH[t]||(P.cls<3?MELEE_SKILL_RANGE:520));if(e&&!e.dead&&!e.isPl)P.sel=e}
@@ -2032,7 +2069,7 @@ function useSkill(i,auto){
   }
   P.qi-=skCost(s);SCD[id]=s.cd;P.swing=.2;P.skLock=SKILL_GCD;sfxSkill(t);
   /* v5_109 CASTING: casting a skill stops you for a moment and plays a cast pose (arms raised). Dash skills (CAST_NOROOT) keep moving you instead. Tune CAST_T / CAST_T_LONG. */
-  if(!CAST_NOROOT[t]){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null}
+  if(!CAST_NOROOT[t]){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null} /* v5_153 casting roots you again (v5_152 removed the root while moving); v5_154 a move input does NOT cancel it, you move when the pose ends */
   return true;
 }
 function unlock(k){unlockId(2+k)}
@@ -2221,7 +2258,7 @@ function forgeCost(lv,armor){
 }
 function gearDesc(q,o){
   const ks=Object.keys(q.st);
-  return RAR[o.r].n+' \u00b7 Grade '+o.g+' \u00b7 now '+statTxt(o.st,o.lv,q)+' \u00b7 forge: '+ks.map(k=>'+'+q.st[k][1]+STAT_LBL[k]).join(', ')+' per level';
+  return RAR[o.r].n+' \u00b7 Grade '+o.g+' \u00b7 now '+statTxt(o.st,o.lv,q)+' \u00b7 forge at +'+FORGE_MAX+': '+ks.map(k=>FLAT_STATS[k]?'+'+fg2(slotFlatPctF(q,k,1)*100)+'% '+STAT_LBL[k].trim():'+'+fg2(q.st[k][1]*FORGE_PCT_REF)+STAT_LBL[k]).join(', ');
 }
 let frT=0;
 function forgePop(ok,nm,lv){ /* big SUCCESS / FAILED popup over the forge window; does not block clicks and fades after ~1.7 s */
@@ -2295,15 +2332,15 @@ function renderForge(){
       bar();
       add('fgs','<b>Now:</b> '+statTxt(o.st,lv,q));
       if(lv<FORGE_MAX)add('fgs','<b>Next level:</b> '+statTxt(o.st,lv+1,q));
-      add('fgs','Each level: '+Object.keys(q.st).map(k=>'+'+q.st[k][1]+STAT_LBL[k]).join(', '));
+      if(lv<FORGE_MAX){const d=forgeGain(lv);add('fgs','<b>Forge gain:</b> <span class="fgg">'+Object.keys(q.st).map(k=>FLAT_STATS[k]?'+'+fg2(slotFlatPctF(q,k,d)*100)+'% '+STAT_LBL[k].trim():'+'+fg2(d*FORGE_PCT_REF*q.st[k][1])+STAT_LBL[k]).join(', ')+'</span>');if(lv>=10)add('fgs','Higher forge levels give more than lower ones.')}
     }else{
       const lvTxt=add('fgl','+'+lv+(lv<FORGE_MAX?' \u2192 +'+(lv+1):' MAX'));
       bar();
-      const now=t.k==='wpn'?'+'+r2(BLADE_ATK*lv)+' ATK':'+'+r2(ROBE_DEF*lv)+' DEF, +'+r2(ROBE_HP*lv)+' HP';
-      const nxt=t.k==='wpn'?'+'+r2(BLADE_ATK*(lv+1))+' ATK':'+'+r2(ROBE_DEF*(lv+1))+' DEF, +'+r2(ROBE_HP*(lv+1))+' HP';
+      const now=corePctArr(q,forgeFrac(lv)).join(', ');
+      const nxt=corePctArr(q,forgeFrac(lv+1)).join(', ');
       add('fgs','Your starting '+(t.k==='wpn'?'Blade':'Robe')+'. A boss drop can replace it.');
       add('fgs','<b>Now:</b> '+now);if(lv<FORGE_MAX)add('fgs','<b>Next level:</b> '+nxt);
-      add('fgs','Each level: '+(t.k==='wpn'?'+'+r2(BLADE_ATK)+' ATK':'+'+r2(ROBE_DEF)+' DEF, +'+r2(ROBE_HP)+' HP'));
+      if(lv<FORGE_MAX){const d=forgeGain(lv);add('fgs','<b>Forge gain:</b> <span class="fgg">'+corePctArr(q,d).join(', ')+'</span>');if(lv>=10)add('fgs','Higher forge levels give more than lower ones.')}
     }
     if(lv<FORGE_MAX){
       const c=forgeCost(lv,t.armor),okO=P.ore>=c.ore,okC=P.coins>=c.coins;
@@ -2380,7 +2417,7 @@ function lootIcon(key,icon,n,col){
 function bagLog(t,c){P.recent.unshift({t,c});if(P.recent.length>20)P.recent.pop();saveSoon();if(!$('bag').hidden)renderBag()}
 function addPot(k,n){if(n<=0)return;lootIcon('p'+k,k==='tp'?'&#10162;':'&#9879;',n,POTS[k].c);P.pots[k]=Math.min(POT_MAX,P.pots[k]+n);pop(P.x-14,P.y-58,'+'+n+' '+POT_SH[k],POTS[k].c,12);bagLog('+'+n+' '+POTS[k].n+(n>1?'s':''),POTS[k].c)}
 /* ---------- dodge: quick dash with a brief invulnerable window, aimed by dragging the small pad ---------- */
-const DASH_DIST=210,DASH_T=.2,DASH_CD=1.6,DODGE_INV=.35; /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
+const DASH_DIST=210,DASH_T=.34,DASH_CD=1.6,DODGE_INV=.35; /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
 function doDodge(dx,dy){
   if(!started||P.dead>0||P.dcd>0)return;
   P.cast=0; /* dodging cancels a cast */
@@ -2388,8 +2425,10 @@ function doDodge(dx,dy){
   if(l<.01){dx=Math.cos(P.face);dy=Math.sin(P.face);l=1}
   P.dvx=dx/l;P.dvy=dy/l;P.dashT=DASH_T;P.dcd=DASH_CD;P.inv=Math.max(P.inv>0?P.inv:0,DODGE_INV);P.skLock=Math.max(P.skLock||0,DODGE_INV);P.atkCd=Math.max(P.atkCd||0,DODGE_INV);
   P.face=Math.atan2(P.dvy,P.dvx);P.mv=null;P.task=null;P.mine=0;
-  ring(P.x,P.y,48,'#bfe9ff');
+  ring(P.x,P.y,48,'#bfe9ff');ring(P.x,P.y,80,'#ffffff');
+  spark(P.x,P.y,'#e8f6ff',14,150,.45,3.4);spark(P.x,P.y,'#9fd8ff',10,90,.55,4.2); /* v5_142 launch burst */
 }
+const dashEase=u=>1-Math.pow(1-Math.min(1,Math.max(0,u)),3);
 /* v5_99 ROTATABLE / TILTABLE CAMERA (3D mode). yaw rotates the view around the player, tilt is the camera pitch (radians above the ground).
    Controls: hold RIGHT or MIDDLE mouse and drag (left/right = rotate, up/down = tilt), or [ and ] to rotate, PageUp / PageDown to tilt, Home to reset;
    phone: drag with TWO fingers (sideways = rotate, up/down = tilt, pinch = zoom). Movement, joystick, dodge and the hub arrow follow the view. */
@@ -2398,6 +2437,8 @@ const camView={yaw:0,tilt:CAM_TILT0};
 function camRot(ix,iy){if(!MODE3D||!camView.yaw)return [ix,iy];const c=Math.cos(camView.yaw),sn=Math.sin(camView.yaw);return [ix*c+iy*sn,-ix*sn+iy*c]} /* screen direction -> world direction */
 function camUnrot(wx,wy){if(!MODE3D||!camView.yaw)return [wx,wy];const c=Math.cos(camView.yaw),sn=Math.sin(camView.yaw);return [wx*c-wy*sn,wx*sn+wy*c]} /* world direction -> screen direction */
 function camAdj(dyaw,dtilt){camView.yaw=(camView.yaw+dyaw)%(Math.PI*2);camView.tilt=clamp(camView.tilt+dtilt,CAM_TILT_MIN,CAM_TILT_MAX)}
+/* true while you are steering (keys / joystick): auto skills do not cast while it is true (v5_153). v5_154: a move input no longer cancels the cast pose */
+function wantsMove(){const ix=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0)+joy.x,iy=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)+joy.y;return Math.abs(ix)>.12||Math.abs(iy)>.12}
 function moveDir(){const ix=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0)+joy.x,iy=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)+joy.y;return Math.hypot(ix,iy)>.3?camRot(ix,iy):[0,0]}
 const dodgeEl=$('dodge'),dodgeKnob=dodgeEl.querySelector('i'),dg={id:null,x:0,y:0};
 function dgMove(e){
@@ -3307,7 +3348,7 @@ function updatePlayer(dt){
   pot.hp=Math.max(0,pot.hp-dt);pot.qi=Math.max(0,pot.qi-dt);pot.tp=Math.max(0,pot.tp-dt);
   if(P.tp>0){if(dist(P.x,P.y,P.tpx,P.tpy)>30)cancelTp('Teleport cancelled: you moved.');else{P.tp-=dt;tpFx(dt);if(P.tp<=0)finishTp()}}
   autoPot();for(let i=0;i<SCD.length;i++)if(SCD[i]>0)SCD[i]-=dt;P.bfT-=dt;P.vlT-=dt;P.drT-=dt;P.ceT-=dt;if(P.gsT>0)P.gsT-=dt;if(P.galeLock>0)P.galeLock-=dt;P.inv-=dt;if(P.shT>0){P.shT-=dt;if(P.shT<=0)P.sh=0}
-  P.qi=Math.min(maxQi(),P.qi+dt*(3+P.lvl*.1));
+  P.qi=Math.min(maxQi(),P.qi+dt*(3+P.lvl*.1+maxQi()*qrgVal()/100));
   if(P.hubSkMsg>0)P.hubSkMsg-=dt;
   if(P.rngMsg>0)P.rngMsg-=dt;
   if(inTown()){P.hp=Math.min(maxHp(),P.hp+maxHp()*.08*dt);P.qi=Math.min(maxQi(),P.qi+dt*8)}
@@ -3366,14 +3407,17 @@ function updatePlayer(dt){
     if(t&&!t.dead){
       const d=dist(t.x,t.y,P.x,P.y);
       let near=0;for(const m of (pvpOnly()?foes():mons))if(!m.dead&&dist(m.x,m.y,P.x,P.y)<120)near++;
-      if(!(P.skLock>0))for(let i=0;i<AUTO_SLOTS;i++){const id=EQ[i];if(id<0||!AUTOSK[i])continue;const ty=SKILLS[id].t; /* slot 1 first, then 2, 3 ... */
+      if(!(P.skLock>0)&&!wantsMove())for(let i=0;i<AUTO_SLOTS;i++){ /* v5_153 AUTO skills wait while you steer (keys / joystick): stop moving and they cast again */const id=EQ[i];if(id<0||!AUTOSK[i])continue;const ty=SKILLS[id].t; /* slot 1 first, then 2, 3 ... */
         const cu=clsAuto(ty,d,t,near),u=cu!==undefined?cu:ty==='heal'||ty==='mend'?P.hp<maxHp()*.5:ty==='nova'?near>=2||(d<=90&&t.boss):ty==='drain'?near>=2||(near&&P.hp<maxHp()*.8):ty==='might'?(t.boss||near>=3)&&P.bfT<=0:ty==='shadowstep'?d>120&&d<420:ty==='bladestorm'?near>=2||d<=130:ty==='smoke'?(t.boss||near>=3)&&P.vlT<=0:ty==='execute'?d<=200:ty==='siphon'?d<=170&&P.hp<maxHp()*.9:ty==='rush'?d>150&&d<380:ty==='strike'||ty==='flurry'?d<=170:ty==='cleave'?d<=200:ty==='leap'?d>170&&d<360:ty==='meteor'||ty==='chain'?d<420:d<420;
         if(u&&useSkill(i,true))break} /* first skill that really fired wins; the rest wait for the next cast */
     }
   }
   if(P.cast>0)P.cast-=dt;
   P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);
-  if(P.dashT>0){const st=DASH_DIST/DASH_T*dt;P.x+=P.dvx*st;P.y+=P.dvy*st;P.dashT-=dt;spark(P.x,P.y,'#bfe9ff',2,60,.25,2)}
+  if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1)-dashEase(e0));P.x+=P.dvx*st;P.y+=P.dvy*st;
+    /* v5_142 dash animation: ghost trail left along the path (fades behind you), streak sparks flung backwards, soft landing ring */
+    spark(P.x,P.y,'#bfe9ff',3,18,.5,3.6);spark(P.x,P.y,'#ffffff',1,10,.35,2.4);spark(P.x-P.dvx*18,P.y-P.dvy*18,'#7fc4ff',2,70,.3,2.2);
+    if(P.dashT<=0){ring(P.x,P.y,58,'#bfe9ff');spark(P.x,P.y,'#e8f6ff',12,110,.4,3);}}
   const d=dist(P.x,P.y,C,C);
   if(d>RIM-20){P.x=C+(P.x-C)/d*(RIM-20);P.y=C+(P.y-C)/d*(RIM-20)}
   const mvd=Math.hypot(P.x-ox0,P.y-oy0);
@@ -3403,7 +3447,7 @@ function updateMonsters(dt){
     const dp=dist(P.x,P.y,m.x,m.y);
     if(m.state==='chase'){
       /* v5_113 bosses have a MUCH larger leash (BOSS_LEASH from home, BOSS_LOSE from you) so they cannot be dragged out and reset easily; normal monsters unchanged */
-      if(P.dead>0||town||dp>(m.boss?BOSS_LOSE:650)||dist(m.x,m.y,m.hx,m.hy)>(m.boss?BOSS_LEASH:520))m.state='return';
+      if(P.dead>0||town||dp>(m.boss?BOSS_LOSE:MON_LOSE)||dist(m.x,m.y,m.hx,m.hy)>(m.boss?BOSS_LEASH:MON_LEASH))m.state='return';
     }else if(m.state==='idle'){
       if(P.dead<=0&&!town&&dp<m.aggro)m.state='chase';
       else{
@@ -4250,6 +4294,22 @@ const el={hp:$('hp'),qi:$('qi'),xp:$('xp'),tg:$('tg'),tgHp:$('tgHp')};
 const power=()=>Math.round(atkVal()*6+defVal()*4+maxHp()*.25);
 const kfmt=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e4?(n/1e3).toFixed(1)+'K':String(n);
 const pad2=n=>(n<10?'0':'')+n;
+/* v5_143 buff tooltip: hover (PC) or tap (phone) a buff icon to see its name, description and time left. The panel follows the live buff data, so the numbers
+   keep counting down while you hold the mouse still. */
+let bfTipName='',bfTipEl=null,bfTipHide=0;
+function bfTipBox(){if(!bfTipEl){bfTipEl=document.createElement('div');bfTipEl.id='bftip';bfTipEl.hidden=true;($('hud')||document.body).appendChild(bfTipEl)}return bfTipEl}
+function bfTipFill(b){const e=bfTipBox();e.innerHTML='';const n=document.createElement('b');n.textContent=b[3];e.appendChild(n);const d=document.createElement('small');d.textContent=b[4];e.appendChild(d);if(b[5]>0){const t=document.createElement('small');t.textContent=b[5]+' s left';e.appendChild(t)}}
+function bfTipPlace(x,y){const e=bfTipBox(),w=e.offsetWidth,h=e.offsetHeight;e.style.left=Math.max(4,Math.min(innerWidth-w-4,x+14))+'px';e.style.top=Math.max(4,Math.min(innerHeight-h-4,y+18))+'px'}
+function bfTipShow(name,x,y){bfTipName=name;const b=(window.BUFF_NOW||[]).find(z=>z[3]===name);if(!b)return bfTipOff();bfTipFill(b);bfTipBox().hidden=false;bfTipPlace(x,y)}
+function bfTipOff(){bfTipName='';clearTimeout(bfTipHide);if(bfTipEl)bfTipEl.hidden=true}
+function bfTipRefresh(bs){window.BUFF_NOW=bs;if(!bfTipName)return;const b=bs.find(z=>z[3]===bfTipName);if(!b)return bfTipOff();bfTipFill(b)}
+(function(){const bx=$('buffs');if(!bx)return;
+  const at=e=>{const t=e.target.closest&&e.target.closest('.bf');return t&&bx.contains(t)?t:null};
+  bx.addEventListener('mouseover',e=>{const t=at(e);if(t)bfTipShow(t.dataset.n,e.clientX,e.clientY)});
+  bx.addEventListener('mousemove',e=>{if(bfTipName&&at(e))bfTipPlace(e.clientX,e.clientY)});
+  bx.addEventListener('mouseout',e=>{if(!at(e)||!bx.contains(e.relatedTarget)||!(e.relatedTarget.closest&&e.relatedTarget.closest('.bf')))bfTipOff()});
+  bx.addEventListener('click',e=>{const t=at(e);if(!t)return;if(bfTipName===t.dataset.n&&e.pointerType==='touch'){bfTipOff();return}bfTipShow(t.dataset.n,e.clientX,e.clientY);if(e.pointerType==='touch'){clearTimeout(bfTipHide);bfTipHide=setTimeout(bfTipOff,3500)}});
+})();
 let buffKey='',zoneKey='',lastPing='';
 const st=(e,t)=>{t=''+t;if(e.textContent!==t)e.textContent=t},sw=(e,v)=>{v=''+v;if(e.style.width!==v)e.style.width=v},sh=(e,v)=>{v=''+v;if(e.style.height!==v)e.style.height=v};
 function hud(){
@@ -4287,9 +4347,16 @@ function hud(){
   const zk=curWorld+':'+base;
   if(zk!==zoneKey){const first=!zoneKey;zoneKey=zk;if(started&&!first){const b=$('banner');b.innerHTML='';b.appendChild(document.createTextNode(base));const sm=document.createElement('small');sm.textContent=W[curWorld].n;b.appendChild(sm);b.style.animation='none';void b.offsetWidth;b.style.animation=''}}
   /* buffs */
-  const bs=[];if(P.bfT>0)bs.push(['\u25b2',Math.ceil(P.bfT),'#ffd36b']);if(P.vlT>0)bs.push(['\u2601',Math.ceil(P.vlT),'#b79cff']);if(P.drT>0)bs.push(['\u26e8',Math.ceil(P.drT),'#ffb070']);if(P.ceT>0)bs.push(['\u25ce',Math.ceil(P.ceT),'#ffe27a']);if(P.spirits.length)bs.push(['\u2658',P.spirits.length,'#9fe0ff']);if(P.sh>0&&P.shT>0)bs.push(['\u25c8',Math.ceil(P.shT),'#8ff0c4']);
+  const bs=[];
+  if(P.bfT>0)bs.push(['\u25b2',Math.ceil(P.bfT),'#ffd36b','ATK Boost','+'+Math.round(P.bf*100)+'% ATK.',Math.ceil(P.bfT)]);
+  if(P.vlT>0)bs.push(['\u2601',Math.ceil(P.vlT),'#b79cff','Veil','+35% move speed and a stronger ATK boost while it lasts.',Math.ceil(P.vlT)]);
+  if(P.drT>0)bs.push(['\u26e8',Math.ceil(P.drT),'#ffb070','Damage Reduction','Takes '+Math.round(P.dr*100)+'% less damage from hits.',Math.ceil(P.drT)]);
+  if(P.ceT>0)bs.push(['\u25ce',Math.ceil(P.ceT),'#ffe27a','Eagle Eye','+25% crit chance.',Math.ceil(P.ceT)]);
+  if(P.spirits.length)bs.push(['\u2658',P.spirits.length,'#9fe0ff','Spirits',P.spirits.length+' summoned spirit'+(P.spirits.length>1?'s':'')+' fighting beside you.',0]);
+  if(P.sh>0&&P.shT>0)bs.push(['\u25c8',Math.ceil(P.shT),'#8ff0c4','Shield','Absorbs '+Math.round(P.sh).toLocaleString()+' damage.',Math.ceil(P.shT)]);
   const bk=bs.map(x=>x[0]+x[1]).join('|');
-  if(bk!==buffKey){buffKey=bk;const bx=$('buffs');bx.innerHTML='';for(const x of bs){const e=document.createElement('div');e.className='bf';e.style.color=x[2];e.textContent=x[0];const em=document.createElement('em');em.textContent=x[1];e.appendChild(em);bx.appendChild(e)}}
+  if(bk!==buffKey){buffKey=bk;const bx=$('buffs');bx.innerHTML='';for(const x of bs){const e=document.createElement('div');e.className='bf';e.dataset.n=x[3];e.style.color=x[2];e.textContent=x[0];const em=document.createElement('em');em.textContent=x[1];e.appendChild(em);bx.appendChild(e)}}
+  bfTipRefresh(bs);
   /* potions */
   st($('potN'),kfmt(P.pots.hp));st($('potQN'),kfmt(P.pots.qi));
   $('potCd').hidden=pot.hp<=0;st($('potCd'),Math.ceil(pot.hp)+'s');$('potQCd').hidden=pot.qi<=0;st($('potQCd'),Math.ceil(pot.qi)+'s');
@@ -4343,7 +4410,7 @@ $('bSaver').addEventListener('click',()=>{if(!started)return;$('menu').hidden=tr
 function statsUpdate(){
   const w=$('statsWin');if(w.hidden)return;
   st($('swCls'),CLASSES[P.cls].n);st($('swLv'),P.lvl);st($('swRealm'),realmName(realmIdx()));st($('swPw'),power().toLocaleString());
-  st($('swHp'),maxHp().toLocaleString());st($('swQi'),maxQi().toLocaleString());
+  st($('swHp'),maxHp().toLocaleString());st($('swQi'),maxQi().toLocaleString());st($('swQrg'),'+'+(Math.round(qrgVal()*100)/100)+'%/s');
   st($('swAtk'),atkVal().toLocaleString());st($('swDef'),defVal().toLocaleString());
   st($('swRed'),Math.round(defRedAt(defVal(),P.lvl)*100)+'%');
   st($('swCrit'),Math.round(critChance()*100)+'%');st($('swCd'),Math.round(critMul()*100)+'%');st($('swCdb'),Math.round(cdbVal()*10)/10+'%');st($('swCev'),Math.round(cevVal()*10)/10+'%');st($('swCdr'),Math.round(cdrVal()*10)/10+'%');
@@ -4585,14 +4652,15 @@ makeDrag($('frwin'),'h4');
 /* inspect another player: click the "Player" tag on the target frame */
 const PG={id:-1};
 const PG_ORDER=['wpn','wpn2','robe','ear','neck','ring','brace','glove','belt','legs','boot'];
-const pgStats=(st,lv,q)=>Object.keys(st).map(k=>{const v=st[k]+(q&&q.st[k]?lv*q.st[k][1]:0);return '+'+(Math.round(v*10)/10)+STAT_LBL[k]});
+const pgStats=statArr;
 /* another player's POWER: same formula as the Power on your own HUD (ATK*6 + DEF*4 + max HP*0.25), worked out from the gear and levels they share.
    Max HP is the value their own client reports. Temporary buffs are not counted. */
-function peerStat(q,key){let v=0;for(const s of GEAR){const o=q.eq&&q.eq[s.k];if(o&&o.g>0){v+=o.st[key]||0;const a=s.st[key];if(a&&!(s.core&&CORE_FORGED[key]))v+=o.lv*a[1]}}return v}
+function peerStat(q,key){let v=0;for(const s of GEAR){const o=q.eq&&q.eq[s.k];if(o&&o.g>0){v+=o.st[key]||0;const a=s.st[key];if(a&&!FLAT_STATS[key])v+=forgeEff(o.lv)*a[1]}}return v}
+const peerForgePct=(q,k)=>flatForgePct(k,s=>{const o=q.eq&&q.eq[s.k];return s.core?{g:o&&o.g>0?o.g:0,lv:s.core==='wlv'?q.wlv:q.alv}:(o||{g:0,lv:0})});
 function peerPower(q){
   const ri=Math.floor((q.lvl-1)/10),cb=CLB[(q.sk>>>21)&7]||{};
-  const atk=Math.round((10+q.lvl*3.5+q.wlv*BLADE_ATK+peerStat(q,'atk'))*(1+ri*.12));
-  const def=Math.round((q.lvl*3+q.alv*ROBE_DEF+peerStat(q,'def'))*(1+ri*.04)*(cb.def||1));
+  const atk=Math.round((10+q.lvl*3.5+peerStat(q,'atk'))*(1+peerForgePct(q,'atk'))*(1+ri*.12));
+  const def=Math.round((q.lvl*3+peerStat(q,'def'))*(1+peerForgePct(q,'def'))*(1+ri*.04)*(cb.def||1));
   return Math.round(atk*6+def*4+q.mh*.25)}
 function pgRender(){
   const box=$('pgear'),q=NET.peers.get(PG.id);
@@ -4615,8 +4683,8 @@ function pgRender(){
   for(const k of PG_ORDER){
     const g=GEAR.find(z=>z.k===k),o=q.eq&&q.eq[k];
     if(o){n++;add({ic:ICONS[k](RAR[o.r].c),cls:RAR[o.r].cls||'rare',name:gearName(g,o),lv:o.lv,col:RAR[o.r].c,sub:RAR[o.r].n+' \u00b7 Grade '+o.g+' \u00b7 '+g.n,stats:pgStats(o.st,o.lv,g)})}
-    else if(k==='wpn'&&q.wlv>0){n++;add({ic:ICONS.blade('#e3b559'),cls:'epic',name:'Primary Weapon (Blade)',lv:q.wlv,col:'#e3b559',sub:'Starting blade \u00b7 forge level +'+q.wlv,stats:['+'+r2(q.wlv*BLADE_ATK)+' ATK']})}
-    else if(k==='robe'&&q.alv>0){n++;add({ic:ICONS.robe('#e3b559'),cls:'epic',name:'Robe',lv:q.alv,col:'#e3b559',sub:'Starting robe \u00b7 forge level +'+q.alv,stats:['+'+r2(q.alv*ROBE_DEF)+' DEF','+'+r2(q.alv*ROBE_HP)+' HP']})}
+    else if(k==='wpn'&&q.wlv>0){n++;add({ic:ICONS.blade('#e3b559'),cls:'epic',name:'Primary Weapon (Blade)',lv:q.wlv,col:'#e3b559',sub:'Starting blade \u00b7 forge level +'+q.wlv,stats:corePctArr(GQ.wpn,forgeFrac(q.wlv))})}
+    else if(k==='robe'&&q.alv>0){n++;add({ic:ICONS.robe('#e3b559'),cls:'epic',name:'Robe',lv:q.alv,col:'#e3b559',sub:'Starting robe \u00b7 forge level +'+q.alv,stats:corePctArr(GQ.robe,forgeFrac(q.alv))})}
     else add({slotLetter:g.ic,name:g.n,sub:'Empty'});
   }
   pw.textContent='\u26A1 Power '+peerPower(q).toLocaleString();
@@ -4912,6 +4980,7 @@ const CMDHELP=[
  'Spawn:  /boss [1-5] [level]  \u00b7 /bossclear  \u00b7 /bosses (list + distance)  \u00b7 /gotoboss',
  'Me:  /heal  \u00b7 /god (invincible on/off)  \u00b7 /speed 0.5-5  \u00b7 /home  \u00b7 /where',
  'Stats:  /lvl N  \u00b7 /exp N  \u00b7 /coins N  \u00b7 /ore N  \u00b7 /pots N  \u00b7 /gear [grade] [common|rare|epic|legendary] [count]',
+ 'Forge:  /forge (show levels)  \u00b7 /forge [slot|all] 0-'+FORGE_MAX+' (set forge level)  \u00b7 /forgereset [slot|all] (back to 0)  \u00b7 slots: wpn wpn2 robe ear neck ring brace glove belt legs boot',
  'View:  /minimap 500-'+3080*MAP_K+' | max | min (radar range, default 2000; max = full map radius)',
  'Party:  /invite name  \u00b7 /accept  \u00b7 /decline  \u00b7 /leave  \u00b7 /p message or the Party chat tab  \u00b7 leader: /kick name  \u00b7 /leader name  \u00b7 /disband',
  'Friends:  /friend name (send a request)  \u00b7 /friend accept [name]  \u00b7 /friend decline [name]  \u00b7 /unfriend name  \u00b7 /friends (open the window)',
@@ -4931,6 +5000,16 @@ function bossNear(n,lv){
   announceBosses(out);
 }
 const RARNAME={common:0,rare:1,epic:2,legendary:3};
+/* slot name (or alias) -> list of slot keys; 'all' = every slot; null = unknown */
+function forgeSlots(w){
+  if(w===undefined)return null;w=String(w).toLowerCase();
+  if(w==='all')return GEAR.map(q=>q.k);
+  const al={weapon:'wpn',blade:'wpn',primary:'wpn',secondary:'wpn2',offhand:'wpn2',earrings:'ear',earring:'ear',necklace:'neck',gloves:'glove',bracelet:'brace',boots:'boot',legguards:'legs',armor:'robe'};
+  w=al[w]||w;return GEAR.some(q=>q.k===w)?[w]:null}
+function forgeApply(keys,n){
+  for(const k of keys)P.gear[k].lv=n; /* wpn / robe write through to P.wlv / P.alv */
+  P.hp=Math.min(P.hp,maxHp());P.qi=Math.min(P.qi,maxQi());
+  save();if(!$('forge').hidden)renderForge();if(!$('bag').hidden)renderBag()}
 const CMDS={
   help(){for(const l of CMDHELP)say(l,'#e3b559',14000)},
   heal(){P.hp=maxHp();P.qi=maxQi();say('Fully healed.','#8ff0c4')},
@@ -4965,6 +5044,19 @@ const CMDS={
     const g=clamp(CMDNUM(a[0],Math.max(1,curWorld))|0,1,NW),rr=a[1]===undefined||a[1]==='random'?-1:(a[1] in RARNAME?RARNAME[a[1]]:clamp(CMDNUM(a[1],0)|0,0,RAR.length-1)),n=clamp(CMDNUM(a[2],1)|0,1,20);
     for(let i=0;i<n;i++){const q=GEAR[Math.floor(rnd()*GEAR.length)];takeGear(rollGear(q,g,.5,rr<0?rollRarity():rr))}
     renderBag&&!$('bag').hidden&&renderBag()},
+  /* v5_143 admin: set / reset forge level. The level belongs to the SLOT (wpn / robe use the Blade / Robe level), so it works with or without an item worn. */
+  forge(a){
+    const sl=forgeSlots(a[0]);
+    if(a.length===0){say('Forge levels: '+GEAR.map(q=>q.k+' +'+P.gear[q.k].lv).join(' \u00b7 '),'#e3b559');return}
+    let keys=sl,val=a.length>1?a[1]:a[0];
+    if(a.length===1&&!isNaN(parseFloat(a[0]))){keys=GEAR.map(q=>q.k);val=a[0]} /* "/forge 50" = every slot */
+    if(!keys||keys.length===0||isNaN(parseFloat(val))){say('Usage: /forge [slot|all] 0-'+FORGE_MAX+'   slots: '+GEAR.map(q=>q.k).join(' '),'#d9503f');return}
+    const n=clamp(parseFloat(val)|0,0,FORGE_MAX);
+    forgeApply(keys,n);say('Forge level set to +'+n+' on '+(keys.length===GEAR.length?'all slots':keys.join(', '))+'.','#e3b559')},
+  forgereset(a){
+    const keys=a.length?forgeSlots(a[0]):GEAR.map(q=>q.k);
+    if(!keys||keys.length===0){say('Usage: /forgereset [slot|all]   slots: '+GEAR.map(q=>q.k).join(' '),'#d9503f');return}
+    forgeApply(keys,0);say('Forge level reset to +0 on '+(keys.length===GEAR.length?'all slots':keys.join(', '))+'.','#e3b559')},
   who(){say('/who needs the multiplayer server.','#8d9aa2')},
   announce(){say('/announce needs the multiplayer server.','#8d9aa2')}
 };
@@ -5266,7 +5358,7 @@ function cpJump(){
   inp.addEventListener('keyup',e=>e.stopPropagation());
   $('cpSet').addEventListener('click',cpSettings);$('cpNew').addEventListener('click',cpNewChat);$('cpHelp').addEventListener('click',cpHelp);
   $('cpPin').addEventListener('click',cpShareLoc);$('cpDoor').addEventListener('click',cpJump);$('cpList').addEventListener('click',cpQuick);
-  $('cpX').addEventListener('click',cpHide);$('bPchat').addEventListener('click',togglePchat);
+  $('cpX').addEventListener('click',cpHide);{const bp=$('bPchat');if(bp)bp.addEventListener('click',togglePchat)} /* v5_151 the top-bar Msg button was removed; private chat still opens with I or /w */
   $('cpLog').addEventListener('click',()=>{if(!$('cpPop').hidden)cpPopHide()});
   $('hud').classList.toggle('nofeed',!CPREF.feed);
   /* drag the window by its title bar */
@@ -5408,7 +5500,7 @@ async function ensureIgn(){
 const hpKey=()=>saveKey()+'_hp';
 function hpStash(){if(!started||!AUTH.ok||P.dead>0||P.hp<=0)return;try{localStorage.setItem(hpKey(),JSON.stringify({h:Math.round(P.hp),q:Math.round(P.qi),t:Date.now(),w:P.lvl}))}catch(e){}}
 function hpRestore(){try{const o=JSON.parse(localStorage.getItem(hpKey())||'null');if(!o||!(o.h>0)||o.w!==P.lvl)return;const el=Math.min(600,Math.max(0,(Date.now()-o.t)/1000));
-  P.hp=Math.min(maxHp(),Math.max(1,o.h+el*(1+P.lvl*.15)));P.qi=Math.min(maxQi(),Math.max(0,o.q+el*(3+P.lvl*.1)))}catch(e){}}
+  P.hp=Math.min(maxHp(),Math.max(1,o.h+el*(1+P.lvl*.15)));P.qi=Math.min(maxQi(),Math.max(0,o.q+el*(3+P.lvl*.1+maxQi()*qrgVal()/100)))}catch(e){}}
 setInterval(hpStash,4000);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)hpStash()});window.addEventListener('pagehide',hpStash);
 async function begin(){
