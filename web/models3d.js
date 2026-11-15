@@ -666,6 +666,11 @@ function animPlayer(R,P,time,ri){
    R.m.glow2.opacity=gt?(.22+.02*gt+.06*Math.sin(time*(3+gt*.6))+(sl?.12:0)):0;
    R.m.oglow.opacity=at?(.34+.03*at+.10*Math.sin(time*(2+at*.5))):0;
    if(at){const f=(time*(.28+.02*at))%1;R.ogb.position.y=3+f*52;R.m.oband.opacity=(.18+.015*at)*Math.sin(f*3.1416)}}
+  /* v5_109 casting pose: both arms rise over the head, body leans back and glows while a skill is being cast */
+  if(P.cast>0){const cm=P.castMax||.6,k=clamp(1-P.cast/cm,0,1),up=Math.sin(Math.min(1,k*3.2)*PI/2),pu=1-clamp((k-.8)/.2,0,1)*.5;
+    R.armR.rotation.x=-2.55*up-.12*Math.sin(time*20)*up;R.armL.rotation.x=-2.55*up+.12*Math.sin(time*20)*up;
+    R.armR.rotation.z=.5*up;R.armL.rotation.z=-.5*up;R.torso.rotation.x=-.2*up;R.torso.rotation.y=0;
+    R.body.position.y+=2.5*up*pu;R.m.glow.opacity=Math.min(1,.28+.1*Math.sin(time*5)+.6*up);R.aR=R.armR.rotation.x;R.aL=R.armL.rotation.x}
 }
 
 /* ================================================================== MONSTERS (unit space, facing +Z) */

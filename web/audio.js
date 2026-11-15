@@ -8,12 +8,16 @@
      SND.play(name, arg)           one-shot effect, e.g. SND.play('hit'), SND.play('cast_proj')
      SND.music(v) / SND.sfx(v)     set volume 0..1 (no argument = read it)
 */
-(function (root) {
+(function SNDMOD(root) {
   'use strict';
   var KEY_M = 'al_vol_music', KEY_S = 'al_vol_sfx';
   function lsGet(k, d) { try { var v = localStorage.getItem(k); if (v === null) return d; var n = parseFloat(v); return isFinite(n) ? Math.min(1, Math.max(0, n)) : d; } catch (e) { return d; } }
   function lsSet(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} }
 
+  var OC = root.OfflineAudioContext || root.webkitOfflineAudioContext, PSR = 32000, REF = 0.392; /* REF = effects bus gain at the default 70% volume (taper(0.7)*0.8) */
+  var preReady = !OC, progDone = 0, progTotal = 0, fromCache = 0, srcHash = null, rbCtx = null, bgJobs = [], rjAct = 0, rjGen = 0, W = { calm: 4, combat: 6 };
+  var MAXC = Math.max(2, Math.min(3, ((root.navigator && navigator.hardwareConcurrency) || 4) - 1)); /* how many sounds are rendered at the same time */
+  var pre = !!OC, pbuf = {}, bufSfx = {}, sfxOut = null, hushed = false, offline = false, saved = null, jobs = [], jobBusy = false, preStarted = false, nActive = 0, satC = null;
   var ctx = null, master = null, musicBus = null, sfxBus = null, rev = null, fxIn = null, noiseBuf = null, timer = null;
   var vMusic = lsGet(KEY_M, 0.5), vSfx = lsGet(KEY_S, 0.7);
   var active = false, combat = false, wasActive = false, wasCombat = false, unlocked = false;
@@ -29,7 +33,7 @@
     if (ctx) return true;
     var AC = root.AudioContext || root.webkitAudioContext;
     if (!AC) return false;
-    try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { try { ctx = new AC(); } catch (e2) { ctx = null; return false; } }
+    try { ctx = new AC({ latencyHint: 'playback' }); } catch (e) { try { ctx = new AC(); } catch (e2) { ctx = null; return false; } }
     var comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -12; comp.knee.value = 14; comp.ratio.value = 5; comp.attack.value = 0.008; comp.release.value = 0.18; /* slower attack lets the crisp transients through */
     master = ctx.createGain(); master.gain.value = 1;
@@ -37,9 +41,7 @@
     musicBus = ctx.createGain(); sfxBus = ctx.createGain();
     musicBus.connect(master);
     /* effects bus: soft saturation for punch, then master. A short room reverb feeds back into the bus. */
-    var sat = ctx.createWaveShaper(), curve = new Float32Array(2048);
-    for (var k = 0; k < curve.length; k++) { var x = k / (curve.length - 1) * 2 - 1; curve[k] = Math.tanh(x * 1.8) / Math.tanh(1.8); }
-    sat.curve = curve; try { sat.oversample = '2x'; } catch (e) {}
+    var sat = ctx.createWaveShaper(); sat.curve = satCurve(); try { sat.oversample = '2x'; } catch (e) {}
     sfxBus.connect(sat); sat.connect(master);
     var irLen = Math.floor(ctx.sampleRate * 0.55), ir = ctx.createBuffer(2, irLen, ctx.sampleRate);
     for (var c = 0; c < 2; c++) {
@@ -62,6 +64,8 @@
     fxIn.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(musicBus);
     makeTrack('calm', 60 / 66 / 4, calmStep);
     makeTrack('combat', 60 / 128 / 4, combatStep);
+    sfxOut = ctx.createGain(); sfxOut.connect(master); /* pre-rendered effects play through here (already saturated + reverbed) */
+    attachBuf('calm'); attachBuf('combat');
     applyVol(true);
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {} /* iOS 16.4+: play even with the ring/silent switch on, and take audio focus */
     ctx.onstatechange = function () {
@@ -80,6 +84,7 @@
     var t = ctx.currentTime, tc = now ? 0.001 : 0.04;
     musicBus.gain.setTargetAtTime(taper(vMusic) * MUSIC_GAIN, t, tc);
     sfxBus.gain.setTargetAtTime(taper(vSfx) * SFX_GAIN, t, tc);
+    if (sfxOut) sfxOut.gain.setTargetAtTime(taper(vSfx) * SFX_GAIN / REF, t, tc);
   }
 
   /* ---------- low-level voices ---------- */
@@ -93,7 +98,7 @@
   }
   /* oscillator note: dest, start, wave, freq from -> to, attack, decay, peak, {hold, det, lp, lp1, q, send, wet} */
   function tone(dest, t, type, f0, f1, a, d, peak, o) {
-    if (voices > VMAX) return;
+    if (voices > VMAX && !offline) return;
     o = o || {};
     var osc = ctx.createOscillator(); osc.type = type;
     osc.frequency.setValueAtTime(f0, t);
@@ -115,11 +120,11 @@
     node.connect(g); g.connect(dest);
     if (o.send && o.wet) { var w = ctx.createGain(); w.gain.value = o.wet; g.connect(w); w.connect(o.send); }
     osc.start(t); osc.stop(t + total + 0.06);
-    voices++; osc.onended = function () { voices--; };
+    if (!offline) { voices++; osc.onended = function () { voices--; }; }
   }
   /* filtered noise: dest, start, decay, peak, filter type, freq from -> to, Q, attack, reverb send amount */
   function noise(dest, t, d, peak, ftype, f0, f1, q, a, wet) {
-    if (voices > VMAX) return;
+    if (voices > VMAX && !offline) return;
     a = a || 0.004;
     var src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
     var f = ctx.createBiquadFilter(); f.type = ftype; f.Q.value = q || 0.7;
@@ -129,7 +134,7 @@
     src.connect(f); f.connect(g); g.connect(dest);
     if (wet && rev) { var w = ctx.createGain(); w.gain.value = wet; g.connect(w); w.connect(rev); }
     src.start(t, Math.random() * 1.5); src.stop(t + a + d + 0.06);
-    voices++; src.onended = function () { voices--; };
+    if (!offline) { voices++; src.onended = function () { voices--; }; }
   }
 
   /* ---------- sound effects ----------
@@ -279,13 +284,27 @@
   var GAP = { swing: 0.09, hit: 0.05, crit: 0.06, miss: 0.1, kill: 0.07, boss: 0.5, hurt: 0.08, block: 0.1, dodge: 0.1, die: 1, levelup: 0.5, potion: 0.2, cast_lightning: 0.08, cast_explosion: 0.08 };
   var lastPlay = {};
   function play(name) {
+    if (hushed) return; /* screen saver: no sound at all */
     if (ctx && ctx.state !== 'running') wake();
     if (!ctx || ctx.state !== 'running' || vSfx < 0.005) return;
-    var f = SFX[name]; if (!f) return;
+    var f = SFX[name]; if (!f || f === NOP) return;
     var now = ctx.currentTime, gap = GAP[name] === undefined ? 0.06 : GAP[name];
     if (lastPlay[name] !== undefined && now - lastPlay[name] < gap) return;
     lastPlay[name] = now;
+    if (pre) { /* pre-rendered: playing a finished sample costs almost nothing, so no lag and no dropped sounds */
+      var vs = bufSfx[name];
+      if (vs && vs.length) { playBuf(vs, now); return; }
+      if (!vs) return; /* still being prepared */
+    }
     try { f(now + 0.005); } catch (e) { /* never let a sound break the game */ }
+  }
+  function playBuf(vs, now) {
+    if (nActive > 12 || !sfxOut) return;
+    var s = ctx.createBufferSource(); s.buffer = vs[(Math.random() * vs.length) | 0];
+    s.playbackRate.value = 0.97 + Math.random() * 0.06;
+    s.connect(sfxOut); nActive++;
+    s.onended = function () { nActive--; try { s.disconnect(); } catch (e) {} };
+    s.start(now + 0.005);
   }
 
   /* ---------- music ---------- */
@@ -368,7 +387,7 @@
   /* ---------- scheduler + crossfade ---------- */
   var LOOK = 1.3;
   function pump() {
-    if (!ctx || ctx.state !== 'running' || vMusic < 0.005) return;
+    if (pre || !ctx || ctx.state !== 'running' || vMusic < 0.005) return; /* pre-render mode plays finished loops, nothing to schedule */
     var now = ctx.currentTime;
     for (var k in tracks) {
       var T = tracks[k];
@@ -388,12 +407,245 @@
     T.out.gain.cancelScheduledValues(now);
     T.out.gain.setTargetAtTime(on ? T.level : 0, now, tc);
   }
+  function startSrc(T, now) {
+    var s = ctx.createBufferSource(); s.buffer = T.buf; s.loop = true; s.loopStart = 0; s.loopEnd = T.loopEnd;
+    s.connect(T.out);
+    var off = T.name === 'combat' ? 0 : (T.pos || 0); /* combat starts on its downbeat; calm resumes on a bar line */
+    s.start(0, off % T.loopEnd);
+    T.src = s; T.t0 = now; T.off = off;
+  }
+  function fadeBuf(T, on, tc) {
+    var now = ctx.currentTime;
+    if (on) { if (!T.src && T.buf) startSrc(T, now); }
+    else if (T.on && T.src) {
+      var s = T.src, pos = (T.off + (now - T.t0)) % T.loopEnd, bar = 16 * T.dur;
+      T.pos = (Math.ceil(pos / bar) * bar) % T.loopEnd;
+      setTimeout(function () { if (T.src === s && !T.on) { try { s.stop(); s.disconnect(); } catch (e) {} T.src = null; } }, tc * 6000 + 100); /* nothing keeps running once faded out */
+    }
+    T.on = on;
+    T.out.gain.cancelScheduledValues(now);
+    T.out.gain.setTargetAtTime(on ? T.level : 0, now, tc);
+  }
+  function attachBuf(name) {
+    var T = tracks[name], P = pbuf[name];
+    if (!T || !P) return;
+    T.buf = P.buf; T.loopEnd = P.loopEnd;
+    if (ctx && unlocked) applyTracks();
+  }
   function applyTracks() {
     if (!ctx) return;
-    var wc = active && combat, wn = active && !combat;
-    fade(tracks.combat, wc, wc ? 0.1 : 0.7);
-    fade(tracks.calm, wn, wn ? 0.9 : 0.35);
+    var wc = active && combat && !hushed, wn = active && !combat && !hushed, f = pre ? fadeBuf : fade;
+    f(tracks.combat, wc, wc ? 0.1 : 0.7);
+    f(tracks.calm, wn, wn ? 0.9 : 0.35);
   }
+  /* screen saver: silence everything and let the audio engine sleep (saves battery and CPU) */
+  function hush(v) {
+    v = !!v; if (v === hushed) return;
+    hushed = v;
+    if (!ctx) return;
+    applyTracks();
+    if (v) setTimeout(function () { if (hushed && ctx && ctx.state === 'running') { try { ctx.suspend(); } catch (e) {} } }, 1200);
+    else wake();
+  }
+
+  /* ---------- pre-rendered music and effects ----------
+     Playing the synthesised sounds live made phones lag and drop notes (hundreds of oscillators every second).
+     Instead each sound is rendered ONCE, a few seconds after the page loads, with an OfflineAudioContext (it runs off the main thread),
+     and from then on the game only plays finished samples: the two music tracks are seamless loops, effects are one-shot samples (2 variants each).
+     If the browser has no OfflineAudioContext, or a render fails, the old live synthesis is used instead. */
+  function satCurve() {
+    if (satC) return satC;
+    satC = new Float32Array(2048);
+    for (var k = 0; k < satC.length; k++) { var x = k / (satC.length - 1) * 2 - 1; satC[k] = Math.tanh(x * 1.8) / Math.tanh(1.8); }
+    return satC;
+  }
+  function mkNoise(c) { var n = PSR * 2, b = c.createBuffer(1, n, PSR), d = b.getChannelData(0); for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; return b; }
+  function buildOff(kind, secs) {
+    var c = new OC(1, Math.ceil(secs * PSR), PSR), g = { ctx: c, noiseBuf: mkNoise(c), musicBus: null, sfxBus: null, rev: null, fxIn: null };
+    if (kind === 'music') {
+      g.musicBus = c.createGain(); g.musicBus.connect(c.destination);
+      g.fxIn = c.createGain();
+      var dl = c.createDelay(1); dl.delayTime.value = 0.43;
+      var fb = c.createGain(); fb.gain.value = 0.36;
+      var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
+      g.fxIn.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(g.musicBus);
+    } else {
+      var sb = g.sfxBus = c.createGain(); sb.gain.value = REF;
+      var sat = c.createWaveShaper(); sat.curve = satCurve(); try { sat.oversample = '2x'; } catch (e) {}
+      sb.connect(sat); sat.connect(c.destination);
+      var irLen = Math.floor(PSR * 0.55), ir = c.createBuffer(1, irLen, PSR), id = ir.getChannelData(0), l1 = 0;
+      for (var j = 0; j < irLen; j++) { l1 += (Math.random() * 2 - 1 - l1) * 0.45; id[j] = l1 * Math.pow(1 - j / irLen, 3.2); }
+      var cv = c.createConvolver(); cv.buffer = ir;
+      g.rev = c.createGain(); var ro = c.createGain(); ro.gain.value = 0.7;
+      g.rev.connect(cv); cv.connect(ro); ro.connect(sb);
+    }
+    return g;
+  }
+  /* the synth functions use these module variables; point them at the offline graph while scheduling, then put the live ones back */
+  function swapIn(g) {
+    saved = { ctx: ctx, musicBus: musicBus, sfxBus: sfxBus, rev: rev, fxIn: fxIn, noiseBuf: noiseBuf };
+    ctx = g.ctx; musicBus = g.musicBus; sfxBus = g.sfxBus; rev = g.rev; fxIn = g.fxIn; noiseBuf = g.noiseBuf; offline = true;
+  }
+  function swapOut() {
+    if (!saved) return;
+    ctx = saved.ctx; musicBus = saved.musicBus; sfxBus = saved.sfxBus; rev = saved.rev; fxIn = saved.fxIn; noiseBuf = saved.noiseBuf; offline = false; saved = null;
+  }
+  function render(c, cb) {
+    var fired = false, fin = function (b) { if (fired) return; fired = true; cb(b || null); }, p;
+    c.oncomplete = function (e) { fin(e && e.renderedBuffer); };
+    try { p = c.startRendering(); } catch (e) { fin(null); return; }
+    if (p && p.then) p.then(fin, function () { fin(null); });
+  }
+  function runJobs() {
+    for (;;) {
+      var j = null;
+      if (jobs.length) { if (rjAct < MAXC) j = jobs.shift(); }
+      else if (rjAct === 0) { preReady = true; if (bgJobs.length) j = bgJobs.shift(); } /* required sounds all done = ready; extras (2nd effect variants) follow one at a time */
+      if (!j) return;
+      rjAct++;
+      (function (j, gen) {
+        var fin = false, done = function () { if (fin || gen !== rjGen) return; fin = true; rjAct--; setTimeout(runJobs, 10); };
+        try { j(done); } catch (e) { swapOut(); preFail(); }
+      })(j, rjGen);
+      if (!jobs.length) return;
+    }
+  }
+  function preFail() { /* anything went wrong: go back to live synthesis */
+    pre = false; preReady = true; jobs.length = 0; bgJobs.length = 0; rjAct = 0; rjGen++;
+    for (var k in tracks) { var T = tracks[k]; if (T.src) { try { T.src.stop(); T.src.disconnect(); } catch (e) {} T.src = null; } }
+    if (ctx && unlocked) applyTracks();
+  }
+  function jobMusic(name, dur, fn, cycles, tail) {
+    return function (next) {
+      var steps = 128 * cycles, loopLen = steps * dur, g = buildOff('music', loopLen + tail), i = 0, T;
+      swapIn(g);
+      try {
+        T = { name: name, level: 1, dur: dur, play: fn, step: 0, mi: 3 };
+        T.out = g.ctx.createGain(); T.out.connect(g.musicBus); T.send = g.ctx.createGain(); T.send.connect(g.fxIn);
+      } finally { swapOut(); }
+      (function chunk() { /* a few bars per tick, so the page never stalls */
+        try {
+          swapIn(g);
+          try { for (var n = 0; n < 16 && i < steps; n++, i++) T.play(i, 0.02 + i * dur, T); } finally { swapOut(); }
+        } catch (e) { preFail(); return; }
+        if (i < steps) { setTimeout(chunk, 6); return; }
+        render(g.ctx, function (b) {
+          if (!b) { preFail(); return; }
+          var d = b.getChannelData(0), N = Math.round(loopLen * b.sampleRate);
+          for (var k = 0; k + N < d.length; k++) d[k] += d[N + k]; /* the ring-out after the loop end is mixed onto the start: seamless loop */
+          pbuf[name] = { buf: b, loopEnd: N / b.sampleRate };
+          idbSave(name, { sr: b.sampleRate, loopEnd: N / b.sampleRate, d: d.slice(0, N) }); /* keep it on the device: next start loads it instead of rendering */
+          progDone += W[name] || 1; attachBuf(name); next();
+        });
+      })();
+    };
+  }
+  /* renders ONE variant of an effect. Loading renders variant 1 of everything; variant 2 is made afterwards in the background (bg = true). */
+  function jobSfx(name, bg) {
+    return function (next) {
+      var g, finished = false;
+      var finish = function (b) {
+        if (finished) return; finished = true;
+        var list = bufSfx[name] || (bufSfx[name] = []); /* an empty list = could not render: that sound falls back to live synthesis */
+        if (b) list.push(b);
+        if (!bg) progDone += 1;
+        if (list.length) { try { idbSave(name, { sr: PSR, v: list.map(function (x) { return x.getChannelData(0); }) }); } catch (e) {} }
+        next();
+      };
+      try { g = buildOff('sfx', 3.4); swapIn(g); try { SFX[name](0.01); } finally { swapOut(); } } catch (e) { finish(null); return; }
+      render(g.ctx, function (b) {
+        if (b) {
+          try { /* cut the silent tail, fade the last few ms */
+            var d = b.getChannelData(0), n = d.length;
+            while (n > 1200 && Math.abs(d[n - 1]) < 0.0015) n--;
+            n = Math.min(d.length, n + 800);
+            var nb = g.ctx.createBuffer(1, n, PSR), nd = nb.getChannelData(0);
+            nd.set(d.subarray(0, n)); for (var q = 0; q < 400 && q < n; q++) nd[n - 1 - q] *= q / 400;
+            b = nb;
+          } catch (e) {}
+        }
+        finish(b);
+      });
+    };
+  }
+  /* ---------- saved copy on the device (IndexedDB) ----------
+     The first start renders everything (a few seconds, on the loading screen) and stores the finished samples. Every later start reads them back
+     (about 100-300 ms) and renders nothing. The saved copy is tagged with a hash of this file's source, so editing audio.js refreshes it by itself. */
+  var DBN = 'woa-audio', DBS = 'snd';
+  function hashSrc() {
+    if (srcHash) return srcHash;
+    var t = SNDMOD.toString(), h = 2166136261;
+    for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (srcHash = (h >>> 0) + ':' + t.length + ':' + PSR);
+  }
+  function idbOpen(cb) {
+    var fin = false, once = function (db) { if (fin) { if (db) { try { db.close(); } catch (e) {} } return; } fin = true; cb(db); };
+    try {
+      var rq = root.indexedDB.open(DBN, 1);
+      rq.onupgradeneeded = function () { try { rq.result.createObjectStore(DBS); } catch (e) {} };
+      rq.onsuccess = function () { once(rq.result); };
+      rq.onerror = rq.onblocked = function () { once(null); };
+      setTimeout(function () { once(null); }, 3000); /* some private modes never answer: just render instead */
+    } catch (e) { once(null); }
+  }
+  function idbLoad(cb) {
+    idbOpen(function (db) {
+      if (!db) { cb({}); return; }
+      var out = {}, h = hashSrc(), fin = false, end = function () { if (fin) return; fin = true; try { db.close(); } catch (e) {} cb(out); };
+      try {
+        var rq = db.transaction(DBS, 'readonly').objectStore(DBS).getAll();
+        rq.onsuccess = function () {
+          var all = rq.result || [], stale = false;
+          all.forEach(function (r) { if (r && r.h === h && r.k) out[r.k] = r; else stale = true; });
+          if (stale) { try { db.transaction(DBS, 'readwrite').objectStore(DBS).clear(); out = {}; all.forEach(function (r) { if (r && r.h === h && r.k) out[r.k] = r; }); } catch (e) {} }
+          end();
+        };
+        rq.onerror = end;
+      } catch (e) { end(); }
+      setTimeout(end, 4000);
+    });
+  }
+  function idbSave(k, rec) {
+    rec.k = k; rec.h = hashSrc();
+    idbOpen(function (db) {
+      if (!db) return;
+      var close = function () { try { db.close(); } catch (e) {} };
+      try { var tx = db.transaction(DBS, 'readwrite'); tx.objectStore(DBS).put(rec, k); tx.oncomplete = tx.onerror = tx.onabort = close; } catch (e) { close(); }
+    });
+  }
+  function rebuild(arr, sr) {
+    if (!rbCtx) rbCtx = new OC(1, 1, PSR);
+    var b = rbCtx.createBuffer(1, arr.length, sr); b.getChannelData(0).set(arr);
+    return b;
+  }
+  function queueMissing(names) {
+    if (!pbuf.calm) jobs.push(jobMusic('calm', 60 / 66 / 4, calmStep, 1, 5));
+    if (!pbuf.combat) jobs.push(jobMusic('combat', 60 / 128 / 4, combatStep, 2, 3));
+    names.forEach(function (k) { if (!bufSfx[k]) jobs.push(jobSfx(k, false)); });
+    names.forEach(function (k) { if (!bufSfx[k] || bufSfx[k].length < 2) bgJobs.push(jobSfx(k, true)); }); /* second variant, after the game is ready */
+  }
+  function startPre() {
+    if (preStarted || !pre) return; preStarted = true;
+    var names;
+    try { names = Object.keys(SFX).filter(function (k) { return SFX[k] !== NOP; }); } catch (e) { preFail(); return; }
+    progTotal = W.calm + W.combat + names.length;
+    idbLoad(function (cache) {
+      try {
+        ['calm', 'combat'].forEach(function (k) {
+          var r = cache[k]; if (!r || !r.d) return;
+          pbuf[k] = { buf: rebuild(r.d, r.sr), loopEnd: r.loopEnd }; progDone += W[k]; fromCache++;
+        });
+        names.forEach(function (k) {
+          var r = cache[k]; if (!r || !r.v || !r.v.length) return;
+          bufSfx[k] = r.v.map(function (a) { return rebuild(a, r.sr); }); progDone += 1; fromCache++;
+        });
+        attachBuf('calm'); attachBuf('combat');
+      } catch (e) { pbuf = {}; bufSfx = {}; progDone = 0; fromCache = 0; } /* saved copy unreadable: render everything again */
+      try { queueMissing(names); } catch (e) { preFail(); return; }
+      runJobs();
+    });
+  }
+  if (pre) setTimeout(startPre, 30); /* starts at once: the loading screen waits for it (SND.progress) */
 
   /* ---------- public ---------- */
   /* Phones put the audio context to sleep ('suspended', or 'interrupted' on iOS) after a call, app switch, screen lock or
@@ -402,7 +654,7 @@
      so a sleeping context could never be woken again). */
   var silentEl = null;
   function wake() {
-    if (!ctx || ctx.state === 'running' || ctx.state === 'closed' || document.hidden) return;
+    if (!ctx || ctx.state === 'running' || ctx.state === 'closed' || document.hidden || hushed) return;
     try { var p = ctx.resume(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
   }
   /* older iOS: a silent looping <audio> element moves the page to the 'playback' audio session so the silent switch does not mute effects */
@@ -443,6 +695,8 @@
 
   root.SND = {
     unlock: unlock,
+    hush: hush,
+    progress: function () { return { done: progDone, total: progTotal, ready: preReady, cached: fromCache }; },
     play: play,
     tick: function (dt, isActive, isCombat) {
       active = !!isActive; var c = !!isCombat;
@@ -460,6 +714,6 @@
       vSfx = clamp(+v || 0, 0, 1); lsSet(KEY_S, vSfx); applyVol();
       return vSfx;
     },
-    _dbg: function () { return { ctx: ctx, master: master, tracks: tracks, sfx: SFX }; }
+    _dbg: function () { return { ctx: ctx, master: master, tracks: tracks, sfx: SFX, pre: pre, pbuf: pbuf, bufSfx: bufSfx, hushed: hushed }; }
   };
 })(window);
