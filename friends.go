@@ -460,3 +460,15 @@ func (h *Hub) friendAct(p *Player, act, name string) {
 	h.friendPush(p)
 	h.friendPushEmail(te)
 }
+
+// areFriends: both players are logged in and each other's friend (accounts are matched by email). Used by the PvP mode rules (v5_158).
+func areFriends(a, b *Player) bool {
+	if frs == nil || a == nil || b == nil || a.email == "" || b.email == "" {
+		return false
+	}
+	ea, eb := strings.ToLower(a.email), strings.ToLower(b.email)
+	frs.mu.Lock()
+	defer frs.mu.Unlock()
+	r := frs.m[ea]
+	return r != nil && frIdx(r.Friends, eb) >= 0
+}

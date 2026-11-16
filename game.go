@@ -21,30 +21,30 @@ import (
 )
 
 const (
-	mapK        = 5 // map size multiplier; must equal MAP_K in web/index.html
+	mapK        = 5 // map size multiplier; must equal MAP_K in web/game.js
 	worldCentre = 3200.0 * mapK
 	rimR        = 3080.0 * mapK
 	townR       = 345.0
-	monMult     = 2 // monster density multiplier; must equal MON_MULT in web/index.html
+	monMult     = 2 // monster density multiplier; must equal MON_MULT in web/game.js
 	nMons       = 5500 // total of ringMons below (monMult is no longer used for the count)
 	nOre        = 80 * mapK
 	tickHz      = 15
 	viewR       = 1800.0
 	monHpPerLv  = 0.005
 
-	// v5_157 monster / boss LEASH (keep equal to MON_LOSE / MON_LEASH / BOSS_LOSE / BOSS_LEASH in web/index.html): a chasing monster gives up and returns home when you are
+	// v5_157 monster / boss LEASH (keep equal to MON_LOSE / MON_LEASH / BOSS_LOSE / BOSS_LEASH in web/game.js): a chasing monster gives up and returns home when you are
 	// further than *Lose from it, or when it is further than *Leash from its home. Was 650 / 520 for every monster (the client had 2400 / 3000 for bosses in solo only).
 	monLose, monLeash   = 1000.0, 800.0
 	bossLose, bossLeash = 3600.0, 4500.0
 
 	// PvP: right-clicking another player flags you for pvpFlagSecs; every PvP hit (given or taken) refreshes it.
 	pvpFlagSecs = 30.0
-	pvpMult     = 0.5  // player-vs-player damage multiplier (keep equal to PVP_MULT in web/index.html). v5_71: 0.4 -> 0.5 (gear was halved)
+	pvpMult     = 0.5  // player-vs-player damage multiplier (keep equal to PVP_MULT in web/game.js). v5_71: 0.4 -> 0.5 (gear was halved)
 	pvpHitCap   = 0.10 // one hit can never take more than this fraction of the victim's max HP
 	pvpBurstWin = 3.0  // anti burst: inside any window of this many seconds ...
 	pvpBurstCap = 0.30 // ... a player cannot lose more than this fraction of max HP to PvP hits (extra hits do 1 dmg)
 
-	// Defense curve shared by monster->player and player->player hits (keep equal to PDEF_* in web/index.html):
+	// Defense curve shared by monster->player and player->player hits (keep equal to PDEF_* in web/game.js):
 	//   reduction = def / (def + pDefK + attackerLevel*pDefKLv), capped at pDefCap.
 	// The attacker's level is in the formula, so the same DEF protects less against a higher level attacker.
 	pDefK   = 10.0
@@ -59,6 +59,11 @@ const (
 	// shield and damage-reduction buff on the client (they count x(1-D)), and removes the level-gap damage penalty of pvpGap.
 	// At a lead of pvpLethalGap levels or more, any hit that lands is lethal (damage is at least the victim's max HP): Lv1000 one-shots Lv1.
 	pvpLethalGap = 500
+	// v5_159 PvP LEVEL COMPRESSION: a level lead counts for at most pvpMaxGap levels in every PvP formula (damage penalty, defence curve, per-hit cap, lethal check).
+	// Before, a Lv1000 one-shot a Lv1 (lead >= pvpLethalGap). With the lead clamped to pvpMaxGap the per-hit cap tops out at pvpHitCap + (pvpHitCapMax-pvpHitCap)*pvpMaxGap/pvpCapGap
+	// = 32.5% of max HP, so the lethal rule never fires and a low level player always gets a few hits to react. A value of 1000 or more restores the old behaviour.
+	// Keep equal to PVP_MAX_GAP in web/game.js.
+	pvpMaxGap = 100
 	// v5_83: a PvP hit is only accepted when attacker and victim are within pvpHitRange[attacker class] + pvpHitSlack units of each other (server positions).
 	// Before, any hit up to 1500 units away was accepted, so players could damage others from far away / from where they were not.
 	// Ranges: Cultivator, Night Blade, Iron Guardian, Storm Archer, Spirit Summoner. Slack covers latency and the 0.12 s display delay.
@@ -66,18 +71,27 @@ const (
 	pvpBountyCd = 60.0 // killing the same player again inside this window pays no bounty
 
 	// The Arena (world 0) is the PvP arena. No monsters, small round map, PvP is always on
-	// for everyone outside the safe hub. Must match ARENA / ARENA_R in web/index.html.
+	// for everyone outside the safe hub. Must match ARENA / ARENA_R in web/game.js.
 	arenaWi = 0 // World 0, the Arena, is the PvP arena
 	arenaR  = 1500.0
 	arenaLo = 1 // unused level band (the Colosseum has no monsters)
 
 	// Random boss waves: each wave brings 1..maxBosses bosses with random type, level (any level of the world) and place.
-	// At most maxBosses bosses are alive in a world at once. Must match BOSS_* in web/index.html (client solo mode).
+	// At most maxBosses bosses are alive in a world at once. Must match BOSS_* in web/game.js (client solo mode).
 	maxBosses   = 5
 	bossWaitMin = 60.0
 	bossWaitMax = 240.0
 	bossLife    = 1200.0 // an unkilled boss vanishes after this many seconds
 	arenaHi     = 300
+
+	// v5_159 party roles. Iron Guardian War Cry taunts nearby monsters onto the caster (tank); heals and ATK buffs cast by a party member also reach
+	// party mates in the same world (support). The server only relays the buff (clamped + rate limited); every client applies it to itself.
+	tauntRadius = 320.0 // monsters this close to the Iron Guardian switch to it
+	tauntCd     = 6.0   // seconds between taunts (War Cry's own cooldown is longer)
+	pbuffRadius = 900.0 // party mates this close receive the shared heal / buff
+	pbuffCd     = 4.0   // seconds between shared buffs from one player
+	pbuffHealMax = 0.08 // shared heal: at most this fraction of the receiver's max HP
+	pbuffAtkMax  = 0.15 // shared ATK buff: at most +15%
 )
 
 type worldDef struct {
@@ -85,8 +99,8 @@ type worldDef struct {
 	bt     [4]int
 }
 
-// Must match WORLDS in web/index.html: level range and the monster type index of each world's four bosses.
-// monsters per ring, ring 1 (next to the hub) to ring 9 (rim). Keep equal to RING_MONS in web/index.html.
+// Must match WORLDS in web/game.js: level range and the monster type index of each world's four bosses.
+// monsters per ring, ring 1 (next to the hub) to ring 9 (rim). Keep equal to RING_MONS in web/game.js.
 var ringMons = [9]int{300, 400, 500, 600, 700, 800, 900, 1000, 300}
 
 var worldDefs = []worldDef{
@@ -295,11 +309,14 @@ type Player struct {
 	pvpWinD   float64 // PvP damage taken inside it
 	wasDead   bool
 	warnAt    time.Time
-	pvpMode   bool // PvP mode button: stay flagged for PvP whenever outside the safe hub
+	pvpLvl    int  // v5_158 PvP mode: 0 Peaceful, 1 Lawful, 2 Hostile, 3 Carnal (see pvpCanHit)
 	pkAt      map[int]float64
 	kills     int
 
 	lastFr time.Time // last friend action (see friends.go)
+
+	tauntAt float64 // v5_159 hub clock of the last taunt
+	pbuffAt float64 // v5_159 hub clock of the last shared party buff
 
 	party *Party       // nil when not in a party (see party.go)
 	inv   *partyInvite // pending party invite, if any
@@ -644,10 +661,7 @@ func (r *Realm) snapshot(p *Player, extra bool, tm float64, dead []int) []byte {
 		b = append(b, ',')
 		b = af(b, q.hp, 0)
 		b = append(b, ',')
-		fl := q.fl
-		if q.pvpT > 0 {
-			fl |= 8 // PvP flagged
-		}
+		fl := q.fl | q.pvpLvl<<5 // v5_158 bits 5-6 = PvP mode (0-3), server-owned
 		b = ai(b, fl)
 		b = append(b, ']')
 	}
@@ -814,35 +828,6 @@ func (h *Hub) step(dt float64, tick int) {
 	for _, r := range h.realms {
 		for _, p := range r.players {
 			p.tokens = math.Min(60, p.tokens+40*dt)
-			// PvP mode (button): keep the flag alive while alive and outside the safe hub
-			if p.pvpMode && p.joined && p.fl&1 == 0 && dist(p.x, p.y, worldCentre, worldCentre) >= townR {
-				if p.pvpT <= 0 {
-					p.send(pvpOn)
-				}
-				p.pvpT = pvpFlagSecs
-			}
-			if p.pvpT > 0 {
-				p.pvpT -= dt
-				if p.pvpT <= 0 {
-					p.pvpT = 0
-					p.send(pvpOff)
-				}
-			}
-		}
-		if r.wi == arenaWi {
-			// PvP is always on outside the hub, off inside it (the hub is the lobby and the respawn point)
-			for _, p := range r.players {
-				live := p.joined && p.fl&1 == 0 && dist(p.x, p.y, worldCentre, worldCentre) >= townR
-				if live {
-					if p.pvpT <= 0 {
-						p.send(pvpOn)
-					}
-					p.pvpT = pvpFlagSecs
-				} else if p.pvpT > 0 {
-					p.pvpT = 0
-					p.send(pvpOff)
-				}
-			}
 		}
 		for i := range r.oreCd {
 			if r.oreCd[i] > 0 {
@@ -940,10 +925,6 @@ func (h *Hub) leaveRealm(p *Player) {
 	}
 	delete(r.players, p.id)
 	p.realm = nil
-	if p.pvpT > 0 {
-		p.pvpT = 0
-		p.send(pvpOff)
-	}
 	p.lastHitBy, p.wasDead = 0, false
 	for _, m := range r.mons {
 		if m.target == p {
@@ -993,16 +974,10 @@ func (h *Hub) onLeave(p *Player) {
 }
 
 var (
-	pvpOn  = []byte(`{"t":"pvp","s":1,"d":30}`)
-	pvpOff = []byte(`{"t":"pvp","s":0}`)
 )
 
 // onPlayerDown runs when a player's client reports it has died. If a PvP hit landed in the last 12s, the hitter gets the kill.
 func (h *Hub) onPlayerDown(p *Player) {
-	if p.pvpT > 0 {
-		p.pvpT = 0
-		p.send(pvpOff)
-	}
 	r := p.realm
 	if r == nil || p.lastHitBy == 0 || h.clock()-p.lastHitT > 12 {
 		return
@@ -1086,7 +1061,9 @@ func cleanChat(s string) string {
 
 func (h *Hub) applyInfo(p *Player, in *inMsg) bool {
 	sk, lv, wl, al := clampI(in.Sk, 0, 1<<32-1), clampI(in.Lv, 1, 1000), clampI(in.Wl, 0, 500), clampI(in.Al, 0, 500)
-	mh, df := clampI(in.Mh, 1, 100000000), clampI(in.Df, 0, 100000000)
+	// v5_159 sanity ceilings: the client reports its own max HP / DEF, so absurd values (a Lv1 claiming 100M HP) are cut to a very generous multiple of the base formulas
+	// (HP 100+32/level, DEF 3/level; real gear + forge + realm bonuses stay far below 1000x). This is a plausibility check, not full server-side validation.
+	mh, df := clampI(in.Mh, 1, 1000*(100+32*lv)+1000000), clampI(in.Df, 0, 1000*(10+3*lv)+100000)
 	changed := sk != p.sk || lv != p.lv || wl != p.wl || al != p.al || mh != p.mh
 	p.sk, p.lv, p.wl, p.al, p.mh, p.def = sk, lv, wl, al, mh, df
 	p.cls = clampI(in.Cl, 0, 4)
@@ -1198,39 +1175,13 @@ func (h *Hub) onMsg(p *Player, raw []byte) {
 			r.kill(m, p)
 		}
 	case "pvpm":
-		// PvP mode button on/off. While on, the flag is refreshed every tick outside the hub (see step).
-		p.pvpMode = in.On == 1
-		if !p.pvpMode && r.wi != arenaWi && p.pvpT > 0 {
-			p.pvpT = 0
-			p.send(pvpOff)
-		}
+		// v5_158 PvP mode: 0 Peaceful, 1 Lawful, 2 Hostile, 3 Carnal (the client sends it in "on"; see pvpCanHit). Everything is checked per hit, there is no timer.
+		p.pvpLvl = clampI(in.On, 0, 3)
 	case "pvp":
-		// right-click on a player: flag yourself for PvP (server checks: not in the safe hub, target alive and outside it too)
-		q := r.players[in.I]
-		if q == nil || q == p || !q.joined || p.fl&1 != 0 || q.fl&1 != 0 || dist(p.x, p.y, q.x, q.y) > 2000 {
-			return
-		}
-		if sameParty(p, q) {
-			p.send([]byte(`{"t":"pvpno","r":"That player is in your party."}`))
-			return
-		}
-		if dist(p.x, p.y, worldCentre, worldCentre) < townR {
-			p.send([]byte(`{"t":"pvpno","r":"You cannot start PvP inside the safe hub."}`))
-			return
-		}
-		if dist(q.x, q.y, worldCentre, worldCentre) < townR {
-			p.send([]byte(`{"t":"pvpno","r":"That player is standing in the safe hub."}`))
-			return
-		}
-		p.pvpT = pvpFlagSecs
-		p.send(pvpOn)
-		if q.pvpT <= 0 && time.Since(p.warnAt) > 5*time.Second {
-			p.warnAt = time.Now()
-			q.send(jsonBytes(map[string]interface{}{"t": "pvpw", "n": p.name}))
-		}
+		// v5_158 the old right-click flag is gone (modes replace it); older clients are ignored
 	case "phit":
 		q := r.players[in.I]
-		if q == nil || q == p || !q.joined || p.tokens < 1 || p.pvpT <= 0 || p.fl&1 != 0 || q.fl&1 != 0 || sameParty(p, q) {
+		if q == nil || q == p || !q.joined || p.tokens < 1 || p.fl&1 != 0 || q.fl&1 != 0 || !pvpCanHit(p, q) {
 			return
 		}
 		if dist(p.x, p.y, worldCentre, worldCentre) < townR || dist(q.x, q.y, worldCentre, worldCentre) < townR || dist(p.x, p.y, q.x, q.y) > pvpHitRange[clampI(p.cls, 0, 4)]+pvpHitSlack {
@@ -1245,12 +1196,16 @@ func (h *Hub) onMsg(p *Player, raw []byte) {
 			d = 1e12
 		}
 		df := float64(q.def)
-		cs := clampF(float64(p.lv-q.lv)/pvpCapGap, 0, 1) // gap dominance D (0 at equal level, 1 at a lead of pvpCapGap)
-		pg := pvpGap(p.lv, q.lv)
+		gap, effLv := p.lv-q.lv, p.lv
+		if gap > pvpMaxGap { // v5_159 level compression: a bigger lead counts as pvpMaxGap
+			gap, effLv = pvpMaxGap, q.lv+pvpMaxGap
+		}
+		cs := clampF(float64(gap)/pvpCapGap, 0, 1) // gap dominance D (0 at equal level, 1 at a lead of pvpCapGap)
+		pg := pvpGap(effLv, q.lv)
 		gapF := pg + (1-pg)*cs // the high-level damage penalty fades out with the gap
-		fd := math.Round(d * pvpMult * (1 - defRed(df, p.lv)) * gapF)
+		fd := math.Round(d * pvpMult * (1 - defRed(df, effLv)) * gapF)
 		hitCap := pvpHitCap + (pvpHitCapMax-pvpHitCap)*cs
-		lethal := p.lv-q.lv >= pvpLethalGap
+		lethal := gap >= pvpLethalGap
 		if lethal {
 			// overwhelming level lead: the hit is lethal, no cap applies
 			if mh := math.Round(float64(q.mh)); fd < mh {
@@ -1267,18 +1222,53 @@ func (h *Hub) onMsg(p *Player, raw []byte) {
 		}
 		cr := itoa(clampI(in.Cr, 0, 1))
 		ds := strconv.FormatFloat(fd, 'f', 0, 64)
-		wasFlagged := q.pvpT > 0
-		p.pvpT, q.pvpT = pvpFlagSecs, pvpFlagSecs
 		q.lastHitBy, q.lastHitT = p.id, h.clock()
 		q.send([]byte(`{"t":"phurt","d":` + ds + `,"i":` + itoa(p.id) + `,"c":` + cr + `}`))
-		if !wasFlagged {
-			q.send(pvpOn)
-		}
 		p.send([]byte(`{"t":"pdm","v":` + itoa(q.id) + `,"d":` + ds + `,"c":` + cr + `}`))
 		ph := []byte(`{"t":"ph","v":` + itoa(q.id) + `,"d":` + ds + `,"c":` + cr + `}`)
 		for _, o := range r.players {
 			if o != p && o != q && dist(o.x, o.y, q.x, q.y) <= 1500 {
 				o.send(ph)
+			}
+		}
+	case "taunt":
+		// v5_159 Iron Guardian War Cry: monsters near the caster switch to it (the tank role). Class 2 only, rate limited.
+		if p.cls != 2 || !p.hunted() || p.tokens < 1 {
+			return
+		}
+		if now := h.clock(); now-p.tauntAt >= tauntCd {
+			p.tauntAt = now
+			p.tokens--
+			for _, m := range r.mons {
+				if m.dead || m.state == 2 {
+					continue
+				}
+				if dist(p.x, p.y, m.x, m.y) <= tauntRadius {
+					m.state = 1
+					m.target = p
+				}
+			}
+		}
+	case "pbuff":
+		// v5_159 party support: relay a heal ("heal", d = fraction of the receiver's max HP) or an ATK buff ("atk", d = +fraction) to party mates nearby.
+		if p.party == nil || p.fl&1 != 0 || p.tokens < 1 || (in.M != "heal" && in.M != "atk") {
+			return
+		}
+		lim := pbuffHealMax
+		if in.M == "atk" {
+			lim = pbuffAtkMax
+		}
+		v := clampF(in.D, 0, lim)
+		now := h.clock()
+		if !(v > 0) || now-p.pbuffAt < pbuffCd {
+			return
+		}
+		p.pbuffAt = now
+		p.tokens--
+		msg := []byte(`{"t":"pbf","k":"` + in.M + `","v":` + strconv.FormatFloat(v, 'f', 3, 64) + `,"i":` + itoa(p.id) + `}`)
+		for _, q := range p.party.members {
+			if q != p && q.joined && q.realm == r && q.fl&1 == 0 && dist(p.x, p.y, q.x, q.y) <= pbuffRadius {
+				q.send(msg)
 			}
 		}
 	case "party":
@@ -1566,4 +1556,28 @@ func leashHome(boss bool) float64 {
 		return bossLeash
 	}
 	return monLeash
+}
+
+// pvpCanHit is the PvP mode rule table (v5_158). a = attacker, b = victim. Keep equal to pvpRule() in web/game.js.
+//
+//	Peaceful (0): attacks nobody.
+//	Lawful   (1): only players in Hostile / Carnal mode; never friends or party.
+//	Hostile  (2): anyone except friends and party.
+//	Carnal   (3): anyone except party.
+//
+// A Peaceful victim can be attacked by Hostile / Carnal players. No cooldowns, penalties, zones or clans yet (the safe hub is still no-PvP, checked by the caller).
+func pvpCanHit(a, b *Player) bool {
+	if a.pvpLvl <= 0 || sameParty(a, b) {
+		return false
+	}
+	if a.pvpLvl >= 3 {
+		return true
+	}
+	if areFriends(a, b) {
+		return false
+	}
+	if a.pvpLvl == 1 {
+		return b.pvpLvl >= 2
+	}
+	return true
 }
