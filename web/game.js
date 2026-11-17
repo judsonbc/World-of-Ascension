@@ -2210,6 +2210,8 @@ P.eggs=0;P.pets={};P.pet=null;P.pf=null; /* P.pet = key of the summoned pet ('s:
 let petComb=null; /* combine mode: {a:'s:c' first pet, b:'s:c' second pet or null} */
 const petKey=(s,c)=>s+':'+c,petParse=k=>{const a=k.split(':');return{s:a[0]|0,c:a[1]|0}};
 const petsObj=()=>P.pets||(P.pets={});
+/* v5_201: validate a pet key received from another player ("s:c"); returns '' for anything invalid */
+function petKeyClean(k){if(typeof k!=='string'||!/^[0-5]:[0-6]$/.test(k))return '';return k[0]==='0'&&k[2]!=='0'?'':k}
 const petStacks=()=>Object.keys(petsObj()).filter(k=>petsObj()[k]>0).length;
 const petName=(s,c)=>s===0?'Chicken':PET_SP[s].n+' [Class '+PET_CLS[c]+']';
 const petCol=(s,c)=>s===0?PET_SP[0].col:PET_CLS_COL[c];
@@ -2343,9 +2345,9 @@ function petSummon(k){
   if(!(petsObj()[k]>0))return;const p=petParse(k),old=P.pet;
   P.pet=k;P.pf=null;
   say((old&&old!==k?'You swapped your pet. ':'')+(p.s===0?'Chicken':PET_SP[p.s].n+' (Class '+PET_CLS[p.c]+')')+' is now by your side.',petCol(p.s,p.c),5000);
-  bagLog('Summoned '+petName(p.s,p.c).replace(/ \[Class (.)\]/,' (Class $1)'),petCol(p.s,p.c));save();renderBag();
+  bagLog('Summoned '+petName(p.s,p.c).replace(/ \[Class (.)\]/,' (Class $1)'),petCol(p.s,p.c));save();netInfo(true);renderBag();
 }
-function petDismiss(){if(!P.pet)return;const p=petParse(P.pet);P.pet=null;P.pf=null;say('Pet dismissed.','#8d9aa2',3000);bagLog('Dismissed pet','#8d9aa2');save();renderBag()}
+function petDismiss(){if(!P.pet)return;const p=petParse(P.pet);P.pet=null;P.pf=null;say('Pet dismissed.','#8d9aa2',3000);bagLog('Dismissed pet','#8d9aa2');save();netInfo(true);renderBag()}
 /* sprite: the pet's icon on a canvas (class-coloured glow behind special pets). Used by the 2D view directly and by the 3D view as a billboard sprite. */
 const PET_SPR={};
 function petSprite(k){
@@ -2418,6 +2420,50 @@ function petDraw2D(){
   const hop=petStep(false);if(!P.pet||!P.pf)return;
   const e=petSprite(P.pet);if(!e.ok&&petParse(P.pet).s===0)return;
   const f=P.pf,x=f.x-cam.x,y=f.y-cam.y,sz=petParse(P.pet).s===0?36:46;
+  ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(x,y+2,sz*.3,sz*.11,0,0,6.2832);ctx.fill();
+  ctx.drawImage(e.cv,x-sz/2,y-sz*.9-hop,sz,sz);
+}
+
+/* ---------- OTHER PLAYERS' PETS (v5_201): each peer reports its summoned pet key (q.pet, from the server 'pt' field); it is drawn following that player. ---------- */
+/* follower position for a peer (same easing / offset as your own pet, see petStep) */
+function peerPetStep(q,is3){
+  if(!q.pet)return 0;
+  const now=performance.now(),dt=Math.min(.1,q.pfT?(now-q.pfT)/1000:.016);q.pfT=now;
+  const yaw=is3&&typeof camView!=='undefined'?camView.yaw:0,rx=Math.cos(yaw),ry=-Math.sin(yaw);
+  const tx=q.x+rx*54,ty=q.y+ry*54;
+  if(!q.pf||Math.hypot(tx-q.pf.x,ty-q.pf.y)>700)q.pf={x:tx,y:ty,mv:0};
+  const f=q.pf,k=1-Math.exp(-7*dt),ox=f.x,oy=f.y;f.x+=(tx-f.x)*k;f.y+=(ty-f.y)*k;
+  f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sp=Math.hypot(f.x-ox,f.y-oy)/Math.max(dt,.001);f.mv+=((sp>40?1:0)-f.mv)*Math.min(1,dt*10);
+  f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
+  return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+}
+/* 3D: list = the peers drawn this frame (rpl). Pets of peers that left, were dismissed or are out of range are removed. */
+function peerPets3(list){
+  const T=T3,map=T.rpt||(T.rpt=new Map()),seen=new Set();
+  for(const q of list){
+    if(!q.pet)continue;
+    peerPetStep(q,true);
+    let h=map.get(q);if(!h){h={};map.set(q,h)}
+    const rig=petRigFor(h,T.sc,q.pet),f=q.pf;
+    if(!rig||!f)continue;
+    seen.add(q);
+    const want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):Math.PI/2-q.face;
+    if(f.yaw===undefined)f.yaw=want;
+    let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*7);
+    rig.root.visible=true;rig.root.scale.setScalar(PET_WORLD_K);
+    rig.root.position.set(f.x-C,gh3(f.x,f.y),f.y-C);rig.root.rotation.y=f.yaw;
+    rig.anim(time,f.mv);
+  }
+  for(const [q,h] of map)if(!seen.has(q)){
+    if(h.pr){T.sc.remove(h.pr.root);try{h.pr.dispose()}catch(e){}h.pr=null}
+    map.delete(q);
+  }
+}
+/* 2D: draw a peer's pet (called from drawRemote) */
+function peerPetDraw2D(q){
+  const hop=peerPetStep(q,false);if(!q.pet||!q.pf)return;
+  const e=petSprite(q.pet);if(!e.ok&&petParse(q.pet).s===0)return;
+  const f=q.pf,x=f.x-cam.x,y=f.y-cam.y,sz=petParse(q.pet).s===0?36:46;
   ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(x,y+2,sz*.3,sz*.11,0,0,6.2832);ctx.fill();
   ctx.drawImage(e.cv,x-sz/2,y-sz*.9-hop,sz,sz);
 }
@@ -3832,7 +3878,8 @@ function drawPlayer(){const pb=P.pet&&P.pf&&P.pf.y<=P.y;if(pb)petDraw2D();drawPl
 function drawRemote(q){
   const x=q.x-cam.x,y=q.y-cam.y;
   if(x<-90||y<-130||x>VW+90||y>VH+90)return;
-  drawPlayerE(q,skinOf(q.sk));
+  const pb=q.pet&&q.pf&&q.pf.y<=q.y;if(pb)peerPetDraw2D(q);
+  drawPlayerE(q,skinOf(q.sk));if(q.pet&&!pb)peerPetDraw2D(q); /* v5_201 other players' pets */
   const ty=y-54;
   if(q.dead<=0)bar(x,ty,34,q.hp/q.mh,q.pvp?'#ff6a5a':'#5fd3a5');
   ctx.fillStyle=q.pvp?'#ff8a7a':PARTY.ids.has(q.id)?'#8ff0b0':'#bfe3ff';ctx.font='600 11px Figtree,system-ui,sans-serif';ctx.textAlign='center';
@@ -4165,6 +4212,7 @@ function render3D(){
     sync3(T3.rp,rpl,q=>{const R=AL3D.makePlayer(q.sk),g=R.root;g.userData.rig=R;g.userData.mat={dispose(){try{Object.values(R.m).forEach(x=>x.dispose&&x.dispose())}catch(e){}}};return g},
       (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=Math.PI/2-q.face;g.rotation.x=q.dead>0?-1.4:0;AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
       null);
+    peerPets3(rpl===NONE?NONE:rpl); /* v5_201 other players' pets */
     {const rg=((LOW?650:900)+(LOW?200:300)*T3.zoom)*(PQ.lock?PQ.mon:1);sync3(T3.mp,mons,mkMon,updMon,m=>(!m.dead||m.dieT>0)&&Math.abs(m.x-P.x)<rg+(T3.mp.has(m)?150:0)&&Math.abs(m.y-P.y)<rg-100+(T3.mp.has(m)?150:0))}
     sync3(T3.or,ores,()=>AL3D.makeOre(),(q,o)=>q.position.set(o.x-C,gh3(o.x,o.y),o.y-C),o=>o.cd<=0&&Math.abs(o.x-P.x)<(LOW?900:1400)+(T3.or.has(o)?150:0)&&Math.abs(o.y-P.y)<(LOW?850:1300)+(T3.or.has(o)?150:0));
     sync3(T3.it,items,it=>AL3D.makeItem(it.k,it.slot,it.col),(q,it)=>{q.position.set(it.x-C,gh3(it.x,it.y)+14+Math.sin(it.t*5)*3,it.y-C);AL3D.animItem(q,it,time)});
@@ -4471,11 +4519,11 @@ function eqClean(raw){const o={};if(!raw||typeof raw!=='object')return o;
   return o}
 function mkPeer(i){
   return {isPl:true,eq:eqClean(i.eq),id:i.id,name:String(i.n||'?').slice(0,16),sk:i.sk|0,lvl:clamp(i.lv|0,1,MAXLV),wlv:i.wl|0,alv:i.al|0,mh:Math.max(1,i.mh|0),hp:Math.max(1,i.mh|0),
-    x:+i.x||C,y:+i.y||C,tx:+i.x||C,ty:+i.y||C,face:0,dir:1,mvAmt:0,anim:0,swing:0,hurt:0,bfT:0,sh:0,dead:0,r:14,mine:0,pvp:false,pm:0};
+    x:+i.x||C,y:+i.y||C,tx:+i.x||C,ty:+i.y||C,face:0,dir:1,mvAmt:0,anim:0,swing:0,hurt:0,bfT:0,sh:0,dead:0,r:14,mine:0,pvp:false,pm:0,pet:petKeyClean(i.pt),pf:null};
 }
 function netInfo(force){
   if(!NET.joined)return;
-  const o={t:'i',cl:P.cls,sk:SKW(),lv:P.lvl,wl:P.wlv,al:P.alv,mh:maxHp(),df:defVal(),eq:eqPack()},k=JSON.stringify(o);
+  const o={t:'i',cl:P.cls,sk:SKW(),lv:P.lvl,wl:P.wlv,al:P.alv,mh:maxHp(),df:defVal(),eq:eqPack(),pt:P.pet||''},k=JSON.stringify(o);
   if(!force&&k===NET.infoKey)return;
   NET.infoKey=k;netSend(o);
 }
@@ -4828,7 +4876,7 @@ function netMsg(m){
     case 'o':if(ores[m.i])ores[m.i].cd=+m.cd||30;break;
     case 'pj':{const i=m.p;if(i&&i.id!==NET.id&&MP){NET.peers.set(i.id,mkPeer(i));say(String(i.n)+' entered the world.','#5fd3a5')}break}
     case 'pl':{const q=NET.peers.get(m.id);if(q){NET.peers.delete(m.id);say(q.name+' left.','#8d9aa2');if(PG.id===m.id)pgClose()}break}
-    case 'pi':{const i=m.p,q=i&&NET.peers.get(i.id);if(q){q.sk=i.sk|0;q.lvl=clamp(i.lv|0,1,MAXLV);q.wlv=i.wl|0;q.alv=i.al|0;q.mh=Math.max(1,i.mh|0);if(i.eq!==undefined){q.eq=eqClean(i.eq);if(PG.id===q.id)pgRender()}}break}
+    case 'pi':{const i=m.p,q=i&&NET.peers.get(i.id);if(q){q.sk=i.sk|0;q.lvl=clamp(i.lv|0,1,MAXLV);q.wlv=i.wl|0;q.alv=i.al|0;q.mh=Math.max(1,i.mh|0);{const pk=petKeyClean(i.pt);if(pk!==q.pet){q.pet=pk;q.pf=null}}if(i.eq!==undefined){q.eq=eqClean(i.eq);if(PG.id===q.id)pgRender()}}break}
     case 'fx':if(MP)playFx(m);break;
     case 'pvp':break; /* v5_158 the 30 s flag is gone (PvP modes) */
     case 'pvpno':say(String(m.r||'PvP not allowed here.'),'#8d9aa2');break;

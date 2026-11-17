@@ -296,6 +296,7 @@ type Player struct {
 	sk, lv   int
 	wl, al   int
 	cls      int // class index reported by the client (info message), clamped 0..4
+	pet      string // v5_201 summoned pet key 's:c' reported by the client (cosmetic, relayed so other players see it); "" = none
 	mh, def  int
 	eq       json.RawMessage // equipped gear as sent by the client (validated JSON, size-capped)
 	tokens   float64
@@ -373,10 +374,11 @@ type PInfo struct {
 	X    float64 `json:"x"`
 	Y    float64 `json:"y"`
 	Eq   json.RawMessage `json:"eq,omitempty"` // equipped gear, relayed so other players can inspect it
+	Pt   string  `json:"pt,omitempty"` // v5_201 summoned pet 's:c' (omitted = no pet)
 }
 
 func (p *Player) info() PInfo {
-	return PInfo{p.id, p.name, p.sk, p.lv, p.wl, p.al, p.mh, math.Round(p.x), math.Round(p.y), p.eq}
+	return PInfo{p.id, p.name, p.sk, p.lv, p.wl, p.al, p.mh, math.Round(p.x), math.Round(p.y), p.eq, p.pet}
 }
 
 type Realm struct {
@@ -1021,6 +1023,7 @@ type inMsg struct {
 	Df   int     `json:"df"`
 	Cl   int     `json:"cl"` // class index (0 Cultivator .. 4 Spirit Summoner), used for the PvP hit range check
 	Eq   json.RawMessage `json:"eq"`
+	Pt   string  `json:"pt"` // v5_201 summoned pet key 's:c' (see cleanPet)
 	X    float64 `json:"x"`
 	Y    float64 `json:"y"`
 	F    float64 `json:"f"`
@@ -1063,6 +1066,18 @@ func cleanChat(s string) string {
 	return strings.TrimSpace(string(b))
 }
 
+// cleanPet validates a summoned-pet key "s:c": species 0..5 (0 chicken, 1-5 special), class 0..6 (F..S); a chicken has no class. Anything else = no pet.
+func cleanPet(s string) string {
+	if len(s) != 3 || s[1] != ':' {
+		return ""
+	}
+	a, c := int(s[0])-'0', int(s[2])-'0'
+	if a < 0 || a > 5 || c < 0 || c > 6 || (a == 0 && c != 0) {
+		return ""
+	}
+	return s
+}
+
 func (h *Hub) applyInfo(p *Player, in *inMsg) bool {
 	sk, lv, wl, al := clampI(in.Sk, 0, 1<<32-1), clampI(in.Lv, 1, 1000), clampI(in.Wl, 0, 500), clampI(in.Al, 0, 500)
 	// v5_159 sanity ceilings: the client reports its own max HP / DEF, so absurd values (a Lv1 claiming 100M HP) are cut to a very generous multiple of the base formulas
@@ -1071,6 +1086,10 @@ func (h *Hub) applyInfo(p *Player, in *inMsg) bool {
 	changed := sk != p.sk || lv != p.lv || wl != p.wl || al != p.al || mh != p.mh
 	p.sk, p.lv, p.wl, p.al, p.mh, p.def = sk, lv, wl, al, mh, df
 	p.cls = clampI(in.Cl, 0, 4)
+	if pt := cleanPet(in.Pt); pt != p.pet {
+		p.pet = pt
+		changed = true
+	}
 	if n := len(in.Eq); n > 0 && n <= 3000 && string(in.Eq) != string(p.eq) {
 		p.eq = append(json.RawMessage(nil), in.Eq...)
 		changed = true

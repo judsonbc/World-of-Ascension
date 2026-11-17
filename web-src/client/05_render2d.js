@@ -901,7 +901,8 @@ function drawPlayer(){const pb=P.pet&&P.pf&&P.pf.y<=P.y;if(pb)petDraw2D();drawPl
 function drawRemote(q){
   const x=q.x-cam.x,y=q.y-cam.y;
   if(x<-90||y<-130||x>VW+90||y>VH+90)return;
-  drawPlayerE(q,skinOf(q.sk));
+  const pb=q.pet&&q.pf&&q.pf.y<=q.y;if(pb)peerPetDraw2D(q);
+  drawPlayerE(q,skinOf(q.sk));if(q.pet&&!pb)peerPetDraw2D(q); /* v5_201 other players' pets */
   const ty=y-54;
   if(q.dead<=0)bar(x,ty,34,q.hp/q.mh,q.pvp?'#ff6a5a':'#5fd3a5');
   ctx.fillStyle=q.pvp?'#ff8a7a':PARTY.ids.has(q.id)?'#8ff0b0':'#bfe3ff';ctx.font='600 11px Figtree,system-ui,sans-serif';ctx.textAlign='center';
