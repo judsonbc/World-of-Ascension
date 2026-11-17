@@ -89,11 +89,11 @@ function limb(par,x,y,z,len,rt,mat,paw,pawMat,pawS){
    Returns {g, up, kn, foot, a2}; the walk cycle swings g and flexes kn (see walk()). */
 function kneeLeg(par,hx,hy,hz,o){
   const g=G(par,[hx,hy,hz]),a1=o.a1,a2=o.a2,pS=o.pawS,l1=o.l1;
-  if(o.th)A(g,'sph',o.thMat||o.mat,o.thPos||[0,.6,0],o.th);
+  if(o.th)A(g,o.thGeo||'sph',o.thMat||o.mat,o.thPos||[0,.6,0],o.th);
   const up=G(g);up.rotation.x=a1;
   A(up,'leg2',o.mat,[0,-l1/2,0],[o.d1,l1,o.d1*.92]);
   const l2=(hy-l1*Math.cos(a1)-pS[1]/2)/Math.cos(a2),k=[0,-l1*Math.cos(a1),-l1*Math.sin(a1)];
-  A(g,'sph',o.mat,k,Math.max(.86*o.d1,o.d2)*1.02);                       /* the knee: a smooth joint, hardly wider than the leg (v5_200c: was much fatter) */
+  A(g,'sph',o.kneeMat||o.mat,k,Math.max(.86*o.d1,o.d2)*1.02);                       /* the knee: a smooth joint, hardly wider than the leg (v5_200c: was much fatter) */
   const kn=G(g,k);kn.rotation.x=a2;
   A(kn,'leg2',o.low||o.mat,[0,-l2/2,0],[o.d2,l2,o.d2*.92]);
   const foot=G(kn,[0,-l2,0]);foot.rotation.x=-a2;                      /* counter-rotated: the paw stays flat */
@@ -150,14 +150,6 @@ function texChicken(){return tex('chicken',(g,W)=>{
   g.fillStyle=gr;g.fillRect(0,0,W,W);
   g.strokeStyle='rgba(150,130,90,.28)';g.lineWidth=1.4;
   for(let row=0;row<18;row++)for(let i=0;i<14;i++){const x=i*W/14+(row%2?W/28:0),y=row*W/18+6;g.beginPath();g.arc(x,y,W/30,.15*PI,.85*PI);g.stroke()}
-})}
-function texDragon(){return tex('dragon',(g,W)=>{
-  const gr=g.createLinearGradient(0,0,0,W);gr.addColorStop(0,'#1f7d3a');gr.addColorStop(.5,'#3fb455');gr.addColorStop(.8,'#8fdc7a');gr.addColorStop(1,'#d8f2a0');
-  g.fillStyle=gr;g.fillRect(0,0,W,W);
-  g.lineWidth=1.8;
-  for(let row=0;row<16;row++)for(let i=0;i<16;i++){const x=i*W/16+(row%2?W/32:0),y=row*W/16+8;
-    g.strokeStyle='rgba(0,50,15,.38)';g.beginPath();g.arc(x,y,W/32+1,.05*PI,.95*PI);g.stroke();
-    g.strokeStyle='rgba(220,255,190,.18)';g.beginPath();g.arc(x,y-2,W/32,.15*PI,.85*PI);g.stroke()}
 })}
 /* v5_200f FIRE SPRITES. The old flames were additive spheres: round, hard-edged, so they read as bubbles. Now they are camera-facing sprites with feathered textures:
    'flame' = a white teardrop (wide soft base, thin tip) that fades to nothing at every edge, tinted per layer by the material colour; 'soft' = a plain soft glow. */
@@ -241,51 +233,173 @@ function mkChicken(B){
   }};
 }
 
+/* v5_204 DRAGON redesign (matches the reference art): long S-curved neck, olive-green head with a red-orange crest, two swept-back horns + a snout tusk + a cream beard,
+   gold belly plates down the throat / chest / belly, copper-bronze flanks, red-orange legs with ivory claws, big orange bat wings (red at the bones -> peach at the scalloped edge, tan finger bones with claws),
+   a long tail that curls up behind with red spikes (dark brown root -> peach tip). Colours are vertex colours so the parts blend into one animal. */
+function drgCol(x,y,z){   /* body-space colour for the torso / thighs: dark brown back -> copper flanks -> gold belly */
+  const sm=(a,b,v)=>{const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t)};
+  const up=sm(8,19,y),dn=1-sm(4,11,y),back=[.36,.22,.15],flank=[.86,.5,.15],belly=[.95,.76,.38];
+  const c=[0,0,0];for(let i=0;i<3;i++){let v=flank[i];v+= (back[i]-flank[i])*up*.8;v+=(belly[i]-v)*dn;c[i]=v}
+  return c;
+}
+function drgGeo(key,p,s,r){
+  if(GC[key])return GC[key];
+  const g=new T.SphereGeometry(.5,LITE?14:26,LITE?10:18),pos=g.attributes.position,col=new Float32Array(pos.count*3);
+  const m=new T.Matrix4().compose(new T.Vector3(p[0],p[1],p[2]),new T.Quaternion().setFromEuler(new T.Euler(r?r[0]:0,r?r[1]:0,r?r[2]:0)),new T.Vector3(s[0],s[1],s[2])),v=new T.Vector3();
+  for(let i=0;i<pos.count;i++){v.fromBufferAttribute(pos,i).applyMatrix4(m);const c=drgCol(v.x,v.y,v.z);col[i*3]=c[0];col[i*3+1]=c[1];col[i*3+2]=c[2]}
+  g.setAttribute('color',new T.BufferAttribute(col,3));return GC[key]=g;
+}
+function texDragon(){return tex('dragon',(g,W)=>{   /* olive-green reptile scales with a lighter yellow-green sheen (head / neck / wing arms) */
+  const gr=g.createLinearGradient(0,0,0,W);gr.addColorStop(0,'#6f8f3a');gr.addColorStop(.5,'#9cb04a');gr.addColorStop(1,'#c4c85a');
+  g.fillStyle=gr;g.fillRect(0,0,W,W);g.lineWidth=1.6;
+  for(let row=0;row<22;row++)for(let i=0;i<22;i++){const x=i*W/22+(row%2?W/44:0),y=row*W/22+6;
+    g.strokeStyle='rgba(40,55,10,.42)';g.beginPath();g.arc(x,y,W/44+1,.05*PI,.95*PI);g.stroke();
+    g.strokeStyle='rgba(235,240,150,.2)';g.beginPath();g.arc(x,y-1.6,W/44,.15*PI,.85*PI);g.stroke()}
+})}
+function texDragonWing(){return tex('dragonwing',(g,W)=>{   /* wing membrane: red-orange near the arm (left) fading to peach at the far edge (right), with faint streaks */
+  const gr=g.createLinearGradient(0,0,W,0);gr.addColorStop(0,'#d8381a');gr.addColorStop(.35,'#ee6a28');gr.addColorStop(.7,'#f6a46a');gr.addColorStop(1,'#fbd2ab');
+  g.fillStyle=gr;g.fillRect(0,0,W,W);const r=rng(7);
+  for(let i=0;i<260;i++){g.strokeStyle=r()<.5?'rgba(255,230,190,.10)':'rgba(150,30,0,.10)';g.lineWidth=1.2;const y=r()*W,x=r()*W*.8;g.beginPath();g.moveTo(x,y);g.lineTo(x+W*.2+r()*W*.2,y+(r()-.5)*20);g.stroke()}
+})}
+function hornChain(par,mat,pts,w){   /* v5_205: connected tapered horn; pts are joined end to end so nothing floats; w = base diameter */
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1],dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],L=Math.hypot(dx,dy,dz),g=G(par,a);
+    g.rotation.order='YXZ';g.rotation.set(-Math.atan2(dy,Math.hypot(dx,dz)),Math.atan2(dx,dz),0);
+    A(g,'leg',mat,[0,0,L/2],[w,L*1.04,w],[-PI/2,0,0]);w*=.72}
+  const e=pts[pts.length-1];A(par,'sphL',mat,e,w*.9)}
+function dragonWingGeo(){   /* v5_206: wing membrane colour per vertex: deep red-orange at the arm -> orange -> peach at the far / trailing edge (as in the reference art) */
+  if(GC.drg_wing)return GC.drg_wing;
+  const g=geo('wingDragon').clone(),pos=g.attributes.position,col=new Float32Array(pos.count*3),
+    st=[[0,.6,.3,.14],[.1,.86,.26,.11],[.3,.93,.4,.16],[.6,.96,.6,.3],[1,.99,.82,.65]];   /* v5_211: root starts in the body brown so the membrane melts into the shoulder */
+  for(let i=0;i<pos.count;i++){
+    let u=Math.min(1,Math.max(0,Math.hypot(pos.getX(i),pos.getY(i)*1.3)/32+Math.max(0,-pos.getY(i))*.025));
+    let a=0;while(a<st.length-2&&u>st[a+1][0])a++;const f=(u-st[a][0])/(st[a+1][0]-st[a][0]);
+    for(let c=0;c<3;c++)col[i*3+c]=st[a][1+c]+(st[a+1][1+c]-st[a][1+c])*Math.min(1,Math.max(0,f))}
+  g.setAttribute('color',new T.BufferAttribute(col,3));return GC.drg_wing=g}
+function drgBlobGeo(c,sc,fn){   /* v5_207: unique sphere whose vertex colours come from fn(body-space x,y,z) so neighbouring parts share one continuous colour field */
+  const g=new T.SphereGeometry(.5,LITE?12:20,LITE?9:14),pos=g.attributes.position,col=new Float32Array(pos.count*3);
+  for(let i=0;i<pos.count;i++){const x=c[0]+pos.getX(i)*sc[0],y=c[1]+pos.getY(i)*sc[1],z=c[2]+pos.getZ(i)*sc[2],k=fn(x,y,z);col[i*3]=k[0];col[i*3+1]=k[1];col[i*3+2]=k[2]}
+  g.setAttribute('color',new T.BufferAttribute(col,3));return g}
+const drgSm=(a,b,v)=>{const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t)};
+function texDrgLeg(){return tex('drgleg',(g,W)=>{   /* v5_208 leg shading: copper at the top (matches the flank) -> red-orange -> slightly darker at the foot */
+  const gr=g.createLinearGradient(0,0,0,W);gr.addColorStop(0,'#d98a3a');gr.addColorStop(.45,'#dc6a2c');gr.addColorStop(1,'#b8401a');g.fillStyle=gr;g.fillRect(0,0,W,W)})}
+
+/* v5_211 SMOOTH WING ROOT: no more ball at the shoulder. A thin tapered arm runs from inside the torso out along the first wing bone; its vertex colours start exactly in the
+   body colour field (drgCol) and fade into the wing-arm colour, with a top-lit / under-dark shading, so body -> wing is one continuous surface. a/b are wing-local points, r0/r1 radii. */
+function drgWingRootGeo(side,P,a,b,r0,r1){
+  const g=new T.CylinderGeometry(r1,r0,1,LITE?10:16,LITE?4:8),dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy),ang=Math.atan2(dy,dx)-PI/2;
+  g.scale(1,L,1);g.rotateZ(ang);g.translate((a[0]+b[0])/2,(a[1]+b[1])/2,0);
+  const pos=g.attributes.position,nor=g.attributes.normal,col=new Float32Array(pos.count*3),ux=dx/L,uy=dy/L,arm=[.62,.54,.2],ws=.82,th=side*.3,ct=Math.cos(th),st=Math.sin(th);
+  for(let i=0;i<pos.count;i++){
+    const lx=pos.getX(i),ly=pos.getY(i),lz=pos.getZ(i),t=Math.min(1,Math.max(0,((lx-a[0])*ux+(ly-a[1])*uy)/L)),f=drgSm(.12,.8,t);
+    const sx=side*ws*lx,sy=ws*ly,sz=ws*lz,bx=P[0]+sx*ct+sz*st,by=P[1]+sy,bz=P[2]-sx*st+sz*ct,c=drgCol(bx,by,bz),sh=.8+.3*Math.min(1,Math.max(-1,nor.getY(i)))*(.4+.6*f)+.06*f;   /* sh: darker underneath, lit on top */
+    for(let k=0;k<3;k++)col[i*3+k]=Math.min(1,(c[k]+(arm[k]-c[k])*f)*sh)}
+  g.setAttribute('color',new T.BufferAttribute(col,3));return g}
+function texDrgLegUp(){return tex('drglegup',(g,W)=>{const gr=g.createLinearGradient(0,0,0,W);gr.addColorStop(0,'#d98a3a');gr.addColorStop(1,'#dc6a2c');g.fillStyle=gr;g.fillRect(0,0,W,W)})}
+function texDrgLegLow(){return tex('drglegl',(g,W)=>{const gr=g.createLinearGradient(0,0,0,W);gr.addColorStop(0,'#dc6a2c');gr.addColorStop(1,'#b8401a');g.fillStyle=gr;g.fillRect(0,0,W,W)})}
+const DRG_LEGTOP=[.85,.54,.23];
+function drgThighCol(x,y,z){   /* v5_212: thigh = body colour field at the top, fading into the leg's top colour towards its lower half, so body -> leg has no colour step */
+  const c=drgCol(x,y,z),f=drgSm(10.6,6.8,y);return[c[0]+(DRG_LEGTOP[0]-c[0])*f,c[1]+(DRG_LEGTOP[1]-c[1])*f,c[2]+(DRG_LEGTOP[2]-c[2])*f]}
 function mkDragon(B){
-  const skin=lam(0xffffff,{map:texDragon()}),dark=lam(0x2a8a46),belly=lam(0xd9f0a0),gold=lam(0xffb347,{emissive:0x3a1c00}),ivory=phg(0xf6ebc0,{shininess:60}),
-    mem=lam(0x2f9d7a,{side:T.DoubleSide,transparent:true,opacity:.9,emissive:0x082a1c}),bn=lam(0x1f7a3c),eyeM={};
-  const body=G(B,[0,0,0]);
-  A(body,'sph',skin,[0,13.2,0],[13,12,20]);
-  for(let i=0;i<7;i++)A(body,'sph',belly,[0,8.4,-7+i*2.4],[8.4,2.8,2.8]);      /* belly plates */
-  A(body,'sph',skin,[0,16.5,8],[9,9.5,9]);A(body,'sph',skin,[0,19.8,10.8],[7.6,8.4,7.6]);   /* neck */
-  const head=G(body,[0,23,13]);
-  A(head,'sph',skin,[0,0,0],[10,9,10.4]);
-  A(head,'sph',skin,[0,-1.5,6.2],[6.6,5.2,7.4]);                              /* snout */
-  A(head,'sph',belly,[0,-3.4,5.6],[5.4,2.2,6.2]);                             /* jaw */
-  A(head,'sph',phg(0x103a1c),[-1.7,-.6,9.6],[1,.8,.8]);A(head,'sph',phg(0x103a1c),[1.7,-.6,9.6],[1,.8,.8]);   /* nostrils */
-  A(head,'cone',ivory,[-1.8,-2.6,8.6],[.9,1.6,.9],[PI,0,0]);A(head,'cone',ivory,[1.8,-2.6,8.6],[.9,1.6,.9],[PI,0,0]); /* fangs */
+  const skin=lam(0xffffff,{map:texDragon()}),vc=lam(0xffffff,{vertexColors:true}),
+    plate=phg(0xe8bd62,{shininess:55,specular:0x665533,emissive:0x3a2606}),plateL=phg(0xf4d684,{shininess:55,specular:0x665533,emissive:0x3a2a08}),
+    red=lam(0xe2501f,{emissive:0x3a0c00}),redD=lam(0xc43a14,{emissive:0x2a0600}),leg=lam(0xffffff,{map:texDrgLegUp(),emissive:0x1c0600}),legLo=lam(0xffffff,{map:texDrgLegLow(),emissive:0x1c0600}),kneeM=lam(0xdc6a2c,{emissive:0x1c0600}),pawM=lam(0xb8401a,{emissive:0x1c0600}),vcLeg=lam(0xffffff,{vertexColors:true,emissive:0x1c0600}),brown=lam(0x6a4634),
+    horn=phg(0xf0cfa4,{shininess:40}),horn2=phg(0xd8d878,{shininess:40}),ivory=phg(0xf6ebc0,{shininess:60}),claw=phg(0xe6d9a2,{shininess:60}),
+    fbone=lam(0xd98a3c,{emissive:0x2a1000}),beard=lam(0xf2d2b0,{side:T.DoubleSide}),
+    mem=lam(0xffffff,{vertexColors:true,side:T.DoubleSide,emissive:0x2a0a00}),mem2=lam(0xf8dcc0,{side:T.DoubleSide,transparent:true,opacity:.92}),
+    tailM=lam(0xffffff,{vertexColors:true});
+  const armM=lam(new T.Color(1,.8,.58),{map:texDragon()}),nmat=lam(0xffffff,{map:texDragon(),vertexColors:true}),body=G(B,[0,0,0]);
+  /* v5_210 flames like the phoenix: soft additive glow + flickering flame sprites (wfl list is animated in anim) */
+  const R=rng(53),wfl=[],fo2=fsp(0xff3a08,.3),fm2=fsp(0xff8a1c,.34),fc2=fsp(0xffd666,.4),fsoft=fsp(0xff6a14,.3,'soft');fsoft.depthTest=false;
+  const mass=(par,cx,cy,cz,sx,sz,n,w,h)=>{
+    SP(par,fsoft,[cx,cy+h*.2,cz],sx*2+w*1.2+sz,h*.95);
+    for(let i=0;i<n;i++){const u=(i+.5)/n,e=Math.abs(u-.5)*2,hh=h*(.55+.6*R())*(1-e*e*.55),ww=w*(.8+.5*R()),m=SP(par,[fo2,fm2,fm2,fc2][(R()*4)|0],[cx+(R()-.5)*sx,cy,cz+(u-.5)*sz],ww,hh,1);wfl.push({m:m,sx:ww,sy:hh,ph:R()*6.28})}};
+  /* ---- torso: crouched, chest forward and high, hips low; vertex-coloured (brown back / copper flank / gold belly) */
+  const tp=[[0,13,-2.5],[13,13,22],[0,0,0]],tp2=[[0,15.5,5.5],[11.5,12.5,12],[-.25,0,0]],tp3=[[0,11.6,-8],[11,10.5,11],[.18,0,0]];
+  A(body,drgGeo('drg_t1',tp[0],tp[1]),vc,tp[0],tp[1]);
+  A(body,drgGeo('drg_t2',tp2[0],tp2[1],tp2[2]),vc,tp2[0],tp2[1],tp2[2]);
+  A(body,drgGeo('drg_t3',tp3[0],tp3[1],tp3[2]),vc,tp3[0],tp3[1],tp3[2]);
+  for(let i=0;i<6;i++){const k=i/7,wx=i===5?.8:1;A(body,drgBlobGeo([0,7.2+k*4.6,-8+i*3.1],[(8.2-k*1.4)*wx,2.4,3.2],(x,y,z)=>{const c=drgCol(x,y,z),m=i%2?1:1.07;return[Math.min(1,c[0]*m),Math.min(1,c[1]*m),Math.min(1,c[2]*m)]}),vc,[0,7.2+k*4.6,-8+i*3.1],[(8.2-k*1.4)*wx,2.4,3.2],[ -.15-k*.35,0,0])}   /* gold belly bands (v5_213: only the 6 that lie inside the torso; the last two stuck out in front of the chest as small brown leaf-shaped lumps) */
+  const fsoft2=fsp(0xff7a22,.22,'soft'),fsoft3=fsp(0xff9a3a,.14,'soft');fsoft2.depthTest=false;fsoft3.depthTest=false;
+  for(const s of [-1,1]){   /* v5_212: no glow sphere any more (its rim was a visible bubble); layered soft radial sprites fade to 0 at the rim and are not clipped by the body, so no edge shows */
+    SP(body,fsoft3,[s*5,19.6,1.6],24,22);
+    SP(body,fsoft2,[s*4.8,19.6,1.6],15,13);
+    mass(body,s*4.8,19.2,1.6,4.5,7,LITE?3:5,8,12)}
+  /* ---- neck: a chain of olive scale spheres along an S path, each with a gold throat plate on the front and a red spine on the back */
+  const path=[[7,15.5],[8.6,19.5],[8.6,24],[7.4,28.5],[6.2,32.4],[6.6,35.6]],pts=[];
+  for(let i=0;i<path.length-1;i++)for(let j=0;j<3;j++){const f=j/3;pts.push([path[i][0]+(path[i+1][0]-path[i][0])*f,path[i][1]+(path[i+1][1]-path[i][1])*f])}
+  pts.push(path[path.length-1]);
+  pts.forEach((q,i)=>{
+    const k=i/(pts.length-1),r=4.7-k*1.5,nx=pts[Math.min(i+1,pts.length-1)],pv=pts[Math.max(i-1,0)],dz=nx[0]-pv[0],dy=nx[1]-pv[1],phi=Math.atan2(dy,dz);
+    const sz=r*1.9,ng=drgBlobGeo([0,q[1],q[0]],[sz,sz,sz],(x,y,z)=>{const t=1-drgSm(15,33,y);return[1,1-.3*t,1-.55*t]});   /* smooth copper -> green fade, per vertex */
+    A(body,ng,nmat,[0,q[1],q[0]],[sz,sz,sz]);
+    const f=G(body,[0,q[1],q[0]]);f.rotation.x=-phi;                                  /* local +y = back normal, local z = along the neck */
+    A(f,'sph',i%2?plate:plateL,[0,-r*.86,0],[r*1.45,r*.62,r*.95]);                    /* throat plate (front) */
+    if(i%2===0)A(f,'cone',red,[0,r*.95,-.4],[1.5-k*.5,4.2-k*1.2,1.5-k*.5],[-.6,0,0]);  /* back spine */
+  });
+  /* ---- head (olive green) at the top of the neck, looking forward */
+  const head=G(body,[0,38.2,10.2]);head.rotation.x=.12;head.scale.setScalar(1.22);
+  A(head,'sph',skin,[0,0,0],[9.6,8.6,10.6]);
+  A(head,'sph',skin,[0,-1.2,6.6],[6.2,5,8.4]);                                         /* snout */
+  A(head,'sph',skin,[0,-1.6,10.2],[4.6,3.6,3.4]);                                     /* nose */
+  A(head,'sph',plateL,[0,-3.6,5],[4.6,1.8,8.2],[.1,0,0]);                              /* lower jaw (cream) */
+  A(head,'sph',phg(0x7a1810),[0,-2.4,5.4],[3.8,1.1,6.6]);                              /* red mouth */
+  const mouth=A(head,'sph',glow(0xff7a22,.45),[0,-2.6,8],[2.2,2.2,2.2]);
+  A(head,'sph',phg(0x2a1a08),[-1.5,-.4,11.6],[.9,.7,.7]);A(head,'sph',phg(0x2a1a08),[1.5,-.4,11.6],[.9,.7,.7]);   /* nostrils */
+  hornChain(head,horn2,[[0,-.6,10.6],[0,.8,12.6],[0,3.2,13.4],[0,5.2,12.6]],1.9);        /* snout tusk: starts inside the nose, curls up */
   for(const s of [-1,1]){
-    A(head,'cone',ivory,[s*3.2,4.6,-2.2],[2.6,6.2,2.6],[-.95,0,s*.35]);A(head,'cone',ivory,[s*4.4,6.8,-6],[1.6,4.6,1.6],[-1.35,0,s*.3]);  /* horns */
-    feather(head,mem,7,3.6,.6,[s*4.6,-.4,-2.4],Math.atan2(s*.6,-.8),0);                                                          /* cheek frills */
-    A(head,'sph',skin,[s*3.5,2.6,3.6],[3.4,1.7,2.4],[0,0,s*-.3]);                                                                /* brow */
-    const iz=3.9;A(head,'sph',phg(0xffc21a,{shininess:120,emissive:0x5a3a00}),[s*4,1.1,iz],3.1);
-    A(head,'sph',phg(0x120808,{shininess:120}),[s*4.2,1.1,iz+1.1],[.8,2.6,.8]);A(head,'sphL',bas(0xffffff),[s*4.4,2,iz+1.5],.9);}
-  const mouth=A(head,'sph',glow(0xff8a2a,.5),[0,-2,9.4],[2.4,2.4,2.4]);
-  [[0,22.8,8.8],[0,21,6.4],[0,19.9,3.2],[0,19.5,-.4],[0,19.1,-4],[0,17.7,-7.4],[0,15.8,-11],[0,14.4,-14.5]].forEach((p,i)=>{const k=i/7;A(body,'cone',gold,p,[2.4-k*1,4.8-k*1.9,2.4-k*1],[-.45-k*.1,0,0])});   /* back spines */
-  const tail=G(body,[0,12,-9.5]);
-  for(let i=0;i<8;i++){const k=i/7;A(tail,'sph',i%2?dark:skin,[0,-k*1.2+Math.sin(k*2.4)*1.4,-i*2.8],[7*(1-k*.78),6.4*(1-k*.78),6.5*(1-k*.7)])}
-  A(tail,'sph',gold,[0,-.6,-22.4],[3.6,.9,5.6],[0,0,0]);A(tail,'cone',gold,[0,-.6,-25.8],[3.6,4.4,.9],[-PI/2,0,0]);
+    for(let i=0;i<4;i++)A(head,'cone',ivory,[s*(1.6+i*1.05),-2.1,4.6+i*1.8],[.7,1.5,.7],[PI,0,0]);   /* teeth */
+    A(head,'cone',ivory,[s*2.1,-3.1,9.2],[.9,2.2,.9],[PI,0,0]);                          /* front fangs */
+    hornChain(head,s>0?horn2:horn,[[s*3,2.6,-1],[s*3.8,5.6,-5],[s*4.6,8,-10.5],[s*5,10.4,-16],[s*5,13.2,-19.5]],3.6);   /* long swept-back horns, one connected piece, rooted in the skull */
+    A(head,'sph',skin,[s*3.9,2.5,3.4],[3.6,1.7,3.2],[0,0,s*-.3]);                       /* brow ridge */
+    const iz=4.2;A(head,'sph',phg(0xe46a1c,{shininess:120,emissive:0x5a1e00}),[s*4.4,.9,iz],3.3);
+    A(head,'sph',phg(0x1a0806,{shininess:120}),[s*4.7,.9,iz+1.15],[1.5,2,1.2]);A(head,'sphL',bas(0xffffff),[s*4.9,1.8,iz+1.6],.8);
+    feather(head,red,6.6,3,.6,[s*5.2,-.2,-1.6],Math.atan2(s*.9,-.5),-.1);              /* cheek frills */
+    feather(head,redD,5,2.4,.5,[s*5,-1.8,-.4],Math.atan2(s*.9,-.2),.15);
+    A(head,'cone',beard,[s*1.6,-4.6,6.8],[.9,4,.5],[.2,0,s*.1]);A(head,'cone',beard,[s*.7,-5,4.6],[.8,3.6,.5],[.2,0,s*.05]);   /* whisker tendrils */
+  }
+  A(head,'cone',beard,[0,-5.2,8.2],[1,4.4,.5],[.15,0,0]);A(head,'cone',beard,[0,-5,2.8],[1,3.6,.5],[.15,0,0]);
+  const crest=G(head,[0,4.6,-3.4]);   /* red-orange crest of flame-like spikes on top of the head */
+  [[0,5.2,.3,-.2],[-1.9,4.6,.1,-.35],[1.9,4.6,.1,-.35],[0,4,.2,-.7],[-3.2,3.2,.2,-.7],[3.2,3.2,.2,-.7],[0,3.2,.35,-1.05],[-1.2,3.4,.1,-.5],[1.2,3.4,.1,-.5]].forEach((c,i)=>A(crest,'cone',i%2?redD:red,[c[0]*.5,0,i*-.5+1.4],[1.5,c[1]*1.5,1.3],[c[3]-.15,0,c[0]*-.12]));
+  /* ---- tail: a thick curve, brown root -> peach tip, red spikes along the top, curling up behind */
+  const tail=G(body,[0,9.5,-12.5]);
+  const tc=(k)=>[.42+k*.5,.28+k*.38,.2+k*.28];
+  const tpts=[];for(let i=0;i<11;i++){const k=i/10;tpts.push([0,-k*4.2+Math.sin(k*PI)*0+Math.pow(k,2.2)*13,-i*3.2+Math.sin(k*PI*.9)*0])}
+  const tailCol=(x,y,z)=>{const k=Math.min(1,Math.max(0,-z/32)),c=tc(k),b=drgCol(x,y+9.5,z-12.5),f=drgSm(0,.4,k);return[b[0]+(c[0]-b[0])*f,b[1]+(c[1]-b[1])*f,b[2]+(c[2]-b[2])*f]};
+  tpts.forEach((p,i)=>{const k=i/10,r=5.4*(1-k*.82);
+    A(tail,drgBlobGeo([p[0],p[1],p[2]],[r*1.8,r*1.7,r*2.2],tailCol),vc,[p[0],p[1],p[2]],[r*1.8,r*1.7,r*2.2]);
+    if(i>0&&i<10)A(tail,'cone',i%2?red:redD,[0,p[1]+r*.88,p[2]],[1.7*(1-k*.5),4.8*(1-k*.45),1.7*(1-k*.5)],[-.35,0,0])});
+  A(tail,'cone',red,[0,tpts[10][1]+.4,tpts[10][2]-3.4],[2,6,1.4],[-PI/2-.4,0,0]);
+  /* ---- wings: big orange bat wings with five finger bones, scalloped edge and claws */
   const wings=[];
   for(const s of [-1,1]){
-    const w=G(body,[s*5,17.5,1.5]);w.scale.set(s*.58,.58,.58);w.rotation.y=s*.25;
-    A(w,'wingDragon',mem,[0,0,0]);
-    [[[0,0],[9,11]],[[9,11],[20,15]],[[20,15],[30,19]],[[20,15],[26,3]],[[20,15],[16,-4]],[[20,15],[6,-8]]].forEach((b,i)=>bone(w,b[0],b[1],i<2?1.3:.8,bn));
+    const WP=[s*3.7,17.9,1.5],w=G(body,WP);w.scale.set(s*.82,.82,.82);w.rotation.y=s*.3;
+    A(w,drgWingRootGeo(s,WP,[-3.4,-4.2],[7.2,8.9],4.3,1.65),vc,[0,0,0]);                 /* v5_211 tapered shoulder arm: body colour -> wing-arm colour, embedded in the torso */
+    A(w,dragonWingGeo(),mem,[0,0,0]);
+    A(w,'wingDragon',mem2,[3,-1.5,-.35],[.8,.82,1]);                                    /* the paler far membrane peeking behind */
+    const fingers=[[[0,0],[9,11]],[[9,11],[20,15]],[[20,15],[30,19]],[[20,15],[26,3]],[[20,15],[16,-4]],[[20,15],[6,-8]]];
+    fingers.forEach((b,i)=>bone(w,b[0],b[1],i<2?1.5:.85,i<2?armM:fbone));
+    [[30,19],[26,3],[16,-4],[6,-8]].forEach(q=>A(w,'cone',claw,[q[0],q[1],0],[1.3,3.4,1.3],[0,0,Math.atan2(q[1]-8,q[0]-14)-PI/2]));
+    A(w,'cone',horn2,[9,11.8,0],[1.8,4.8,1.8],[0,0,.15]);                               /* yellow wrist claw */
+    A(w,dragonWingGeo(),glow(0xff7a22,.2),[0,0,.08],[1.05,1.05,1]);                       /* soft glowing membrane */
+    for(const q of [[10,9,5],[19,13,6],[23,7,5],[15,1,6],[8,-3,4]])mass(w,q[0],q[1],.4,q[2],1,LITE?2:3,7,11);   /* flames burning along the finger bones */
     wings.push(w);
   }
-  /* v5_200: the hips used to sit OUTSIDE the body ellipsoid, so the legs floated beside it. Now each hip is inside the flank, with a big thigh / shoulder mass buried in the body, then upper leg, knee, lower leg, paw. */
+  /* ---- legs: front legs straight, hind legs bent (crouching); orange-red scales, copper thighs, ivory claws */
   const legs=[];
-  [[-4.2,7.2,0],[4.2,7.2,0],[-4.2,-6.6,1],[4.2,-6.6,1]].forEach(p=>{const hind=p[2],L=kneeLeg(body,p[0],10.6,p[1],{
-      hind:hind,l1:4.4,d1:6.2,d2:5.3,kr:2,a1:hind?-.5:-.2,a2:hind?.62:.25,mat:skin,low:dark,
-      th:hind?[5.4,6.6,7.2]:[5,6,6.4],thPos:[0,-.2,0],pawS:[5.8,3.2,7.2],pawMat:skin,pawZ:1});
-    for(const tx of [-1.8,0,1.8])A(L.foot,'cone',ivory,[tx,-.3,4.7],[1.1,2.6,1.1],[PI/2,0,0]);
+  [[-4.6,7.8,0],[4.6,7.8,0],[-5,-7,1],[5,-7,1]].forEach(p=>{const hind=p[2],L=kneeLeg(body,p[0],10.4,p[1],{
+      hind:hind,l1:4.4,d1:6,d2:5,kr:2,a1:hind?-.55:-.15,a2:hind?.7:.2,mat:leg,low:legLo,kneeMat:kneeM,
+      th:hind?[6.4,7.6,8.2]:[5.4,6.4,6.8],thPos:[0,.2,0],thMat:vcLeg,thGeo:drgBlobGeo([p[0],10.6,p[1]],hind?[6.4,7.6,8.2]:[5.4,6.4,6.8],drgThighCol),pawS:[5.6,3.2,7.4],pawMat:pawM,pawZ:1.2});
+    for(const tx of [-1.9,0,1.9])A(L.foot,'cone',claw,[tx,-.2,5.2],[1.1,2.8,1.1],[PI/2,0,0]);
     legs.push(L)});
-  return{fr:15,hh:30,anim(t,mv){
-    const flap=Math.sin(t*(2.2+mv*5))*(.16+mv*.22);
-    wings[0].rotation.z=-.15-flap;wings[1].rotation.z=.15+flap;
-    head.rotation.y=Math.sin(t*.8)*.18;head.rotation.x=Math.sin(t*1.3)*.05;
-    tail.rotation.y=Math.sin(t*1.9)*.28;tail.rotation.x=Math.sin(t*1.2)*.05;
+  return{fr:17,hh:48,k:.78,anim(t,mv){
+    const flap=Math.sin(t*(2+mv*5))*(.13+mv*.22);
+    wfl.forEach(f=>{const q=1+Math.sin(t*10+f.ph)*.2+Math.sin(t*19+f.ph*2)*.1;f.m.scale.set(f.sx*(1-(q-1)*.3),f.sy*q,1)});
+    wings[0].rotation.z=-.12-flap;wings[1].rotation.z=.12+flap;
+    head.rotation.y=Math.sin(t*.8)*.2;head.rotation.x=.12+Math.sin(t*1.3)*.05;
+    tail.rotation.y=Math.sin(t*1.7)*.26;tail.rotation.x=Math.sin(t*1.1)*.04;
     walk(legs,t,mv,8,.6);
-    body.position.y=Math.abs(Math.sin(t*8))*1.2*mv+Math.sin(t*2)*.25;
+    body.position.y=Math.abs(Math.sin(t*8))*1.1*mv+Math.sin(t*2)*.3;
     mouth.scale.setScalar(2.2+Math.sin(t*5)*.5+Math.sin(t*11)*.25);
   }};
 }
