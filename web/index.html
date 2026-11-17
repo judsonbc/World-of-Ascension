@@ -18,7 +18,7 @@
   var sw='serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1');
   if(sw)navigator.serviceWorker.register('sw.js').catch(function(){});
   /* 1) game files (cache hit = instant; first visit downloads and the service worker stores them) */
-  var files=['models3d.js','audio.js','tutorial.js','three-compat.js','fx3d.js','manifest.json'],got=0;
+  var files=['models3d.js','pets3d.js','audio.js','tutorial.js','three-compat.js','fx3d.js','manifest.json'],got=0;
   set(4,'Downloading game files...');
   files.forEach(function(f){fetch(f).then(function(r){return r.arrayBuffer()}).catch(function(){}).then(function(){got++;set(4+got/files.length*50,'Downloading game files... '+got+'/'+files.length)})});
   var wait=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
@@ -127,7 +127,7 @@ html.phone #statsWin{box-sizing:border-box;left:10px;top:calc(60*var(--u));width
 html.phone #statsWin h4{margin-bottom:1px}html.phone #statsWin hr{margin:1px 0}html.phone #statsWin span{min-width:0}
 /* phone landscape: sit between the player HUD (left) and the minimap / buttons (right), sized in HUD units so it scales with the screen */
 @media (orientation:landscape){html.phone #statsWin{left:calc(232*var(--u));top:calc(52*var(--u));width:calc(600*var(--u));font-size:max(8.5px,calc(16.5*var(--u)));gap:1px calc(14*var(--u));padding:calc(8*var(--u)) calc(12*var(--u));max-height:calc(100vh - 56px);max-height:calc(100dvh - 56px)}}
-#brow{display:flex;align-items:center;gap:6px;min-height:calc(22*var(--u))}#brow .rt{font:600 calc(10.5*var(--u)) var(--body);color:#bfeedd;background:rgba(0,0,0,.5);padding:calc(2*var(--u)) calc(7*var(--u));border-radius:calc(3*var(--u));border:calc(1*var(--u)) solid rgba(95,211,165,.35);white-space:nowrap}
+#brow{display:flex;flex-wrap:nowrap;align-items:center;gap:6px;min-height:calc(22*var(--u))}#brow .rt{flex:none}#brow .rt{font:600 calc(10.5*var(--u)) var(--body);color:#bfeedd;background:rgba(0,0,0,.5);padding:calc(2*var(--u)) calc(7*var(--u));border-radius:calc(3*var(--u));border:calc(1*var(--u)) solid rgba(95,211,165,.35);white-space:nowrap}
 .bar2{position:relative;height:calc(14*var(--u));background:#210708;border:calc(1*var(--u)) solid rgba(0,0,0,.75);overflow:hidden;box-shadow:0 calc(1*var(--u)) calc(4*var(--u)) rgba(0,0,0,.6)}
 .bar2 i{position:absolute;left:0;top:0;bottom:0;width:50%}
 .bar2 span{position:absolute;inset:0;text-align:center;font:600 calc(11*var(--u))/calc(14*var(--u)) var(--body);font-variant-numeric:tabular-nums;text-shadow:0 calc(1*var(--u)) calc(2*var(--u)) #000;color:#fff}
@@ -139,8 +139,10 @@ html.phone #statsWin h4{margin-bottom:1px}html.phone #statsWin hr{margin:1px 0}h
 .bf{position:relative;width:calc(22*var(--u));height:calc(22*var(--u));display:grid;place-items:center;border:calc(1*var(--u)) solid #c9b27a;background:#15202a;font-size:calc(12*var(--u));border-radius:calc(3*var(--u))}
 .bf{pointer-events:auto;cursor:help}
 .bf{touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
-#buffs{flex-wrap:wrap}
-html.phone .bf{width:calc(26*var(--u));height:calc(26*var(--u));min-width:24px;min-height:24px;font-size:calc(14*var(--u))}
+/* v5_200 buffs: ALWAYS one row (PC and phone). The row takes the space beside the realm tag; when there are many buffs the icons shrink (down to a minimum) and, only if still too many, run on to the right - they never wrap onto a second line. */
+#buffs{flex:1 1 0;min-width:0;flex-wrap:nowrap}
+.bf{flex:0 1 calc(22*var(--u));min-width:calc(13*var(--u))}
+html.phone .bf{flex:0 1 calc(26*var(--u));width:auto;height:calc(26*var(--u));min-width:calc(15*var(--u));min-height:24px;font-size:calc(14*var(--u))}
 /* v5_143 buff tooltip: name + description, see-through panel */
 #bftip{position:fixed;z-index:40;pointer-events:none;max-width:calc(230*var(--u));padding:calc(6*var(--u)) calc(9*var(--u));border-radius:calc(7*var(--u));background:rgba(8,14,20,.5);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);border:1px solid rgba(232,224,202,.28);box-shadow:0 2px 10px rgba(0,0,0,.35);color:var(--paper);font:500 calc(11*var(--u))/1.35 var(--body);text-shadow:0 1px 2px #000}
 #bftip b{display:block;font:700 calc(12*var(--u)) var(--body);margin-bottom:calc(2*var(--u))}
@@ -635,6 +637,8 @@ html.phone .modal #bag .bagwin,html.phone #bag .bagwin{zoom:1}
 .bslot{position:relative;aspect-ratio:1;border-radius:6px;border:1px solid #2f6fa8;background:radial-gradient(circle at 50% 40%,#2c639b 0%,#173a66 70%,#102848 100%);padding:0;cursor:pointer;overflow:hidden;color:#fff}
 .bslot.epic{border-color:#b3302c;background:radial-gradient(circle at 50% 35%,#ff7a2a 0%,#b0261c 40%,#4a1218 100%)}
 .bslot.leg{border-color:#d9b020;background:radial-gradient(circle at 50% 40%,#fff3a0 0%,#f0c400 50%,#8a6a00 100%)}
+.bslot.pa{border-color:#4de3b0;background:radial-gradient(circle at 50% 40%,#b8ffe8 0%,#2fbf8f 50%,#0b4a38 100%)}
+.bslot.ps{border-color:#ff7ae0;background:conic-gradient(from 0deg at 50% 50%,#ff7ae0,#ffd23a,#4de3b0,#5aa9ff,#c07bff,#ff7ae0);box-shadow:0 0 8px #ff7ae0}
 .bslot.cm{border-color:#8a949a;background:radial-gradient(circle at 50% 40%,#9aa5ab 0%,#566269 70%,#323b40 100%)}
 .bslot.pu{border-color:#9a55e0;background:radial-gradient(circle at 50% 38%,#c79bff 0%,#7a35c0 50%,#2c1250 100%)}
 .bslot.empty{opacity:.45;cursor:default}
@@ -1165,6 +1169,7 @@ html.phone .wdcard .wdnote{display:none}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="var q=document.createElement('script');q.src='three.min.js';document.head.appendChild(q)"></script>
 <script src="three-compat.js"></script>
 <script src="models3d.js"></script>
+<script src="pets3d.js"></script>
 <script src="fx3d.js"></script>
 <script src="audio.js"></script>
 <script src="game.js"></script>

@@ -772,7 +772,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow()})
 window.addEventListener('pagehide',saveNow);window.addEventListener('beforeunload',saveNow);
 function save(){
   if(!AUTH.ok)return;
-  const str=JSON.stringify({v:2,pm:PVPLVL,ts:Date.now(),gv:GEAR_VER,sv:AUTH.ver===null?undefined:AUTH.ver,lvl:P.lvl,exp:P.exp,coins:P.coins,ore:P.ore,wlv:P.wlv,alv:P.alv,wv:2,wi:curWorld===ARENA?1:curWorld,eq:EQ,as:AUTOSK.map(x=>x?1:0),sk:SKIN,lkv:2,lk:LOOKS.map((v,i)=>i===P.cls?SKIN:v),gear:P.gear,bag:bagArr(),pots:P.pots,wh:whArr(),fb:P.fightBack?1:0,tm:P.tapMove?1:0,mk:1,sg:1,cl:P.cls,cs:CLS_STORE.map(x=>x?{e:x.e,a:x.a.map(y=>y?1:0)}:null),ap:P.autoPot?1:0,ah:P.apHp,aq:P.apQi});
+  const str=JSON.stringify({v:2,pm:PVPLVL,ts:Date.now(),gv:GEAR_VER,sv:AUTH.ver===null?undefined:AUTH.ver,lvl:P.lvl,exp:P.exp,coins:P.coins,ore:P.ore,wlv:P.wlv,alv:P.alv,wv:2,wi:curWorld===ARENA?1:curWorld,eq:EQ,as:AUTOSK.map(x=>x?1:0),sk:SKIN,lkv:2,lk:LOOKS.map((v,i)=>i===P.cls?SKIN:v),gear:P.gear,bag:bagArr(),pots:P.pots,wh:whArr(),eg:P.eggs|0,pt:P.pets,sp:P.pet||'',fb:P.fightBack?1:0,tm:P.tapMove?1:0,mk:1,sg:1,cl:P.cls,cs:CLS_STORE.map(x=>x?{e:x.e,a:x.a.map(y=>y?1:0)}:null),ap:P.autoPot?1:0,ah:P.apHp,aq:P.apQi});
   try{localStorage.setItem(saveKey(),str)}catch(e){}
   cloudPush(str);
   netInfo();
@@ -785,7 +785,7 @@ function load(){
     const gm=s.gv===GEAR_VER?()=>1:GEAR_OLD[s.gv]?gearMulFrom(s.gv):gearMul; /* older saves: rolled stats were on the old scale, bring them to the new one (v3 saves are already scaled, so only the ratio is applied) */
     if(s.gear&&typeof s.gear==='object')for(const q of GEAR){const o=s.gear[q.k];if(o){const t=P.gear[q.k];t.g=clamp(o.g|0,0,NW);t.lv=clamp(o.lv|0,0,FORGE_MAX);t.r=clamp(o.r|0,0,RAR.length-1);t.st={};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE||k in SPECIAL){const v=+o.st[k];if(v>=0&&v<1e6)t.st[k]=r2(v*gm(k))}fixGear(t,q)}}
     const parseGear=(arr,cap)=>{const out=[];if(Array.isArray(arr))for(const o of arr.slice(0,cap)){const q=o&&GEAR.find(z=>z.k===o.slot);if(!q)continue;const it={slot:q.k,g:clamp(o.g|0,1,NW),r:clamp(o.r|0,0,RAR.length-1),st:{}};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE||k in SPECIAL){const v=+o.st[k];if(v>=0&&v<1e6)it.st[k]=r2(v*gm(k))}addQrg(it,q);it.col=RAR[it.r].c;it.u=bagUid++;out.push(it)}return out};
-    P.bag=parseGear(s.bag,200);P.wh=parseGear(s.wh,WH_CAP);
+    P.bag=parseGear(s.bag,200);P.wh=parseGear(s.wh,WH_CAP);P.eggs=clamp(s.eg|0,0,99999);P.pets=parsePets(s.pt);P.pet=petLoad(s.sp);P.pf=null;
     PVPLVL=clamp(s.pm|0,0,3);
     if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;
     let wi=s.wi|0;if(s.wv!==2&&wi<=10)wi++; /* older saves: world numbers started at 0 for Ashen Reach */
@@ -870,6 +870,7 @@ function rewardKill(m,noLoot){
   addPot('qi',m.boss?3+Math.floor(rnd()*4):(rnd()<POT_DROP?1:0));
   addPot('tp',m.boss?1+Math.floor(rnd()*2):(rnd()<TP_DROP?1:0));
   if(m.boss&&rnd()<GEAR_DROP_CHANCE)dropGear(m);
+  if(m.boss&&rnd()<EGG_DROP_CHANCE)giveEgg(m);
 }
 function dropGear(m){
   /* 1-3 random pieces per boss: random slot, random rarity, random stat rolls */
@@ -888,7 +889,7 @@ const BAG_CAP=50,WH_CAP=100;let bagUid=1; /* bag holds 50 slots; the hub Warehou
 const bagArr=()=>P.bag||(P.bag=[]);
 const whArr=()=>P.wh||(P.wh=[]);
 const oreOf=it=>(2+it.g*2)*(1+it.r);
-function bagCount(){let n=(P.coins>0)+(P.ore>0)+(P.wlv>0&&P.gear.wpn.g===0)+(P.alv>0&&P.gear.robe.g===0)+bagArr().length;for(const k of ['hp','qi','tp'])if(P.pots[k]>0)n++;for(const q of GEAR)if(P.gear[q.k].g>0)n++;return n}
+function bagCount(){let n=(P.coins>0)+(P.ore>0)+(P.wlv>0&&P.gear.wpn.g===0)+(P.alv>0&&P.gear.robe.g===0)+(P.eggs>0)+petStacks()+bagArr().length;for(const k of ['hp','qi','tp'])if(P.pots[k]>0)n++;for(const q of GEAR)if(P.gear[q.k].g>0)n++;return n}
 /* the bag used to hold 100: anything over the cap moves to the warehouse (up to its 100 slots) */
 function fixBagOverflow(){const A=bagArr(),W=whArr();let n=0;while(bagCount()>BAG_CAP&&A.length&&W.length<WH_CAP){W.push(A.pop());n++}if(n){bagLog(n+' spare piece'+(n>1?'s':'')+' moved to the Warehouse (bag is now '+BAG_CAP+' slots)','#8d9aa2');save()}}
 function takeGear(it){
@@ -1895,7 +1896,7 @@ function bagItems(){
   if(P.alv>0&&P.gear.robe.g===0)a.push({id:'robe',n:'Robe',v:P.alv,t:'+'+P.alv,r:'epic',eq:1,ic:ICONS.robe(skinOf(SKIN).robe),d:'Your starting Robe, forge level +'+P.alv+'. A boss-dropped Robe can replace it. Temper it at the Lotus Forge.'});
   for(const q of GEAR){const o=P.gear[q.k];if(o.g>0)a.push({id:'g_'+q.k,n:gearName(q,o),v:o.r*1e6+Math.round(gearScore(o)*100)+o.lv,t:'+'+o.lv,r:RAR[o.r].cls||'rare',eq:1,ic:ICONS[q.k](RAR[o.r].c),d:gearDesc(q,o)})}
   for(const it of bagArr()){const q=GEAR.find(z=>z.k===it.slot);a.push({id:'s_'+it.u,n:gearName(q,it),v:1,t:'G'+it.g,r:RAR[it.r].cls||'rare',ic:ICONS[q.k](RAR[it.r].c),d:statTxt(it.st,0,null)+'. Sells for '+oreOf(it)+' ore.',stored:it})}
-  return a;
+  return petBagItems(a);
 }
 function sellStored(u){const A=bagArr(),i=A.findIndex(x=>x.u===u);if(i<0)return;const it=A[i],q=GEAR.find(z=>z.k===it.slot),ore=oreOf(it);A.splice(i,1);P.ore+=ore;bagLog('Sold '+gearName(q,it)+' \u2192 '+ore+' ore','#7fe0ee');bagSel=null;bagConfirm=null;save();renderBag()}
 function sellMany(){const A=bagArr();let n=0,ore=0;
@@ -1939,18 +1940,20 @@ function autoEquipBest(){
 }
 function snapSeen(){bagSeen={};for(const it of bagItems())bagSeen[it.id]=it.v}
 function renderBag(){
-  const items=bagItems(),total=BAG_CAP;
+  petCombValidate();const items=bagItems(),total=BAG_CAP;
   if(!bagSeen)snapSeen();
   if(bagSel&&!items.some(i=>i.id===bagSel))bagSel=null;
   $('bagCnt').textContent=items.length+' / '+BAG_CAP;
   $('bagLv').textContent='Lv. '+P.lvl;
   const pick=it=>{
+    if(petComb&&!bagMulti&&petCombTap(it))return;
     if(bagMulti){if(!it.stored){say('Only spare gear in your bag can be sold.','#8d9aa2',2500);return}const u=it.stored.u;bagPick.has(u)?bagPick.delete(u):bagPick.add(u);bagConfirm=null;renderBag();return}
     if(bagSel!==it.id)bagConfirm=null;bagSel=it.id;renderBag()};
   const mkSlot=it=>{
     const b=document.createElement('button');b.type='button';
-    b.className='bslot '+it.r+(bagMulti?(it.stored&&bagPick.has(it.stored.u)?' msel':''):(bagSel===it.id?' sel':''));b.title=it.n;b.innerHTML=it.ic;
+    b.className='bslot '+it.r+(bagMulti?(it.stored&&bagPick.has(it.stored.u)?' msel':''):(bagSel===it.id?' sel':'')+(petComb&&it.pet&&petComb.b===it.pet.key?' msel':''));b.title=it.n;b.innerHTML=it.ic;
     if(!it.eq&&it.v>(bagSeen[it.id]||0)){const ad=document.createElement('span');ad.className='ad';ad.textContent='NEW';b.appendChild(ad)}
+    if(it.pet&&P.pet===it.pet.key){const ad=document.createElement('span');ad.className='eqr';ad.textContent='OUT';b.appendChild(ad)}
     const q=document.createElement('span');q.className='q';q.textContent=it.t;b.appendChild(q);
     b.addEventListener('click',()=>pick(it));return b};
   /* equipped gear around the avatar: left and right columns */
@@ -1979,6 +1982,7 @@ function renderBag(){
   const info=$('bagInfo');info.innerHTML='';
   const sel=items.find(i=>i.id===bagSel);
   $('bagMulti').classList.toggle('on',bagMulti);$('bagMulti').textContent=bagMulti?'Done selecting':'Sell multiple';
+  if(petComb&&!bagMulti)petCombPanel(info);else
   if(bagMulti){
     const A=bagArr();for(const u of [...bagPick])if(!A.some(x=>x.u===u))bagPick.delete(u);
     let ore=0;for(const it of A)if(bagPick.has(it.u))ore+=oreOf(it);const n=bagPick.size;
@@ -2013,6 +2017,7 @@ function renderBag(){
       }
       info.appendChild(w)}
     if(sel.eq&&sel.id.slice(0,2)==='g_'){const k=sel.id.slice(2),w=document.createElement('div'),b=document.createElement('button');w.className='bagact';b.type='button';b.className='btn';b.textContent='Unequip';b.addEventListener('click',()=>unequipGear(k));w.appendChild(b);info.appendChild(w)}
+    if(sel.egg||sel.pet)petBagActions(sel,info);
     if(sel.pot){const k=sel.pot,b=document.createElement('button');b.type='button';b.className='btn pri';b.textContent=pot[k]>0?Math.ceil(pot[k])+'s':(k==='tp'&&P.tp>0?'...':'Use');b.disabled=pot[k]>0;b.addEventListener('click',()=>{usePot(k);renderBag()});info.appendChild(b)}
   }
 }
@@ -2064,7 +2069,7 @@ function renderWh(){
 }
 $('bWare').addEventListener('click',openWh);$('whClose').addEventListener('click',closeWh);$('whAll').addEventListener('click',whStoreAll);
 $('wh').addEventListener('pointerdown',e=>{if(e.target===$('wh'))closeWh()});
-function closeBag(){$('bag').hidden=true;bagConfirm=null;bagMulti=false;bagPick.clear();snapSeen()}
+function closeBag(){$('bag').hidden=true;bagConfirm=null;petComb=null;bagMulti=false;bagPick.clear();snapSeen()}
 function toggleBag(){if(!started)return;const b=$('bag');if(b.hidden){b.hidden=false;renderBag()}else closeBag()}
 $('bBag').addEventListener('click',toggleBag);$('bagAuto').addEventListener('click',autoEquipBest);$('bagMulti').addEventListener('click',()=>{bagMulti=!bagMulti;bagPick.clear();bagConfirm=null;renderBag()});$('bagClose').addEventListener('click',closeBag);
 $('autoPot').addEventListener('change',e=>{P.autoPot=e.target.checked;save()});
@@ -2192,6 +2197,230 @@ function openShop(){
 $('shopClose').addEventListener('click',()=>{closeBuy();closeXc();$('shop').hidden=true});
 setInterval(()=>{if(started)save()},8000); /* v5_186 20 s -> 8 s */
 
+/* ---------- PETS (v5_195): eggs drop from bosses, hatch in the bag, combine F > E > D > C > B > A > S. No pet stats yet. ----------
+   P.eggs  = number of eggs (one stacked bag slot).
+   P.pets  = { 's:c': count } stacks, s = species index (0 chicken, 1-5 special), c = class index (0 F ... 6 S). One bag slot per stack.
+   Chicken is the common pet: it has no class and cannot be combined. */
+const EGG_DROP_CHANCE=1,EGG_DROP_N=1,EGG_ORE=10;                /* boss egg drop (bag full: the egg is sold for ore) */
+const EGG_SPECIAL_CHANCE=5;                                     /* % chance a hatched egg is a special pet (else a chicken) */
+const PET_CLS=['F','E','D','C','B','A','S'],PET_CLS_COL=['#c4cdd2','#5aa9ff','#c07bff','#ff6a4a','#ffb02e','#4de3b0','#ff7ae0'],PET_CLS_SLOT=['cm','','pu','epic','leg','pa','ps'];
+const PET_UP=[5,4,3,2,1,.5];                                    /* % chance to combine class i + class i into class i+1 (F>E 5, E>D 4, D>C 3, C>B 2, B>A 1, A>S .5) */
+const PET_SP=[{n:'Chicken',col:'#f3e6c4'},{n:'Dragon',col:'#5cd36a'},{n:'Fairy',col:'#ff9ad5'},{n:'Phoenix',col:'#ff7a2a'},{n:'Tiger',col:'#ffb347'},{n:'Wolf',col:'#aab7c4'}];
+P.eggs=0;P.pets={};P.pet=null;P.pf=null; /* P.pet = key of the summoned pet ('s:c') or null; P.pf = where it is (follows you) */
+let petComb=null; /* combine mode: {a:'s:c' first pet, b:'s:c' second pet or null} */
+const petKey=(s,c)=>s+':'+c,petParse=k=>{const a=k.split(':');return{s:a[0]|0,c:a[1]|0}};
+const petsObj=()=>P.pets||(P.pets={});
+const petStacks=()=>Object.keys(petsObj()).filter(k=>petsObj()[k]>0).length;
+const petName=(s,c)=>s===0?'Chicken':PET_SP[s].n+' [Class '+PET_CLS[c]+']';
+const petCol=(s,c)=>s===0?PET_SP[0].col:PET_CLS_COL[c];
+function petAdd(s,c,n){const o=petsObj(),k=petKey(s,c);o[k]=(o[k]||0)+n}
+function petTake(s,c,n){const o=petsObj(),k=petKey(s,c);o[k]=(o[k]||0)-n;if(o[k]<=0)delete o[k]}
+function parsePets(o){const out={};if(o&&typeof o==='object')for(const k in o){const p=petParse(k);if(p.s<0||p.s>=PET_SP.length||p.c<0||p.c>=PET_CLS.length)continue;if(p.s===0&&p.c!==0)continue;const n=Math.min(99999,o[k]|0);if(n>0)out[petKey(p.s,p.c)]=n}return out}
+/* ---- icons ---- */
+ICONS.egg=()=>svgW('<path d="M32 5C20 5 11 28 11 40c0 12 9 19 21 19s21-7 21-19C53 28 44 5 32 5z" fill="#f4ecd8" stroke="#8a7a56" stroke-width="2"/><circle cx="24" cy="38" r="4" fill="#e3b559"/><circle cx="39" cy="30" r="3.5" fill="#7fb0e8"/><circle cx="36" cy="47" r="4" fill="#e88aa8"/><path d="M20 22q4-9 10-12" stroke="#fff" stroke-width="3" fill="none" opacity=".7" stroke-linecap="round"/>');
+ICONS.pet=[
+ c=>svgW('<ellipse cx="30" cy="40" rx="18" ry="15" fill="#f6efd8" stroke="#8a7a56" stroke-width="2"/><circle cx="44" cy="25" r="10" fill="#f6efd8" stroke="#8a7a56" stroke-width="2"/><path d="M40 11q4-6 8 0q4-5 6 2z" fill="#e0412f" stroke="#7a1c14" stroke-width="1.5"/><path d="M53 26l8 3-8 3z" fill="#f0a030" stroke="#8a5a10" stroke-width="1.5"/><circle cx="46" cy="23" r="2" fill="#222"/><path d="M13 36q-6 2-6 10 8-2 10-6z" fill="#e9dfbf" stroke="#8a7a56" stroke-width="1.5"/><path d="M26 54v6M34 54v6" stroke="#f0a030" stroke-width="3"/>'),
+ c=>svgW('<path d="M6 30l16-16 6 14-10 8z" fill="#3aa84d" stroke="#14451d" stroke-width="2"/><path d="M58 30L42 14l-6 14 10 8z" fill="#3aa84d" stroke="#14451d" stroke-width="2"/><ellipse cx="32" cy="38" rx="12" ry="14" fill="#5cd36a" stroke="#14451d" stroke-width="2"/><path d="M24 14l4 10M40 14l-4 10" stroke="#e3b559" stroke-width="3" stroke-linecap="round"/><ellipse cx="32" cy="44" rx="7" ry="5" fill="#a8f0a0"/><circle cx="26" cy="34" r="2.5" fill="#ffe14a" stroke="#222"/><circle cx="38" cy="34" r="2.5" fill="#ffe14a" stroke="#222"/><circle cx="29" cy="44" r="1.2" fill="#14451d"/><circle cx="35" cy="44" r="1.2" fill="#14451d"/>'),
+ c=>svgW('<path d="M30 30L8 12q-2 18 12 26z" fill="#bfe8ff" stroke="#6aa8d8" stroke-width="1.5" opacity=".9"/><path d="M34 30l22-18q2 18-12 26z" fill="#bfe8ff" stroke="#6aa8d8" stroke-width="1.5" opacity=".9"/><circle cx="32" cy="18" r="8" fill="#ffd9c0" stroke="#8a5a40" stroke-width="1.5"/><path d="M23 16q4-12 18 0q-2-4-9-4t-9 4z" fill="#ff9ad5" stroke="#a04070" stroke-width="1.5"/><path d="M26 26h12l5 22H21z" fill="#ff9ad5" stroke="#a04070" stroke-width="2"/><path d="M28 48v10M36 48v10" stroke="#ffd9c0" stroke-width="3"/><path d="M50 40l2 5 5 1-4 4 1 5-5-3-5 3 1-5-4-4 5-1z" fill="#ffe14a" stroke="#a07a10" stroke-width="1"/>'),
+ c=>svgW('<path d="M32 36L4 18q4 24 28 28z" fill="#ff7a2a" stroke="#7a2a08" stroke-width="2"/><path d="M32 36l28-18q-4 24-28 28z" fill="#ff7a2a" stroke="#7a2a08" stroke-width="2"/><path d="M32 40q-12 6-6 22 6-8 6-12 0 4 6 12 6-16-6-22z" fill="#ffd23a" stroke="#c0500a" stroke-width="1.5"/><ellipse cx="32" cy="32" rx="9" ry="12" fill="#ff9a3a" stroke="#7a2a08" stroke-width="2"/><circle cx="32" cy="16" r="8" fill="#ffb347" stroke="#7a2a08" stroke-width="2"/><path d="M26 10q2-8 6-8-1 4 2 6 2-4 6-4-2 6-4 8z" fill="#e0412f"/><path d="M30 18l-2 6 4-2 4 2-2-6z" fill="#ffe14a" stroke="#8a5a10" stroke-width="1"/><circle cx="29" cy="15" r="1.6" fill="#222"/><circle cx="35" cy="15" r="1.6" fill="#222"/>'),
+ c=>svgW('<path d="M12 22L9 6l14 8zM52 22l3-16-14 8z" fill="#ffb347" stroke="#7a4a08" stroke-width="2"/><ellipse cx="32" cy="34" rx="22" ry="21" fill="#ffb347" stroke="#7a4a08" stroke-width="2"/><path d="M32 13v9M22 15l3 8M42 15l-3 8M10 32h8M54 32h-8M12 42l7-2M52 42l-7-2" stroke="#2a1a08" stroke-width="3" stroke-linecap="round"/><ellipse cx="32" cy="44" rx="11" ry="8" fill="#fff4dc"/><circle cx="23" cy="31" r="3" fill="#ffe14a" stroke="#222" stroke-width="1.5"/><circle cx="41" cy="31" r="3" fill="#ffe14a" stroke="#222" stroke-width="1.5"/><path d="M29 40h6l-3 4z" fill="#e0707a" stroke="#222" stroke-width="1"/><path d="M32 44v4M26 48q6 4 12 0" stroke="#222" stroke-width="1.5" fill="none"/>'),
+ c=>svgW('<path d="M12 28L8 4l16 12zM52 28l4-24-16 12z" fill="#aab7c4" stroke="#33414f" stroke-width="2"/><path d="M12 28q-4 18 12 28h16q16-10 12-28-8-10-20-10t-20 10z" fill="#aab7c4" stroke="#33414f" stroke-width="2"/><path d="M24 40q8-6 16 0l-4 16H28z" fill="#e8eef4" stroke="#33414f" stroke-width="1.5"/><path d="M28 44h8l-4 7z" fill="#222"/><circle cx="23" cy="32" r="2.8" fill="#ffd23a" stroke="#222"/><circle cx="41" cy="32" r="2.8" fill="#ffd23a" stroke="#222"/><path d="M20 22l3 5M44 22l-3 5" stroke="#6b7a88" stroke-width="2"/>')];
+const petIcon=(s,c)=>ICONS.pet[s](petCol(s,c));
+/* ---- boss drop ---- */
+function giveEgg(m){
+  const n=EGG_DROP_N;
+  if(P.eggs===0&&bagCount()>=BAG_CAP){
+    P.ore+=EGG_ORE;lootIcon('o','&#9670;',EGG_ORE,'#7fe0ee');
+    say('Bag full. Sold a Pet Egg for '+EGG_ORE+' ore.','#7fe0ee');bagLog('Bag full: sold Pet Egg \u2192 '+EGG_ORE+' ore','#7fe0ee');save();return}
+  P.eggs+=n;lootIcon('egg','&#9711;',n,'#f4ecd8');pop(P.x+28,P.y-52,'+'+n+' Pet Egg','#f4ecd8',13);
+  say((m?m.name+' dropped a Pet Egg! ':'')+'Open your bag and tap it to hatch.','#f4ecd8',6000);bagLog('+'+n+' Pet Egg'+(n>1?'s':''),'#f4ecd8');save();
+}
+/* ---- hatching ---- */
+function hatchRoll(){return rnd()*100<EGG_SPECIAL_CHANCE?1+Math.floor(rnd()*5):0}
+function hatchEggs(n){
+  n=Math.min(n,P.eggs);if(n<=0)return;
+  const got={};let done=0,first=null;
+  for(let i=0;i<n;i++){
+    const s=hatchRoll(),k=petKey(s,0),isNew=!(petsObj()[k]>0),freed=P.eggs===1;
+    if(isNew&&!got[k]&&bagCount()>=BAG_CAP&&!freed){if(!done)say('Your bag is full. Make room to hatch this egg.','#8d9aa2',4000);break}
+    P.eggs--;petAdd(s,0,1);got[k]=(got[k]||0)+1;done++;if(!first)first=k;
+  }
+  if(!done){renderBag();return}
+  const sp=Object.keys(got).filter(k=>petParse(k).s>0);
+  if(done===1){const p=petParse(first);
+    if(p.s>0){say('The egg hatched a '+PET_SP[p.s].n+'! (Class F)','#ffe14a',8000);pop(P.x,P.y-60,'\u2605 '+PET_SP[p.s].n+'!','#ffe14a',18);spark(P.x,P.y-20,'#ffe14a',24,200,.8,3)}
+    else say('The egg hatched a Chicken.','#c4cdd2',4000);
+    lootIcon('pet'+first,'&#9733;',1,petCol(p.s,0));
+  }else{
+    const parts=Object.keys(got).sort().map(k=>got[k]+' '+PET_SP[petParse(k).s].n+(got[k]>1?'s':''));
+    say('Hatched '+done+' eggs: '+parts.join(', ')+'.',sp.length?'#ffe14a':'#c4cdd2',8000);
+    if(sp.length){pop(P.x,P.y-60,'\u2605 Special pet!','#ffe14a',18);spark(P.x,P.y-20,'#ffe14a',24,200,.8,3)}
+  }
+  bagLog('Hatched '+done+' egg'+(done>1?'s':'')+(sp.length?' \u2014 special pet!':''),sp.length?'#ffe14a':'#c4cdd2');
+  const pick=sp.length?sp[0]:first;bagSel='pet_'+pick;bagConfirm=null;
+  save();renderBag();
+}
+/* ---- combining: two pets of the same class (any species) -> one pet of the next class, or a failure that destroys 1 of the two ---- */
+function petCanCombine(p){return p.s>0&&p.c<PET_CLS.length-1}
+function petCombineReady(){
+  if(!petComb||!petComb.b)return false;
+  const A=petParse(petComb.a),B=petParse(petComb.b),o=petsObj();
+  if(A.c!==B.c||!petCanCombine(A)||!petCanCombine(B))return false;
+  return petComb.a===petComb.b?(o[petComb.a]|0)>=2:(o[petComb.a]|0)>=1&&(o[petComb.b]|0)>=1;
+}
+function doCombine(){
+  if(!petCombineReady())return;
+  const A=petParse(petComb.a),B=petParse(petComb.b),c=A.c,ch=PET_UP[c];
+  if(rnd()*100<ch){
+    const s=rnd()<.5?A.s:B.s;
+    petTake(A.s,c,1);petTake(B.s,c,1);petAdd(s,c+1,1);
+    const msg='Combine success! '+PET_SP[A.s].n+' + '+PET_SP[B.s].n+' became a '+PET_SP[s].n+' [Class '+PET_CLS[c+1]+']!';
+    say(msg,PET_CLS_COL[c+1],9000);pop(P.x,P.y-60,'\u2605 Class '+PET_CLS[c+1]+' '+PET_SP[s].n,PET_CLS_COL[c+1],18);spark(P.x,P.y-20,PET_CLS_COL[c+1],34,220,.9,3.2);
+    bagLog('Combined \u2192 '+PET_SP[s].n+' Class '+PET_CLS[c+1],PET_CLS_COL[c+1]);
+    petComb=null;bagSel='pet_'+petKey(s,c+1);
+  }else{
+    const lose=rnd()<.5?A:B;
+    petTake(lose.s,c,1);
+    say('Combine failed (' + ch + '% chance). A '+PET_SP[lose.s].n+' [Class '+PET_CLS[c]+'] was destroyed.','#ff8a7a',8000);
+    bagLog('Combine failed: lost '+PET_SP[lose.s].n+' Class '+PET_CLS[c],'#ff8a7a');
+    /* back to the pick screen with the first pet kept selected if it is still there */
+    petComb=(petsObj()[petComb.a]>0)?{a:petComb.a,b:null}:null;
+    if(!petComb)bagSel=null;
+  }
+  save();renderBag();
+}
+/* bag integration: items, tap handling, info panel */
+function petBagItems(a){
+  if(P.eggs>0)a.push({id:'egg',n:'Pet Egg',v:P.eggs,t:fmtQ(P.eggs),r:'pu',ic:ICONS.egg(),d:'Dropped by world bosses. Hatch it for a pet: '+EGG_SPECIAL_CHANCE+'% a special pet (Dragon, Fairy, Phoenix, Tiger or Wolf, Class F), '+(100-EGG_SPECIAL_CHANCE)+'% a Chicken.',egg:1});
+  const o=petsObj(),ks=Object.keys(o).filter(k=>o[k]>0).sort((x,y)=>{const a=petParse(x),b=petParse(y);return b.c-a.c||a.s-b.s});
+  for(const k of ks){const p=petParse(k),n=o[k];
+    a.push({id:'pet_'+k,n:p.s===0?'Chicken':PET_SP[p.s].n+' (Class '+PET_CLS[p.c]+')',v:n,t:p.s===0?'\u00d7'+fmtQ(n):PET_CLS[p.c]+(n>1?' \u00d7'+n:''),r:p.s===0?'cm':PET_CLS_SLOT[p.c],ic:petIcon(p.s,p.c),
+      d:p.s===0?'A common pet. It cannot be combined.':'Class '+PET_CLS[p.c]+' pet.'+(petCanCombine(p)?' Combine two Class '+PET_CLS[p.c]+' pets for a '+PET_UP[p.c]+'% chance of a Class '+PET_CLS[p.c+1]+' pet; on failure 1 of the 2 is destroyed.':' The highest class.'),pet:{key:k,s:p.s,c:p.c,n:n}})}
+  return a;
+}
+/* returns true when the tap was a combine-mode tap (and was handled) */
+function petCombTap(it){
+  if(!petComb)return false;
+  if(!it.pet){petComb=null;return false}
+  const A=petParse(petComb.a);
+  if(it.pet.c!==A.c||!petCanCombine(it.pet)){say('Pick a special pet of the same class (Class '+PET_CLS[A.c]+').','#8d9aa2',3000);return true}
+  if(it.pet.key===petComb.a&&!petComb.b&&it.pet.n<2){return true}
+  if(petComb.b===it.pet.key){petComb.b=null;renderBag();return true}
+  if(it.pet.key===petComb.a&&!petComb.b&&it.pet.n>=2){petComb.b=it.pet.key;renderBag();return true}
+  if(it.pet.key!==petComb.a){petComb.b=it.pet.key;renderBag();return true}
+  return true;
+}
+function petCombPanel(info){
+  const A=petParse(petComb.a),d=document.createElement('div'),sm=document.createElement('small'),nm=document.createElement('b');
+  nm.textContent='Combine pets \u2014 Class '+PET_CLS[A.c];nm.style.color=PET_CLS_COL[A.c];d.appendChild(nm);
+  const ch=PET_UP[A.c],ready=petCombineReady();
+  sm.textContent=ready?(PET_SP[A.s].n+' + '+PET_SP[petParse(petComb.b).s].n+': '+ch+'% chance of a Class '+PET_CLS[A.c+1]+' pet (species of one of the two). On failure 1 of the 2 is destroyed. Cannot be undone.')
+    :(PET_SP[A.s].n+' selected. Tap a second Class '+PET_CLS[A.c]+' pet'+((petsObj()[petComb.a]|0)>=2?' (or the same stack again)':'')+'. '+ch+'% chance of Class '+PET_CLS[A.c+1]+'.');
+  d.appendChild(sm);info.appendChild(d);
+  const w=document.createElement('div');w.className='bagact';
+  const mk=(t,c,f,dis)=>{const b=document.createElement('button');b.type='button';b.className='btn'+(c?' '+c:'');b.textContent=t;b.disabled=!!dis;b.addEventListener('click',f);w.appendChild(b)};
+  mk('Combine','pri',doCombine,!ready);mk('Cancel','',()=>{petComb=null;renderBag()});info.appendChild(w);
+}
+function petBagActions(sel,info){
+  const w=document.createElement('div');w.className='bagact';
+  const mk=(t,c,f,dis)=>{const b=document.createElement('button');b.type='button';b.className='btn'+(c?' '+c:'');b.textContent=t;b.disabled=!!dis;b.addEventListener('click',f);w.appendChild(b)};
+  if(sel.egg){mk('Hatch','pri',()=>hatchEggs(1));if(P.eggs>1)mk('Hatch all ('+P.eggs+')','',()=>hatchEggs(P.eggs))}
+  else if(sel.pet){
+    const on=P.pet===sel.pet.key;
+    mk(on?'Dismiss':'Summon',on?'':'pri',()=>on?petDismiss():petSummon(sel.pet.key));
+    if(petCanCombine(sel.pet))mk('Combine','',()=>{petComb={a:sel.pet.key,b:null};renderBag()},sel.pet.n<2&&petPartners(sel.pet)<1);
+  }
+  if(w.children.length)info.appendChild(w);
+}
+/* how many OTHER special pets of the same class exist (so Combine is only enabled when a partner exists) */
+function petPartners(p){let n=0;const o=petsObj();for(const k in o){if(k===p.key)continue;const q=petParse(k);if(q.s>0&&q.c===p.c)n+=o[k]}return n}
+function petCombValidate(){if(!petComb)return;const o=petsObj();if(!(o[petComb.a]>0))petComb=null;else if(petComb.b&&!(o[petComb.b]>0))petComb.b=null}
+
+/* ---------- summon: ONE pet follows beside you (any pet, common or special). Summoning another replaces it. Summoning does not use the pet up. ---------- */
+function petValidate(){if(P.pet&&!(petsObj()[P.pet]>0)){P.pet=null;P.pf=null}}
+function petLoad(k){return typeof k==='string'&&petsObj()[k]>0?k:null}
+function petSummon(k){
+  if(!(petsObj()[k]>0))return;const p=petParse(k),old=P.pet;
+  P.pet=k;P.pf=null;
+  say((old&&old!==k?'You swapped your pet. ':'')+(p.s===0?'Chicken':PET_SP[p.s].n+' (Class '+PET_CLS[p.c]+')')+' is now by your side.',petCol(p.s,p.c),5000);
+  bagLog('Summoned '+petName(p.s,p.c).replace(/ \[Class (.)\]/,' (Class $1)'),petCol(p.s,p.c));save();renderBag();
+}
+function petDismiss(){if(!P.pet)return;const p=petParse(P.pet);P.pet=null;P.pf=null;say('Pet dismissed.','#8d9aa2',3000);bagLog('Dismissed pet','#8d9aa2');save();renderBag()}
+/* sprite: the pet's icon on a canvas (class-coloured glow behind special pets). Used by the 2D view directly and by the 3D view as a billboard sprite. */
+const PET_SPR={};
+function petSprite(k){
+  let e=PET_SPR[k];if(e)return e;
+  const p=petParse(k),cv=document.createElement('canvas');cv.width=cv.height=128;
+  e=PET_SPR[k]={cv,tex:null,ok:false};
+  const g=cv.getContext('2d');
+  if(p.s>0){const gr=g.createRadialGradient(64,70,8,64,70,62);gr.addColorStop(0,PET_CLS_COL[p.c]+'aa');gr.addColorStop(1,PET_CLS_COL[p.c]+'00');g.fillStyle=gr;g.fillRect(0,0,128,128)}
+  const im=new Image();
+  im.onload=()=>{g.drawImage(im,14,14,100,100);e.ok=true;if(e.tex)e.tex.needsUpdate=true};
+  im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(petIcon(p.s,p.c).replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" '));
+  return e;
+}
+let petT=0;
+/* follower position: eases toward a spot to the right of you (screen-right in 3D, from the camera yaw), snaps if you teleport. Returns the hop height. */
+function petStep(is3){
+  petValidate();if(!P.pet)return 0;
+  const now=performance.now(),dt=Math.min(.1,petT?(now-petT)/1000:.016);petT=now;
+  const yaw=is3&&typeof camView!=='undefined'?camView.yaw:0,rx=Math.cos(yaw),ry=-Math.sin(yaw);
+  const tx=P.x+rx*54,ty=P.y+ry*54;
+  if(!P.pf||Math.hypot(tx-P.pf.x,ty-P.pf.y)>700)P.pf={x:tx,y:ty,mv:0};
+  const f=P.pf,k=1-Math.exp(-7*dt),ox=f.x,oy=f.y;f.x+=(tx-f.x)*k;f.y+=(ty-f.y)*k;
+  f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sp=Math.hypot(f.x-ox,f.y-oy)/Math.max(dt,.001);f.mv+=((sp>40?1:0)-f.mv)*Math.min(1,dt*10);
+  f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
+  return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+}
+/* ---- 3D pet models (web/pets3d.js). Each view (world, bag, forge) owns its own rig; the model is rebuilt only when the summoned pet changes. ---- */
+const PET_WORLD_K=1.15;
+function petRigFor(h,sc,key){
+  if(window.PET3D&&window.THREE&&!petRigFor.ok){try{PET3D.init(THREE,LOW);petRigFor.ok=1}catch(e){petRigFor.ok=-1}}
+  if(h.pk!==key){
+    if(h.pr){sc.remove(h.pr.root);try{h.pr.dispose()}catch(e){}h.pr=null}
+    h.pk=key;
+    if(key&&petRigFor.ok===1){try{const p=petParse(key);h.pr=PET3D.make(p.s,p.c);sc.add(h.pr.root)}catch(e){console.error('pet model',e);h.pr=null}}
+  }
+  return h.pr||null;
+}
+/* the summoned pet standing beside the avatar in the Bag / Forge preview (the avatar moves a little to the left to make room). Returns true if shown. */
+function petPreview(V,t){
+  petValidate();
+  const rig=petRigFor(V,V.sc,P.pet);
+  if(!rig)return false;
+  rig.root.position.set(26,0,12);rig.root.rotation.y=-.6+Math.sin(t*.5)*.08;rig.root.scale.setScalar(1.25);
+  rig.anim(t,0);return true;
+}
+function petRender3(){
+  const hop=petStep(true),T=T3;
+  if(!P.pet){if(T.petSp)T.petSp.visible=false;if(T.pr)T.pr.root.visible=false;return}
+  const rig=petRigFor(T,T.sc,P.pet),f=P.pf;
+  if(rig){
+    if(T.petSp)T.petSp.visible=false;
+    const want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):Math.PI/2-P.face;
+    if(f.yaw===undefined)f.yaw=want;
+    let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*7);
+    rig.root.visible=true;rig.root.scale.setScalar(PET_WORLD_K);
+    rig.root.position.set(f.x-C,gh3(f.x,f.y),f.y-C);rig.root.rotation.y=f.yaw;
+    rig.anim(time,f.mv);return;
+  }
+  /* fallback (pets3d.js missing or the model failed): billboard sprite of the icon */
+  if(T.petKey!==P.pet||!T.petSp){
+    if(T.petSp){T.sc.remove(T.petSp);T.petSp.material.dispose()}
+    const e=petSprite(P.pet);if(!e.tex)e.tex=new THREE.CanvasTexture(e.cv);
+    const m=new THREE.SpriteMaterial({map:e.tex,transparent:true,depthWrite:false});
+    T.petSp=new THREE.Sprite(m);T.sc.add(T.petSp);T.petKey=P.pet;
+  }
+  const sp=T.petSp,sz=petParse(P.pet).s===0?38:50;
+  sp.visible=true;sp.scale.set(sz,sz,1);sp.position.set(f.x-C,gh3(f.x,f.y)+sz*.46+hop,f.y-C);
+}
+function petDraw2D(){
+  const hop=petStep(false);if(!P.pet||!P.pf)return;
+  const e=petSprite(P.pet);if(!e.ok&&petParse(P.pet).s===0)return;
+  const f=P.pf,x=f.x-cam.x,y=f.y-cam.y,sz=petParse(P.pet).s===0?36:46;
+  ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(x,y+2,sz*.3,sz*.11,0,0,6.2832);ctx.fill();
+  ctx.drawImage(e.cv,x-sz/2,y-sz*.9-hop,sz,sz);
+}
 /* ---------- input ---------- */
 const keys={};
 window.addEventListener('keydown',e=>{
@@ -2615,7 +2844,7 @@ function bagInit3(){
     const rig=AL3D.makePlayer(SKW());sc.add(rig.root);
     const sh=new THREE.Mesh(new THREE.CircleGeometry(15,28).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.3,depthWrite:false}));sh.position.y=.3;sc.add(sh);
     cam.position.set(0,48,190);cam.lookAt(0,32,0);
-    Object.assign(BAGV,{r,sc,cam,rig});
+    Object.assign(BAGV,{r,sc,cam,rig,sh});
   }catch(e){console.error(e);BAGV.fail=1;BAGV.r=null;return false}
   return true;
 }
@@ -2624,7 +2853,7 @@ function paintBag3(){
   const {r,sc,cam,rig}=BAGV,t=performance.now()/1000;
   if(rig.skin!==SKW())AL3D.setSkin(rig,SKW());
   if(BAGV.drag)BAGV.vel*=.7;else{BAGV.yaw+=BAGV.vel;BAGV.vel*=.94;if(Math.abs(BAGV.vel)<.0004)BAGV.vel=0}
-  rig.root.rotation.y=BAGV.yaw;
+  rig.root.rotation.y=BAGV.yaw;{const hp=petPreview(BAGV,t);rig.root.position.x=hp?-16:0;BAGV.sh.position.x=rig.root.position.x}
   AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
   r.render(sc,cam);return true;
 }
@@ -2660,7 +2889,7 @@ function fgInit3(){
     const rig=AL3D.makePlayer(SKW());sc.add(rig.root);
     const sh=new THREE.Mesh(new THREE.CircleGeometry(15,28).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.3,depthWrite:false}));sh.position.y=.3;sc.add(sh);
     cam.position.set(0,48,190);cam.lookAt(0,32,0);
-    Object.assign(FGV,{r,sc,cam,rig});
+    Object.assign(FGV,{r,sc,cam,rig,sh});
   }catch(e){console.error(e);FGV.fail=1;FGV.r=null;return false}
   return true;
 }
@@ -2669,7 +2898,7 @@ function paintFg3(){
   const {r,sc,cam,rig}=FGV,t=performance.now()/1000;
   if(rig.skin!==SKW())AL3D.setSkin(rig,SKW());
   if(FGV.drag)FGV.vel*=.7;else{FGV.yaw+=FGV.vel;FGV.vel*=.94;if(Math.abs(FGV.vel)<.0004)FGV.vel=0}
-  rig.root.rotation.y=FGV.yaw;
+  rig.root.rotation.y=FGV.yaw;{const hp=petPreview(FGV,t);rig.root.position.x=hp?-16:0;FGV.sh.position.x=rig.root.position.x}
   AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
   r.render(sc,cam);return true;
 }
@@ -3599,7 +3828,7 @@ function drawBubble(x,y,Q){
   b.lines.forEach((l,i)=>ctx.fillText(l,bx+w/2,by+ph+12+i*lh));
   ctx.restore();
 }
-function drawPlayer(){drawPlayerE(P,SK());if(P.bub)drawBubble(P.x-cam.x,P.y-cam.y-56,P)}
+function drawPlayer(){const pb=P.pet&&P.pf&&P.pf.y<=P.y;if(pb)petDraw2D();drawPlayerE(P,SK());if(!pb)petDraw2D();if(P.bub)drawBubble(P.x-cam.x,P.y-cam.y-56,P)}
 function drawRemote(q){
   const x=q.x-cam.x,y=q.y-cam.y;
   if(x<-90||y<-130||x>VW+90||y>VH+90)return;
@@ -3927,7 +4156,7 @@ function render3D(){
       const cl=gh3(tx+ox+C,tz+oz+C)+30-(ty+st*D);if(cl>lift)lift=cl;
       T3.lift=lift>(T3.lift||0)?lift:(T3.lift||0)+(lift-(T3.lift||0))*.06;
       T3.cam.position.set(tx+ox+(Math.random()-.5)*sh,ty+st*D+T3.lift,tz+oz)}T3.cam.lookAt(tx,gy+24+(T3.cz||0),tz);if(camView.tilt<CAM_TILT_MIN)T3.cam.rotateX(CAM_TILT_MIN-camView.tilt);T3.cam.updateMatrixWorld();T3.pm.multiplyMatrices(T3.cam.projectionMatrix,T3.cam.matrixWorldInverse);T3.frus.setFromProjectionMatrix(T3.pm);
-    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=Math.PI/2-P.face;pl.rotation.x=P.dead>0?-1.4:0;if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);
+    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=Math.PI/2-P.face;pl.rotation.x=P.dead>0?-1.4:0;if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
     let rpl=NONE;
     if(MP&&NET.peers.size){const prg=LOW?800:1200,PMAX=LOW?PQ.peers:14;let nw=0;rpl=[];
       for(const q of NET.peers.values()){const had=T3.rp.has(q),e=prg+(had?150:0);if(Math.abs(q.x-P.x)>e||Math.abs(q.y-P.y)>e)continue;
@@ -4782,6 +5011,8 @@ const CMDHELP=[
  'Spawn:  /boss [1-5] [level]  \u00b7 /bossclear  \u00b7 /bosses (list + distance)  \u00b7 /gotoboss',
  'Me:  /heal  \u00b7 /god (invincible on/off)  \u00b7 /speed 0.5-5  \u00b7 /home  \u00b7 /where',
  'Stats:  /lvl N  \u00b7 /exp N  \u00b7 /coins N  \u00b7 /ore N  \u00b7 /pots N  \u00b7 /gear [grade] [common|rare|epic|legendary] [count]',
+ 'Reset:  /coinsreset (coins to 0)  \u00b7 /orereset (ore to 0)  \u00b7 /walletreset (both)   also /coins reset  \u00b7 /ore reset',
+ 'Pets:  /pet [species] [class] [count] (species: chicken dragon fairy phoenix tiger wolf random \u00b7 class: F E D C B A S)  \u00b7 /egg [count]  \u00b7 /petreset (remove every pet and egg)',
  'Forge:  /forge (show levels)  \u00b7 /forge [slot|all] 0-'+FORGE_MAX+' (set forge level)  \u00b7 /forgereset [slot|all] (back to 0)  \u00b7 slots: wpn wpn2 robe ear neck ring brace glove belt legs boot',
  'View:  /minimap 500-'+3080*MAP_K+' | max | min (radar range, default 2000; max = full map radius)',
  'Party:  /invite name  \u00b7 /accept  \u00b7 /decline  \u00b7 /leave  \u00b7 /p message or the Party chat tab  \u00b7 leader: /kick name  \u00b7 /leader name  \u00b7 /disband',
@@ -4790,6 +5021,8 @@ const CMDHELP=[
  'Fun:  /fireworks  \u00b7 /roll [sides]  \u00b7 /flip',
  'Server:  /who  \u00b7 /announce message'];
 const CMDNUM=(v,d)=>{const n=parseFloat(v);return isFinite(n)?n:d};
+function refreshCurrencyUi(){if($('bag')&&!$('bag').hidden)renderBag();if($('forge')&&!$('forge').hidden)renderForge();if($('shop')&&!$('shop').hidden&&typeof renderShop==='function')renderShop()}
+const isReset=v=>v!==undefined&&/^(reset|zero|clear|none)$/i.test(String(v));
 function bossNear(n,lv){
   const alive=mons.filter(m=>m.boss&&!m.dead).length,w=W[curWorld],out=[];n=Math.min(n,BOSS_MAX-alive);
   if(curWorld===ARENA){say('There are no bosses in the arena.','#8d9aa2');return}
@@ -4821,8 +5054,32 @@ const CMDS={
   where(){say(W[curWorld].n+' \u00b7 x '+Math.round(P.x)+', y '+Math.round(P.y)+' \u00b7 '+Math.round(dist(P.x,P.y,C,C))+' from the hub \u00b7 Lv '+P.lvl,'#8d9aa2',9000)},
   lvl(a){const n=clamp(CMDNUM(a[0],P.lvl)|0,1,MAXLV);P.lvl=n;P.exp=0;P.hp=maxHp();P.qi=maxQi();buildBar();save();say('Level set to '+n+'.','#e3b559')},
   exp(a){const n=Math.max(0,CMDNUM(a[0],0)|0);if(n)gainExp(n);say('+'+n.toLocaleString()+' EXP','#e3b559')},
-  coins(a){const n=CMDNUM(a[0],1000)|0;P.coins=clamp(P.coins+n,0,2e9);save();say('Coins: '+P.coins.toLocaleString(),'#e3b559')},
-  ore(a){const n=CMDNUM(a[0],100)|0;P.ore=clamp(P.ore+n,0,2e9);save();say('Ore: '+P.ore.toLocaleString(),'#7fe0ee')},
+  coins(a){if(isReset(a[0])){CMDS.coinsreset();return}const n=CMDNUM(a[0],1000)|0;P.coins=clamp(P.coins+n,0,2e9);save();say('Coins: '+P.coins.toLocaleString(),'#e3b559')},
+  ore(a){if(isReset(a[0])){CMDS.orereset();return}const n=CMDNUM(a[0],100)|0;P.ore=clamp(P.ore+n,0,2e9);save();say('Ore: '+P.ore.toLocaleString(),'#7fe0ee')},
+  /* v5_200 admin: set coins / ore back to zero (also /coins reset, /ore reset, /coins zero ...) */
+  coinsreset(){P.coins=0;save();refreshCurrencyUi();say('Coins reset to 0.','#e3b559')},
+  orereset(){P.ore=0;save();refreshCurrencyUi();say('Ore reset to 0.','#7fe0ee')},
+  walletreset(){P.coins=0;P.ore=0;save();refreshCurrencyUi();say('Coins and ore reset to 0.','#e3b559')},
+  resetcoins(){CMDS.coinsreset()},resetore(){CMDS.orereset()},resetwallet(){CMDS.walletreset()},
+  /* v5_200 admin: /pet [species] [class] [count]  -> gives pets straight into the bag (no egg needed). Chicken has no class. Every argument is optional and may come in any order. */
+  pet(a){
+    let s=-1,c=0,n=1,rs=false;
+    for(const w0 of a){const w=String(w0).toLowerCase();
+      if(w==='random'||w==='any'||w==='r'){rs=true;continue}
+      const si=PET_SP.findIndex(q=>q.n.toLowerCase()===w||(w.length>=3&&q.n.toLowerCase().startsWith(w)));if(si>=0){s=si;continue}
+      const ci=PET_CLS.indexOf(w.toUpperCase());if(ci>=0&&w.length===1){c=ci;continue}
+      if(/^x?\d+$/.test(w)){n=clamp(parseInt(w.replace('x',''),10)||1,1,999);continue}
+      say('Usage: /pet [species] [class] [count]   species: '+PET_SP.map(q=>q.n.toLowerCase()).join(' ')+' random   class: '+PET_CLS.join(' ')+'   e.g. /pet dragon S 2','#d9503f');return}
+    const given=[];
+    for(let i=0;i<n;i++){
+      const sp=s>=0&&!rs?s:1+Math.floor(rnd()*(PET_SP.length-1)),cl=sp===0?0:c;
+      const k=petKey(sp,cl);if(!(petsObj()[k]>0)&&!given.includes(k)&&bagCount()+given.length>=BAG_CAP){say('Bag full - '+i+' of '+n+' pets given. Make room first.','#8d9aa2');break}
+      petAdd(sp,cl,1);if(!given.includes(k))given.push(k)}
+    if(!given.length)return;
+    save();if(!$('bag').hidden)renderBag();
+    say('Added '+(n>1?n+' pets: ':'a pet: ')+given.map(k=>{const p=petParse(k);return petName(p.s,p.c)}).join(', ')+'.','#ffe14a',6000)},
+  egg(a){const n=clamp(CMDNUM(a[0],1)|0,1,9999);P.eggs=clamp((P.eggs|0)+n,0,99999);save();if(!$('bag').hidden)renderBag();say('Pet Eggs: '+P.eggs.toLocaleString(),'#f4ecd8')},
+  petreset(){P.pets={};P.eggs=0;P.pet=null;P.pf=null;petComb=null;if(typeof bagSel==='string'&&(bagSel==='egg'||bagSel.indexOf('pet_')===0))bagSel=null;save();if(!$('bag').hidden)renderBag();say('All pets and eggs removed.','#e3b559')},
   pots(a){const n=CMDNUM(a[0],10)|0;for(const k of ['hp','qi','tp'])P.pots[k]=clamp(P.pots[k]+n,0,POT_MAX);save();say('Potions and scrolls '+(n>=0?'+':'')+n+' each.','#e3b559')},
   minimap(a){const w=String(a[0]||'').toLowerCase();MINI_MAX=w==='max';if(!MINI_MAX)MINI_R=w==='min'?500:clamp(CMDNUM(a[0],2000),500,3080*MAP_K);say('Minimap range: '+(MINI_MAX?RIM+' units (maximum radius = whole map)':MINI_R+' units.'),'#e3b559')},
   boss(a){bossNear(clamp(CMDNUM(a[0],1)|0,1,BOSS_MAX),CMDNUM(a[1],0)|0)},

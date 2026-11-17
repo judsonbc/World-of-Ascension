@@ -421,7 +421,7 @@ function bagInit3(){
     const rig=AL3D.makePlayer(SKW());sc.add(rig.root);
     const sh=new THREE.Mesh(new THREE.CircleGeometry(15,28).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.3,depthWrite:false}));sh.position.y=.3;sc.add(sh);
     cam.position.set(0,48,190);cam.lookAt(0,32,0);
-    Object.assign(BAGV,{r,sc,cam,rig});
+    Object.assign(BAGV,{r,sc,cam,rig,sh});
   }catch(e){console.error(e);BAGV.fail=1;BAGV.r=null;return false}
   return true;
 }
@@ -430,7 +430,7 @@ function paintBag3(){
   const {r,sc,cam,rig}=BAGV,t=performance.now()/1000;
   if(rig.skin!==SKW())AL3D.setSkin(rig,SKW());
   if(BAGV.drag)BAGV.vel*=.7;else{BAGV.yaw+=BAGV.vel;BAGV.vel*=.94;if(Math.abs(BAGV.vel)<.0004)BAGV.vel=0}
-  rig.root.rotation.y=BAGV.yaw;
+  rig.root.rotation.y=BAGV.yaw;{const hp=petPreview(BAGV,t);rig.root.position.x=hp?-16:0;BAGV.sh.position.x=rig.root.position.x}
   AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
   r.render(sc,cam);return true;
 }
@@ -466,7 +466,7 @@ function fgInit3(){
     const rig=AL3D.makePlayer(SKW());sc.add(rig.root);
     const sh=new THREE.Mesh(new THREE.CircleGeometry(15,28).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.3,depthWrite:false}));sh.position.y=.3;sc.add(sh);
     cam.position.set(0,48,190);cam.lookAt(0,32,0);
-    Object.assign(FGV,{r,sc,cam,rig});
+    Object.assign(FGV,{r,sc,cam,rig,sh});
   }catch(e){console.error(e);FGV.fail=1;FGV.r=null;return false}
   return true;
 }
@@ -475,7 +475,7 @@ function paintFg3(){
   const {r,sc,cam,rig}=FGV,t=performance.now()/1000;
   if(rig.skin!==SKW())AL3D.setSkin(rig,SKW());
   if(FGV.drag)FGV.vel*=.7;else{FGV.yaw+=FGV.vel;FGV.vel*=.94;if(Math.abs(FGV.vel)<.0004)FGV.vel=0}
-  rig.root.rotation.y=FGV.yaw;
+  rig.root.rotation.y=FGV.yaw;{const hp=petPreview(FGV,t);rig.root.position.x=hp?-16:0;FGV.sh.position.x=rig.root.position.x}
   AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
   r.render(sc,cam);return true;
 }

@@ -897,7 +897,7 @@ function drawBubble(x,y,Q){
   b.lines.forEach((l,i)=>ctx.fillText(l,bx+w/2,by+ph+12+i*lh));
   ctx.restore();
 }
-function drawPlayer(){drawPlayerE(P,SK());if(P.bub)drawBubble(P.x-cam.x,P.y-cam.y-56,P)}
+function drawPlayer(){const pb=P.pet&&P.pf&&P.pf.y<=P.y;if(pb)petDraw2D();drawPlayerE(P,SK());if(!pb)petDraw2D();if(P.bub)drawBubble(P.x-cam.x,P.y-cam.y-56,P)}
 function drawRemote(q){
   const x=q.x-cam.x,y=q.y-cam.y;
   if(x<-90||y<-130||x>VW+90||y>VH+90)return;

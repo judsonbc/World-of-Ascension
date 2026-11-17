@@ -114,7 +114,7 @@ function geo(k){
     case 'aura':g=new T.RingGeometry(.55,1,48).rotateX(-PI/2);break;
     case 'coin':g=new T.CylinderGeometry(.5,.5,.14,18).rotateX(PI/2);break;
     case 'robe':{
-      const pts=[[11.5,9],[11,13],[9.6,19],[8,24],[7.6,28],[8.4,32],[8.9,35.5],[6.5,37.5],[4.2,38.6],[3.8,40.5]].map(a=>new T.Vector2(a[0],a[1]));
+      const pts=[[11.5,9],[11,13],[9.6,19],[8,24],[7.6,28],[8.4,32],[8.9,35.5],[6.5,37.5],[4.6,38.2],[3.9,38.8]].map(a=>new T.Vector2(a[0],a[1]));
       g=new T.LatheGeometry(pts,22,-PI,PI*2);break}
     case 'cloak':{
       const pts=[[.05,.05],[.95,.15],[.8,.8],[.6,1.5],[.62,1.9],[.45,2.15],[.05,2.25]].map(a=>new T.Vector2(a[0],a[1]));
@@ -235,13 +235,15 @@ const bladeTier=w=>w>=75?4:w>=50?3:w>=25?2:w>=10?1:0; /* (old steel-tint tiers, 
 /* FORGE GLOW (v5_54): from forge level 10 the primary weapon and the outfit glow. Colour AND size step up every 10 levels (tier 1 = +10 ... tier 10 = +100):
    cold white-blue > aqua > jade > lime > gold > orange > red > magenta > violet > white-gold. Weapon glow follows P.wlv, outfit glow follows P.alv. */
 const FORGE_GLOW=[null,'#bfeaff','#5fe8ff','#5fffb0','#c8ff5a','#ffd24a','#ff9a3a','#ff5a4a','#ff5ac8','#a86bff','#fff4c8'];
+/* v5_194 REALISTIC CHARACTER: the head is drawn smaller (adult proportions) and has a real face (eyes with iris, brows, nose, lips, chin, ears) */
+const HEAD_K=.84,SKIN_EMI=0x1a0b07;
 const forgeTier=l=>l>=10?Math.min(10,Math.floor(l/10)):0;
 
 function makePlayer(skinIdx){
   const root=new T.Group(),body=G(root),torso=G(body);
   const R={root,body,torso,skin:-1,gear:'',lt:0,aR:-.5,aL:0};
-  const mSkin=new T.MeshLambertMaterial({color:'#f0d2b4'}),
-        mHair=new T.MeshLambertMaterial({color:'#1b1d22'}),
+  const mSkin=new T.MeshPhongMaterial({color:'#f0d2b4',specular:'#2c2119',shininess:16,emissive:SKIN_EMI}),
+        mHair=new T.MeshPhongMaterial({color:'#1b1d22',specular:'#4a4a54',shininess:38}),
         mRobe=new T.MeshLambertMaterial({color:'#d8d2bf',map:tex('robe'),side:T.DoubleSide}),
         mRobe2=new T.MeshLambertMaterial({color:'#d8d2bf',map:tex('cloth'),side:T.DoubleSide}),
         mTrim=new T.MeshLambertMaterial({color:'#e3b559',emissive:'#3a2a08',side:T.DoubleSide}),
@@ -249,14 +251,18 @@ function makePlayer(skinIdx){
         mBoot=new T.MeshLambertMaterial({color:'#1d2830'}),
         mDark=new T.MeshBasicMaterial({color:'#14181c'}),
         mMouth=new T.MeshBasicMaterial({color:'#9a4a44'}),
+        mEyeW=new T.MeshBasicMaterial({color:'#f3f0ea'}),mIris=new T.MeshBasicMaterial({color:'#4a3022'}),mPupil=new T.MeshBasicMaterial({color:'#0c0a0a'}),mSpark=new T.MeshBasicMaterial({color:'#ffffff'}),
+        mEar=new T.MeshLambertMaterial({color:'#d9a98c'}),mNostril=new T.MeshBasicMaterial({color:'#a8705c'}),
         mEmb=new T.MeshBasicMaterial({color:'#e3b559',map:tex('lotus'),transparent:true,depthWrite:false}),
         mSteel=new T.MeshLambertMaterial({color:'#cfe8ff',emissive:'#4a6a80'}),
         mGlow=new T.MeshBasicMaterial(addMat({color:'#cfe8ff',opacity:.35}));
-  R.m={skin:mSkin,hair:mHair,robe:mRobe,robe2:mRobe2,trim:mTrim,sash:mSash,boot:mBoot,steel:mSteel,glow:mGlow,emb:mEmb};
+  R.m={iris:mIris,earIn:mEar,nostril:mNostril,skin:mSkin,hair:mHair,robe:mRobe,robe2:mRobe2,trim:mTrim,sash:mSash,boot:mBoot,steel:mSteel,glow:mGlow,emb:mEmb};
 
   /* legs (pivot at the hip) */
   const mkLeg=sx=>{const L=G(body,[sx*3.6,15,0]);
-    A(L,'cyl',mBoot,[0,-6.5,0],[4.6,13,4.6]);A(L,'box',mBoot,[0,-13.2,1.2],[5.4,4,8.6]);return L};
+    A(L,'taper',mBoot,[0,-6.5,0],[5,13,5],[PI,0,0]);A(L,'tube',mTrim,[0,-7.4,0],[5.5,1.1,5.5]);              /* shin tapers to the ankle, trim cuff */
+    A(L,'sphL',mBoot,[0,-12.8,1.4],[5,3.8,9.2]);A(L,'sphL',mBoot,[0,-13.4,5.4],[4.6,2.8,4.4]);A(L,'sph',mBoot,[0,-12.6,-2.6],[4.4,4.2,4]); /* foot, toe cap, heel */
+    A(L,'box',mDark,[0,-14.8,1.8],[5.2,1,10]);return L};
   R.legL=mkLeg(-1);R.legR=mkLeg(1);
 
   /* robe, hem, collar, sash */
@@ -270,24 +276,38 @@ function makePlayer(skinIdx){
   for(const sx of [1,-1]){const t=G(torso,[sx*3.6,23,-8.2]);A(t,'box',mSash,[0,-4.5,0],[2.6,9,.7]);R.sashTails.push(t)}
 
   /* head */
-  const head=G(torso,[0,44,0]);R.head=head;
+  A(torso,'cyl',mSkin,[0,40.6,0],[5.2,7.6,5.2]);                  /* neck */
+  A(torso,'sph',mSkin,[0,38.2,0],[6.6,3.2,6.0]);                  /* trapezius, so the neck does not float */
+  const head=G(torso,[0,44.6,0]);R.head=head;
   A(head,'sph',mSkin,[0,0,0],14.4);
+  A(head,'sph',mSkin,[0,-6.2,3.7],[5.6,3.8,4.8]);                         /* chin / jaw */
   for(const sx of [-1,1]){
-    A(head,'sphL',mDark,[sx*2.7,.6,6.55],[1.5,2.3,1]);
-    A(head,'box',mHair,[sx*2.8,3.3,6.4],[3.2,.7,.7],[0,0,sx*.14]);
-    A(head,'sph',mSkin,[sx*7.1,0,0],[1.5,2.6,1.7]);
+    /* eye: white, iris, pupil, glint, upper lid line; brow; ear (all placed on the head sphere, radius 7.2) */
+    A(head,'sph',mEyeW,[sx*2.9,.8,6.0],[3.3,2.3,1.3],[0,sx*.35,sx*.1]);
+    A(head,'sph',mIris,[sx*2.9,.8,6.5],[2,2,.7]);
+    A(head,'sph',mPupil,[sx*2.9,.8,6.78],[.95,.95,.35]);
+    A(head,'sphL',mSpark,[sx*2.5,1.3,6.95],[.55,.55,.25]);
+    A(head,'box',mDark,[sx*2.9,2.0,6.1],[3.6,.42,.5],[0,sx*.35,sx*.1]);
+    A(head,'box',mHair,[sx*3.2,3.3,5.5],[3.8,.72,.7],[0,sx*.3,sx*.14]);
+    A(head,'sph',mSkin,[sx*7.0,-.4,-.2],[1.2,3.6,2.4],[0,sx*.3,0]);A(head,'sphL',mEar,[sx*7.3,-.4,.1],[.5,2.2,1.2],[0,sx*.3,0]);
+    A(head,'sphL',mSkin,[sx*.95,-1.9,6.8],[1.2,1.3,1.4]);A(head,'sphL',mNostril,[sx*.8,-2.35,7.35],[.55,.4,.45]);
   }
-  A(head,'sphL',mSkin,[0,-.7,7.2],1.4);
-  A(head,'box',mMouth,[0,-3.1,6.4],[2.2,.4,.4]);R.m.mouth=mMouth;
-  R.lashes=G(head);for(const sx of [-1,1]){A(R.lashes,'box',mDark,[sx*2.9,2.1,6.7],[3.6,.55,.6],[0,0,sx*.4]);A(R.lashes,'box',mDark,[sx*4.6,.9,6.2],[1.4,.5,.6],[0,0,sx*.9])}R.lashes.visible=false;
+  A(head,'sphL',mSkin,[0,-.1,6.9],[1.7,4,1.6]);A(head,'sph',mSkin,[0,-1.7,7.0],[2.1,1.7,2.0]); /* nose bridge + tip */
+  A(head,'sphL',mMouth,[0,-3.3,6.0],[3.2,.95,1.2]);A(head,'sphL',mMouth,[0,-4.3,5.5],[2.8,1.1,1.3]);  /* lips (colour set by setSkin) */
+  A(head,'box',mDark,[0,-3.75,6.2],[2.7,.2,.4]);R.m.mouth=mMouth;
+  R.lashes=G(head);for(const sx of [-1,1]){A(R.lashes,'box',mDark,[sx*2.9,2.1,6.7],[3.6,.55,.6],[0,0,sx*.4]);A(R.lashes,'box',mDark,[sx*4.6,.9,5.6],[1.4,.5,.6],[0,0,sx*.9])}R.lashes.visible=false;
   const HS={};R.hs=HS;
-  const cap=A(head,'hemi',mHair,[0,.6,-.9],15.4,[-.28,0,0]);cap.material=new T.MeshLambertMaterial({color:'#1b1d22',side:T.DoubleSide});R.m.hairCap=cap.material;HS.cap=cap;
+  const cap=A(head,'hemi',mHair,[0,.6,-.9],15.4,[-.6,0,0]);cap.material=new T.MeshPhongMaterial({color:'#1b1d22',specular:'#4a4a54',shininess:38,side:T.DoubleSide});R.m.hairCap=cap.material;HS.cap=cap;
   HS.back=A(head,'sph',mHair,[0,-2.2,-3.6],[13.6,14,10.5]);
+  /* v5_194 bangs across the forehead + two side locks in front of the ears (shown with most hair styles) */
+  HS.fringe=G(head);for(const [fx,fl,fr] of [[-4.7,2.6,.5],[-2.4,3.2,.2],[0,3.4,0],[2.4,3.2,-.2],[4.7,2.6,-.5]]){const fy=5.1,fz=Math.sqrt(Math.max(0,51.84-fx*fx-fy*fy))+.2;
+    A(HS.fringe,'cone',mHair,[fx,fy,fz],[3.4,fl,1.7],[PI-.35,Math.asin(fx/7.4),fr])}
+  for(const sx of [-1,1])A(HS.fringe,'cone',mHair,[sx*7.0,-.2,2.2],[2.6,8,2.2],[PI,0,sx*.08]);
   HS.knot=A(head,'sph',mHair,[0,8.4,-2.6],7.2);
   HS.knotBand=A(head,'box',mTrim,[0,8.6,-2.6],[11,.9,.9]);
-  R.headband=A(head,'tor',mTrim,[0,2.6,0],[14.6,14.6,14.6],[PI/2,0,0]);
+  {const hb=G(head,[0,.6,-.9]);hb.rotation.x=-.6;R.headband=A(hb,'tor',mTrim,[0,0,0],[15.8,15.8,15.8],[PI/2,0,0]);R.headband.userData.grp=hb} /* v5_194 follows the tilted hairline of the hair cap */
   R.pony=G(head,[0,2,-7.2]);A(R.pony,'taper',mHair,[0,-8.5,-1.2],[3.4,18,3.4],[.18,0,0]);A(R.pony,'sphL',mHair,[0,-17.8,-2],3.4);HS.pony=R.pony;
-  R.ties=[];for(const sx of [-1,1]){const t=G(head,[sx*1.2,2.6,-7.6]);A(t,'box',mTrim,[0,-3.2,0],[1.6,6.4,.5]);R.ties.push(t)}
+  R.ties=[];for(const sx of [-1,1]){const t=G(head,[sx*1.2,-3.6,-7.4]);A(t,'box',mTrim,[0,-3.2,0],[1.6,6.4,.5]);R.ties.push(t)}
   HS.ties=R.ties;
   /* extra hair styles (hidden until chosen) */
   HS.long=G(head,[0,2,-7.2]);A(HS.long,'taper',mHair,[0,-14,-1.4],[12,30,5],[.08,0,0]);A(HS.long,'sphL',mHair,[0,-29,-1.6],[11,4,5]);
@@ -322,7 +342,9 @@ function makePlayer(skinIdx){
 
   /* arms (pivot at the shoulder). +x is the sword arm. */
   const mkArm=sx=>{const a=G(torso,[sx*8.4,34.5,0]);
-    A(a,'sph',mRobe2,[0,0,0],6.6);A(a,'taper',mRobe2,[0,-7.5,0],[9,15,9]);A(a,'tube',mTrim,[0,-14.8,0],[9.2,1.6,9.2]);A(a,'sph',mSkin,[0,-16.8,0],4);return a};
+    A(a,'sph',mRobe2,[0,0,0],6.6);A(a,'taper',mRobe2,[0,-7.5,0],[9,15,9]);A(a,'tube',mTrim,[0,-14.8,0],[9.2,1.6,9.2]);const hd=G(a,[0,-16.8,0]);A(hd,'cyl',mSkin,[0,2.4,0],[2.8,2.6,2.8]);A(hd,'sph',mSkin,[0,-.4,0],[4.2,4.6,4]);  /* wrist + palm */
+    for(let f=0;f<4;f++)A(hd,'sphL',mSkin,[(f-1.5)*1.05,-1.2,1.6],[1.15,1.9+(f===1||f===2?.3:0),1.3]);      /* fingers */
+    A(hd,'sphL',mSkin,[-sx*2.0,.2,.9],[1.3,2.6,1.3],[0,0,-sx*.3]);return a};                                  /* thumb */
   R.armR=mkArm(1);R.armL=mkArm(-1);
 
   /* sword in the sword hand */
@@ -539,6 +561,7 @@ function makePlayer(skinIdx){
 function setSkin(R,sk){
   const l=look(sk),cls=clsOf(sk),s=SKINS[l.p%SKINS.length],m=R.m,HS=R.hs;
   m.skin.color.set(s.skin);m.hair.color.set(s.hair);m.hairCap.color.set(s.hair);
+  m.earIn.color.copy(tn(s.skin,.88));m.nostril.color.copy(tn(s.skin,.72));
   m.robe.color.set(s.robe);m.robe2.color.set(s.robe);m.trim.color.set(s.trim);m.sash.color.set(s.sash);m.boot.color.set(s.boot);
   m.emb.color.set(s.trim);
   {const kc=cls>=1&&cls<=4,
@@ -553,7 +576,7 @@ function setSkin(R,sk){
   if(R.sleeves)for(const sl of R.sleeves)sl.visible=(l.o===4);
   /* hair: which parts show for the style, then hats / hood hide what they cover */
   const hs=l.h,hood=l.o===2,flat=l.w===2||l.w===7||l.w===10;
-  HS.cap.visible=!hood&&hs!==7;
+  HS.cap.visible=!hood&&hs!==7;HS.fringe.visible=!hood&&!flat&&[0,1,2,3,4,6].includes(hs);
   HS.back.visible=!hood&&[0,1,2,3,4,6].includes(hs);
   HS.knot.visible=HS.knotBand.visible=!hood&&!flat&&(hs===0||hs===1);
   HS.pony.visible=!hood&&hs===0;HS.ties.forEach(t=>t.visible=!hood&&hs===0);
@@ -575,7 +598,7 @@ function setSkin(R,sk){
   if(cls){if(hs===7)R.headband.visible=false;R.lashes.visible=fem&&(cls===1||cls===3||cls===4)}
   const ts=cls===1?.9:cls===2?1.18:cls===3?.96:1,ls=cls===1?.92:cls===2?1.15:1;
   R.torso.scale.set(ts,1,ts);R.legL.scale.set(ls,1,ls);R.legR.scale.set(ls,1,ls);
-  R.head.scale.set((fem?.94:1)/ts,fem?.94:1,(fem?.94:1)/ts);
+  {const hk=(fem?.94:1)*HEAD_K;R.head.scale.set(hk/ts,hk,hk/ts)}
   R.lk=l;R.skin=sk;
 }
 function setGear(R,wlv,alv){
@@ -652,7 +675,7 @@ function animPlayer(R,P,time,ri){
   }
   const h=P.hurt>0,b=P.bfT>0;
   const em=h?0x882222:b?0x4a2a0e:0;
-  R.m.robe.emissive.setHex(em);R.m.robe2.emissive.setHex(em);R.m.skin.emissive.setHex(h?0x662222:0);
+  R.m.robe.emissive.setHex(em);R.m.robe2.emissive.setHex(em);R.m.skin.emissive.setHex(h?0x662222:SKIN_EMI);
   R.shield.visible=P.sh>0;if(R.shield.visible)R.shield.material.opacity=.14+.06*Math.sin(time*6);
   const ao=R.lk&&R.lk.a>0;
   if(ao){const c=R.orbG,N=R.orbP.length;R.orbP.forEach((q,i)=>{const ang=time*c.sp+i*6.2832/N,rad=19+Math.sin(time*1.3+i*1.7)*3;

@@ -3,6 +3,8 @@ const CMDHELP=[
  'Spawn:  /boss [1-5] [level]  \u00b7 /bossclear  \u00b7 /bosses (list + distance)  \u00b7 /gotoboss',
  'Me:  /heal  \u00b7 /god (invincible on/off)  \u00b7 /speed 0.5-5  \u00b7 /home  \u00b7 /where',
  'Stats:  /lvl N  \u00b7 /exp N  \u00b7 /coins N  \u00b7 /ore N  \u00b7 /pots N  \u00b7 /gear [grade] [common|rare|epic|legendary] [count]',
+ 'Reset:  /coinsreset (coins to 0)  \u00b7 /orereset (ore to 0)  \u00b7 /walletreset (both)   also /coins reset  \u00b7 /ore reset',
+ 'Pets:  /pet [species] [class] [count] (species: chicken dragon fairy phoenix tiger wolf random \u00b7 class: F E D C B A S)  \u00b7 /egg [count]  \u00b7 /petreset (remove every pet and egg)',
  'Forge:  /forge (show levels)  \u00b7 /forge [slot|all] 0-'+FORGE_MAX+' (set forge level)  \u00b7 /forgereset [slot|all] (back to 0)  \u00b7 slots: wpn wpn2 robe ear neck ring brace glove belt legs boot',
  'View:  /minimap 500-'+3080*MAP_K+' | max | min (radar range, default 2000; max = full map radius)',
  'Party:  /invite name  \u00b7 /accept  \u00b7 /decline  \u00b7 /leave  \u00b7 /p message or the Party chat tab  \u00b7 leader: /kick name  \u00b7 /leader name  \u00b7 /disband',
@@ -11,6 +13,8 @@ const CMDHELP=[
  'Fun:  /fireworks  \u00b7 /roll [sides]  \u00b7 /flip',
  'Server:  /who  \u00b7 /announce message'];
 const CMDNUM=(v,d)=>{const n=parseFloat(v);return isFinite(n)?n:d};
+function refreshCurrencyUi(){if($('bag')&&!$('bag').hidden)renderBag();if($('forge')&&!$('forge').hidden)renderForge();if($('shop')&&!$('shop').hidden&&typeof renderShop==='function')renderShop()}
+const isReset=v=>v!==undefined&&/^(reset|zero|clear|none)$/i.test(String(v));
 function bossNear(n,lv){
   const alive=mons.filter(m=>m.boss&&!m.dead).length,w=W[curWorld],out=[];n=Math.min(n,BOSS_MAX-alive);
   if(curWorld===ARENA){say('There are no bosses in the arena.','#8d9aa2');return}
@@ -42,8 +46,32 @@ const CMDS={
   where(){say(W[curWorld].n+' \u00b7 x '+Math.round(P.x)+', y '+Math.round(P.y)+' \u00b7 '+Math.round(dist(P.x,P.y,C,C))+' from the hub \u00b7 Lv '+P.lvl,'#8d9aa2',9000)},
   lvl(a){const n=clamp(CMDNUM(a[0],P.lvl)|0,1,MAXLV);P.lvl=n;P.exp=0;P.hp=maxHp();P.qi=maxQi();buildBar();save();say('Level set to '+n+'.','#e3b559')},
   exp(a){const n=Math.max(0,CMDNUM(a[0],0)|0);if(n)gainExp(n);say('+'+n.toLocaleString()+' EXP','#e3b559')},
-  coins(a){const n=CMDNUM(a[0],1000)|0;P.coins=clamp(P.coins+n,0,2e9);save();say('Coins: '+P.coins.toLocaleString(),'#e3b559')},
-  ore(a){const n=CMDNUM(a[0],100)|0;P.ore=clamp(P.ore+n,0,2e9);save();say('Ore: '+P.ore.toLocaleString(),'#7fe0ee')},
+  coins(a){if(isReset(a[0])){CMDS.coinsreset();return}const n=CMDNUM(a[0],1000)|0;P.coins=clamp(P.coins+n,0,2e9);save();say('Coins: '+P.coins.toLocaleString(),'#e3b559')},
+  ore(a){if(isReset(a[0])){CMDS.orereset();return}const n=CMDNUM(a[0],100)|0;P.ore=clamp(P.ore+n,0,2e9);save();say('Ore: '+P.ore.toLocaleString(),'#7fe0ee')},
+  /* v5_200 admin: set coins / ore back to zero (also /coins reset, /ore reset, /coins zero ...) */
+  coinsreset(){P.coins=0;save();refreshCurrencyUi();say('Coins reset to 0.','#e3b559')},
+  orereset(){P.ore=0;save();refreshCurrencyUi();say('Ore reset to 0.','#7fe0ee')},
+  walletreset(){P.coins=0;P.ore=0;save();refreshCurrencyUi();say('Coins and ore reset to 0.','#e3b559')},
+  resetcoins(){CMDS.coinsreset()},resetore(){CMDS.orereset()},resetwallet(){CMDS.walletreset()},
+  /* v5_200 admin: /pet [species] [class] [count]  -> gives pets straight into the bag (no egg needed). Chicken has no class. Every argument is optional and may come in any order. */
+  pet(a){
+    let s=-1,c=0,n=1,rs=false;
+    for(const w0 of a){const w=String(w0).toLowerCase();
+      if(w==='random'||w==='any'||w==='r'){rs=true;continue}
+      const si=PET_SP.findIndex(q=>q.n.toLowerCase()===w||(w.length>=3&&q.n.toLowerCase().startsWith(w)));if(si>=0){s=si;continue}
+      const ci=PET_CLS.indexOf(w.toUpperCase());if(ci>=0&&w.length===1){c=ci;continue}
+      if(/^x?\d+$/.test(w)){n=clamp(parseInt(w.replace('x',''),10)||1,1,999);continue}
+      say('Usage: /pet [species] [class] [count]   species: '+PET_SP.map(q=>q.n.toLowerCase()).join(' ')+' random   class: '+PET_CLS.join(' ')+'   e.g. /pet dragon S 2','#d9503f');return}
+    const given=[];
+    for(let i=0;i<n;i++){
+      const sp=s>=0&&!rs?s:1+Math.floor(rnd()*(PET_SP.length-1)),cl=sp===0?0:c;
+      const k=petKey(sp,cl);if(!(petsObj()[k]>0)&&!given.includes(k)&&bagCount()+given.length>=BAG_CAP){say('Bag full - '+i+' of '+n+' pets given. Make room first.','#8d9aa2');break}
+      petAdd(sp,cl,1);if(!given.includes(k))given.push(k)}
+    if(!given.length)return;
+    save();if(!$('bag').hidden)renderBag();
+    say('Added '+(n>1?n+' pets: ':'a pet: ')+given.map(k=>{const p=petParse(k);return petName(p.s,p.c)}).join(', ')+'.','#ffe14a',6000)},
+  egg(a){const n=clamp(CMDNUM(a[0],1)|0,1,9999);P.eggs=clamp((P.eggs|0)+n,0,99999);save();if(!$('bag').hidden)renderBag();say('Pet Eggs: '+P.eggs.toLocaleString(),'#f4ecd8')},
+  petreset(){P.pets={};P.eggs=0;P.pet=null;P.pf=null;petComb=null;if(typeof bagSel==='string'&&(bagSel==='egg'||bagSel.indexOf('pet_')===0))bagSel=null;save();if(!$('bag').hidden)renderBag();say('All pets and eggs removed.','#e3b559')},
   pots(a){const n=CMDNUM(a[0],10)|0;for(const k of ['hp','qi','tp'])P.pots[k]=clamp(P.pots[k]+n,0,POT_MAX);save();say('Potions and scrolls '+(n>=0?'+':'')+n+' each.','#e3b559')},
   minimap(a){const w=String(a[0]||'').toLowerCase();MINI_MAX=w==='max';if(!MINI_MAX)MINI_R=w==='min'?500:clamp(CMDNUM(a[0],2000),500,3080*MAP_K);say('Minimap range: '+(MINI_MAX?RIM+' units (maximum radius = whole map)':MINI_R+' units.'),'#e3b559')},
   boss(a){bossNear(clamp(CMDNUM(a[0],1)|0,1,BOSS_MAX),CMDNUM(a[1],0)|0)},

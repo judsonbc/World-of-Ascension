@@ -284,7 +284,7 @@ function bagItems(){
   if(P.alv>0&&P.gear.robe.g===0)a.push({id:'robe',n:'Robe',v:P.alv,t:'+'+P.alv,r:'epic',eq:1,ic:ICONS.robe(skinOf(SKIN).robe),d:'Your starting Robe, forge level +'+P.alv+'. A boss-dropped Robe can replace it. Temper it at the Lotus Forge.'});
   for(const q of GEAR){const o=P.gear[q.k];if(o.g>0)a.push({id:'g_'+q.k,n:gearName(q,o),v:o.r*1e6+Math.round(gearScore(o)*100)+o.lv,t:'+'+o.lv,r:RAR[o.r].cls||'rare',eq:1,ic:ICONS[q.k](RAR[o.r].c),d:gearDesc(q,o)})}
   for(const it of bagArr()){const q=GEAR.find(z=>z.k===it.slot);a.push({id:'s_'+it.u,n:gearName(q,it),v:1,t:'G'+it.g,r:RAR[it.r].cls||'rare',ic:ICONS[q.k](RAR[it.r].c),d:statTxt(it.st,0,null)+'. Sells for '+oreOf(it)+' ore.',stored:it})}
-  return a;
+  return petBagItems(a);
 }
 function sellStored(u){const A=bagArr(),i=A.findIndex(x=>x.u===u);if(i<0)return;const it=A[i],q=GEAR.find(z=>z.k===it.slot),ore=oreOf(it);A.splice(i,1);P.ore+=ore;bagLog('Sold '+gearName(q,it)+' \u2192 '+ore+' ore','#7fe0ee');bagSel=null;bagConfirm=null;save();renderBag()}
 function sellMany(){const A=bagArr();let n=0,ore=0;
@@ -328,18 +328,20 @@ function autoEquipBest(){
 }
 function snapSeen(){bagSeen={};for(const it of bagItems())bagSeen[it.id]=it.v}
 function renderBag(){
-  const items=bagItems(),total=BAG_CAP;
+  petCombValidate();const items=bagItems(),total=BAG_CAP;
   if(!bagSeen)snapSeen();
   if(bagSel&&!items.some(i=>i.id===bagSel))bagSel=null;
   $('bagCnt').textContent=items.length+' / '+BAG_CAP;
   $('bagLv').textContent='Lv. '+P.lvl;
   const pick=it=>{
+    if(petComb&&!bagMulti&&petCombTap(it))return;
     if(bagMulti){if(!it.stored){say('Only spare gear in your bag can be sold.','#8d9aa2',2500);return}const u=it.stored.u;bagPick.has(u)?bagPick.delete(u):bagPick.add(u);bagConfirm=null;renderBag();return}
     if(bagSel!==it.id)bagConfirm=null;bagSel=it.id;renderBag()};
   const mkSlot=it=>{
     const b=document.createElement('button');b.type='button';
-    b.className='bslot '+it.r+(bagMulti?(it.stored&&bagPick.has(it.stored.u)?' msel':''):(bagSel===it.id?' sel':''));b.title=it.n;b.innerHTML=it.ic;
+    b.className='bslot '+it.r+(bagMulti?(it.stored&&bagPick.has(it.stored.u)?' msel':''):(bagSel===it.id?' sel':'')+(petComb&&it.pet&&petComb.b===it.pet.key?' msel':''));b.title=it.n;b.innerHTML=it.ic;
     if(!it.eq&&it.v>(bagSeen[it.id]||0)){const ad=document.createElement('span');ad.className='ad';ad.textContent='NEW';b.appendChild(ad)}
+    if(it.pet&&P.pet===it.pet.key){const ad=document.createElement('span');ad.className='eqr';ad.textContent='OUT';b.appendChild(ad)}
     const q=document.createElement('span');q.className='q';q.textContent=it.t;b.appendChild(q);
     b.addEventListener('click',()=>pick(it));return b};
   /* equipped gear around the avatar: left and right columns */
@@ -368,6 +370,7 @@ function renderBag(){
   const info=$('bagInfo');info.innerHTML='';
   const sel=items.find(i=>i.id===bagSel);
   $('bagMulti').classList.toggle('on',bagMulti);$('bagMulti').textContent=bagMulti?'Done selecting':'Sell multiple';
+  if(petComb&&!bagMulti)petCombPanel(info);else
   if(bagMulti){
     const A=bagArr();for(const u of [...bagPick])if(!A.some(x=>x.u===u))bagPick.delete(u);
     let ore=0;for(const it of A)if(bagPick.has(it.u))ore+=oreOf(it);const n=bagPick.size;
@@ -402,6 +405,7 @@ function renderBag(){
       }
       info.appendChild(w)}
     if(sel.eq&&sel.id.slice(0,2)==='g_'){const k=sel.id.slice(2),w=document.createElement('div'),b=document.createElement('button');w.className='bagact';b.type='button';b.className='btn';b.textContent='Unequip';b.addEventListener('click',()=>unequipGear(k));w.appendChild(b);info.appendChild(w)}
+    if(sel.egg||sel.pet)petBagActions(sel,info);
     if(sel.pot){const k=sel.pot,b=document.createElement('button');b.type='button';b.className='btn pri';b.textContent=pot[k]>0?Math.ceil(pot[k])+'s':(k==='tp'&&P.tp>0?'...':'Use');b.disabled=pot[k]>0;b.addEventListener('click',()=>{usePot(k);renderBag()});info.appendChild(b)}
   }
 }
@@ -453,7 +457,7 @@ function renderWh(){
 }
 $('bWare').addEventListener('click',openWh);$('whClose').addEventListener('click',closeWh);$('whAll').addEventListener('click',whStoreAll);
 $('wh').addEventListener('pointerdown',e=>{if(e.target===$('wh'))closeWh()});
-function closeBag(){$('bag').hidden=true;bagConfirm=null;bagMulti=false;bagPick.clear();snapSeen()}
+function closeBag(){$('bag').hidden=true;bagConfirm=null;petComb=null;bagMulti=false;bagPick.clear();snapSeen()}
 function toggleBag(){if(!started)return;const b=$('bag');if(b.hidden){b.hidden=false;renderBag()}else closeBag()}
 $('bBag').addEventListener('click',toggleBag);$('bagAuto').addEventListener('click',autoEquipBest);$('bagMulti').addEventListener('click',()=>{bagMulti=!bagMulti;bagPick.clear();bagConfirm=null;renderBag()});$('bagClose').addEventListener('click',closeBag);
 $('autoPot').addEventListener('change',e=>{P.autoPot=e.target.checked;save()});
