@@ -107,7 +107,7 @@ const RANGE_FALL=.5,RANGED_CAP=.5;
 const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','','','#9fe8c8','#9fe0ff'];
 function rangedDmg(m,d,fr){d=Math.round(d*(1-RANGE_FALL*clamp(fr,0,1)));if(!m.boss)d=Math.min(d,Math.max(1,Math.round(m.maxhp*RANGED_CAP)));return d}
 const CRIT_MUL=1.8;
-const SKILL_GCD=.45; /* seconds between two skill casts (manual or auto) */
+const SKILL_GCD=1; /* seconds between two skill casts (manual or auto); v5_190: 0.45 -> 1; v5_192: 2; v5_193: back to 1 */
 function sd(m,x,fr){const c=rnd()<critChance();let d=Math.round(atkVal()*x*(c?critMul():1)*(.9+rnd()*.2));if(fr!==undefined)d=rangedDmg(m,d,fr);return hitMonster(m,d,c)}
 /* the thing skills aim at: the attack target, else the selected monster (or selected player while PvP-flagged) */
 function aimT(){const t=P.target&&!P.target.dead?P.target:null;if(t)return t;const q=P.sel;return q&&!q.dead&&(!q.isPl||pvpOk(q))?q:null}
@@ -148,6 +148,17 @@ function skillReach(t,tr,mel,mr){if(SIGR[t])return[SIGR[t],0];switch(t){
   case 'pierce':case 'fan':return [mel?mr+40:364,1];case 'kunai':return [mel?mr+40:418,1];case 'arrow':return [720,1];case 'volley':return [490,1];
   case 'blast':case 'stormarrow':case 'rain':case 'trap':case 'spiritbomb':return [520,0];case 'meteor':return [450,0];case 'chain':return [600,0];
 }return null}
+/* v5_189 RESERVED SKILL: a skill pressed / tapped while it (or the global lock) is not ready is RESERVED and cast the moment it is ready; pressing another skill replaces the reservation.
+   With no manual reservation the HUD shows the auto-cast skill that will fire next, also labelled Reserved. A reservation expires after RSV_MAX seconds. */
+const RSV_MAX=10;
+function manualSkill(i){
+  const id=EQ[i],old=P.rsv,oldT=P.rsvT;P.rsv=-1; /* a manual press that casts or reserves replaces the reserved skill; one that does nothing leaves it alone */
+  if(id<0||useSkill(i))return;
+  P.rsv=old;P.rsvT=oldT;
+  if(P.dead>0||!started)return;
+  /* v5_191 only a READY skill (off cooldown, Qi / HP paid) can be reserved; it then waits only for the 1 s lock between casts. A skill on cooldown or without Qi / HP cannot be clicked at all. */
+  if(SCD[id]<=0&&skCanPay(SKILLS[id])&&P.skLock>0&&i<AUTO_SLOTS){P.rsv=i;P.rsvT=RSV_MAX}
+}
 function useSkill(i,auto){
   if(P.dead>0||!started)return false;
   const id=EQ[i];if(id<0){say('Empty slot. Press K to equip a skill.','#8d9aa2');return false}
@@ -601,9 +612,11 @@ function clsAuto(ty,d,t,near){
     case 'charge':return !!t&&d>P.r+t.r+IG_PAD+40&&d<=400; /* gap-closer only: never wasted on a target that is already in melee reach */
   }
   return d<(P.cls>=3?480:420)}
+/* v5_189 the auto-cast condition of one skill type (was inline in the main loop; also used to show the next auto skill as Reserved) */
+function autoWants(ty,d,t,near){const cu=clsAuto(ty,d,t,near);return cu!==undefined?cu:ty==='heal'||ty==='mend'?P.hp<maxHp()*.5:ty==='nova'?near>=2||(d<=90&&t.boss):ty==='drain'?near>=2||(near&&P.hp<maxHp()*.8):ty==='might'?(t.boss||near>=3)&&P.bfT<=0:ty==='shadowstep'?d>120&&d<420:ty==='bladestorm'?near>=2||d<=130:ty==='smoke'?(t.boss||near>=3)&&P.vlT<=0:ty==='execute'?d<=200:ty==='siphon'?d<=170&&P.hp<maxHp()*.9:ty==='rush'?d>150&&d<380:ty==='strike'||ty==='flurry'?d<=170:ty==='cleave'?d<=200:ty==='leap'?d>170&&d<360:ty==='meteor'||ty==='chain'?d<420:d<420}
 function switchClass(c){
   if(c===P.cls||c<0||c>=CLASSES.length)return;
-  CLS_STORE[P.cls]={e:EQ.slice(),a:AUTOSK.slice()};LOOKS[P.cls]=SKIN;P.cls=c;applyLook(LOOKS[c]);WD.tab=0;if(!$('wardrobe').hidden)wdRender();
+  P.rsv=-1;P.rsvA=-1;CLS_STORE[P.cls]={e:EQ.slice(),a:AUTOSK.slice()};LOOKS[P.cls]=SKIN;P.cls=c;applyLook(LOOKS[c]);WD.tab=0;if(!$('wardrobe').hidden)wdRender();
   const st=CLS_STORE[c];CLS_STORE[c]=null;
   if(st){for(let i=0;i<NSLOT;i++){const q=SKILLS[st.e[i]];EQ[i]=q&&P.lvl>=q.lv&&(q.c||0)===c?st.e[i]:-1;AUTOSK[i]=st.a[i]!==false}}
   else{autoArrange();AUTOSK.fill(true)}

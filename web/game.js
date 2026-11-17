@@ -308,7 +308,7 @@ const P={x:C,y:C+110,r:14,lvl:1,exp:0,hp:100,qi:60,coins:0,gold:0,ore:0,wlv:0,al
   face:0,anim:0,mvAmt:0,dir:1,atkCd:0,bf:0,bfT:0,sh:0,shT:0,inv:0,hurt:0,dead:0,swing:0,target:null,mv:null,task:null,mine:0,qiT:0,pvpT:0,pvpKills:0};
 let PVPLVL=0,PVPMODE=false; /* v5_158 PvP mode 0 Peaceful / 1 Lawful / 2 Hostile / 3 Carnal (saved, sent to the server), and the 'ATK Players Only' toggle */
 P.gear={};for(const g of GEAR){P.gear[g.k]={g:0,lv:0,r:0,st:{}};if(g.core)Object.defineProperty(P.gear[g.k],'lv',{enumerable:true,get:()=>P[g.core],set:v=>{P[g.core]=v}})}
-P.cls=0;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.recent=[];
+P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.recent=[];
 /* the core slots (weapon / robe) already add their ATK / DEF / HP forge bonus in atkVal / defVal / maxHp; every other stat gets it here */
 const CORE_FORGED={atk:1,def:1,hp:1};
 /* v5_148 PERCENT FORGE (replaces the v5_143 exponential flat forge). The forge no longer adds a flat amount of ATK / HP / DEF: that was huge at level 1 (+100 gave x200 power)
@@ -910,7 +910,7 @@ const RANGE_FALL=.5,RANGED_CAP=.5;
 const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','','','#9fe8c8','#9fe0ff'];
 function rangedDmg(m,d,fr){d=Math.round(d*(1-RANGE_FALL*clamp(fr,0,1)));if(!m.boss)d=Math.min(d,Math.max(1,Math.round(m.maxhp*RANGED_CAP)));return d}
 const CRIT_MUL=1.8;
-const SKILL_GCD=.45; /* seconds between two skill casts (manual or auto) */
+const SKILL_GCD=1; /* seconds between two skill casts (manual or auto); v5_190: 0.45 -> 1; v5_192: 2; v5_193: back to 1 */
 function sd(m,x,fr){const c=rnd()<critChance();let d=Math.round(atkVal()*x*(c?critMul():1)*(.9+rnd()*.2));if(fr!==undefined)d=rangedDmg(m,d,fr);return hitMonster(m,d,c)}
 /* the thing skills aim at: the attack target, else the selected monster (or selected player while PvP-flagged) */
 function aimT(){const t=P.target&&!P.target.dead?P.target:null;if(t)return t;const q=P.sel;return q&&!q.dead&&(!q.isPl||pvpOk(q))?q:null}
@@ -951,6 +951,17 @@ function skillReach(t,tr,mel,mr){if(SIGR[t])return[SIGR[t],0];switch(t){
   case 'pierce':case 'fan':return [mel?mr+40:364,1];case 'kunai':return [mel?mr+40:418,1];case 'arrow':return [720,1];case 'volley':return [490,1];
   case 'blast':case 'stormarrow':case 'rain':case 'trap':case 'spiritbomb':return [520,0];case 'meteor':return [450,0];case 'chain':return [600,0];
 }return null}
+/* v5_189 RESERVED SKILL: a skill pressed / tapped while it (or the global lock) is not ready is RESERVED and cast the moment it is ready; pressing another skill replaces the reservation.
+   With no manual reservation the HUD shows the auto-cast skill that will fire next, also labelled Reserved. A reservation expires after RSV_MAX seconds. */
+const RSV_MAX=10;
+function manualSkill(i){
+  const id=EQ[i],old=P.rsv,oldT=P.rsvT;P.rsv=-1; /* a manual press that casts or reserves replaces the reserved skill; one that does nothing leaves it alone */
+  if(id<0||useSkill(i))return;
+  P.rsv=old;P.rsvT=oldT;
+  if(P.dead>0||!started)return;
+  /* v5_191 only a READY skill (off cooldown, Qi / HP paid) can be reserved; it then waits only for the 1 s lock between casts. A skill on cooldown or without Qi / HP cannot be clicked at all. */
+  if(SCD[id]<=0&&skCanPay(SKILLS[id])&&P.skLock>0&&i<AUTO_SLOTS){P.rsv=i;P.rsvT=RSV_MAX}
+}
 function useSkill(i,auto){
   if(P.dead>0||!started)return false;
   const id=EQ[i];if(id<0){say('Empty slot. Press K to equip a skill.','#8d9aa2');return false}
@@ -1404,9 +1415,11 @@ function clsAuto(ty,d,t,near){
     case 'charge':return !!t&&d>P.r+t.r+IG_PAD+40&&d<=400; /* gap-closer only: never wasted on a target that is already in melee reach */
   }
   return d<(P.cls>=3?480:420)}
+/* v5_189 the auto-cast condition of one skill type (was inline in the main loop; also used to show the next auto skill as Reserved) */
+function autoWants(ty,d,t,near){const cu=clsAuto(ty,d,t,near);return cu!==undefined?cu:ty==='heal'||ty==='mend'?P.hp<maxHp()*.5:ty==='nova'?near>=2||(d<=90&&t.boss):ty==='drain'?near>=2||(near&&P.hp<maxHp()*.8):ty==='might'?(t.boss||near>=3)&&P.bfT<=0:ty==='shadowstep'?d>120&&d<420:ty==='bladestorm'?near>=2||d<=130:ty==='smoke'?(t.boss||near>=3)&&P.vlT<=0:ty==='execute'?d<=200:ty==='siphon'?d<=170&&P.hp<maxHp()*.9:ty==='rush'?d>150&&d<380:ty==='strike'||ty==='flurry'?d<=170:ty==='cleave'?d<=200:ty==='leap'?d>170&&d<360:ty==='meteor'||ty==='chain'?d<420:d<420}
 function switchClass(c){
   if(c===P.cls||c<0||c>=CLASSES.length)return;
-  CLS_STORE[P.cls]={e:EQ.slice(),a:AUTOSK.slice()};LOOKS[P.cls]=SKIN;P.cls=c;applyLook(LOOKS[c]);WD.tab=0;if(!$('wardrobe').hidden)wdRender();
+  P.rsv=-1;P.rsvA=-1;CLS_STORE[P.cls]={e:EQ.slice(),a:AUTOSK.slice()};LOOKS[P.cls]=SKIN;P.cls=c;applyLook(LOOKS[c]);WD.tab=0;if(!$('wardrobe').hidden)wdRender();
   const st=CLS_STORE[c];CLS_STORE[c]=null;
   if(st){for(let i=0;i<NSLOT;i++){const q=SKILLS[st.e[i]];EQ[i]=q&&P.lvl>=q.lv&&(q.c||0)===c?st.e[i]:-1;AUTOSK[i]=st.a[i]!==false}}
   else{autoArrange();AUTOSK.fill(true)}
@@ -2189,7 +2202,7 @@ window.addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();
   keys[k]=true;
   if(e.repeat)return;
-  if(SLOTKEYS.includes(k))useSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='c')cycleSkin();
+  if(SLOTKEYS.includes(k))manualSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='c')cycleSkin();
   else if(k===' ')doJump(); /* v5_169 Space = jump (attack nearest is F) */
   else if(k==='e')startMine();
   else if(k==='f'){const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null;P.fatk=true}} /* F = attack nearest */
@@ -2391,7 +2404,7 @@ $('bAuto').addEventListener('click',()=>{if(started)toggleAuto()});
 $('bMine').addEventListener('click',()=>{if(started)startMine()});
 $('bForge').addEventListener('click',openForge);
 
-const skWrap=$('skills');let skBtns=[],armed=3;
+const skWrap=$('skills');let skBtns=[],armed=3,rsvEl=null,rsvKey='';
 const GLYPH={pierce:'\u2197',fan:'\u224b',nova:'\u2738',meteor:'\u2604',chain:'\u26a1',drain:'\u263e',might:'\u25b2',mend:'\u271a',heal:'\u271a',strike:'\u2694',cleave:'\u263d',leap:'\u27a4',flurry:'\u2736',kunai:'\u2734',shadowstep:'\u21af',venom:'\u2623',bladestorm:'\u274b',smoke:'\u2601',execute:'\u2620',siphon:'\u2665',rush:'\u21d2',bash:'\u25a3',charge:'\u27a4',quake:'\u2301',bulwark:'\u26e8',roar:'\u2742',counter:'\u21ba',hammer:'\u2692',ironskin:'\u25c6',shockwave:'\u224b',arrow:'\u27b6',volley:'\u2917',rain:'\u2602',blast:'\u2739',eagle:'\u25ce',gale:'\u21e0',trap:'\u26a1',stormarrow:'\u21af',wolves:'\u2658',soulburst:'\u2735',wail:'\u224b',chains:'\u26d3',soulheal:'\u271a',harvest:'\u2766',guardian:'\u2656',spiritbomb:'\u2600'};
 for(const c of SIGD)for(const y of c)GLYPH[y[0]]=y[6]; /* v5_160 signature skill icons */
 /* [right, bottom] of each button's centre, in HUD units, measured from the bottom-right corner (round slots 1-12, then the two large ones) */
@@ -2403,6 +2416,7 @@ function buildBar(){
   atk.innerHTML='<b>\u2694</b>';place(atk,52,67,64);
   atk.addEventListener('pointerdown',e=>{e.preventDefault();if(!started)return;if(P.sel&&!P.sel.dead&&P.sel.isPl){startPvp(P.sel);return}const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null}});
   skWrap.appendChild(atk);
+  rsvEl=document.createElement('div');rsvEl.className='rsv';rsvEl.hidden=true;rsvKey='';skWrap.appendChild(rsvEl);
   for(let i=0;i<NSLOT;i++){const s=SKILLS[EQ[i]],b=document.createElement('button');b.type='button';b.className='sk'+(i>=12?' big':'');
     if(i<12)place(b,SLOTPOS[i][0],SLOTPOS[i][1],40); /* R (12) and T (13) are positioned in CSS, left of the dodge pad */
     if(s)b.style.borderColor=s.col;b.title=(s?s.n:'Empty slot (K to equip)')+' ['+SLOTKEYS[i].toUpperCase()+']';
@@ -2412,7 +2426,7 @@ function buildBar(){
       e.preventDefault();const sy=e.clientY,u=parseFloat(getComputedStyle($('hud')).getPropertyValue('--u'))||1,thr=Math.max(14,14*u);let flipped=false;
       try{b.setPointerCapture(e.pointerId)}catch(_){}
       const mv=ev=>{if(!flipped&&sy-ev.clientY>thr){flipped=true;toggleAutoSkill(i)}};
-      const end=ev=>{b.removeEventListener('pointermove',mv);b.removeEventListener('pointerup',end);b.removeEventListener('pointercancel',end);if(!flipped&&ev.type==='pointerup')useSkill(i)};
+      const end=ev=>{b.removeEventListener('pointermove',mv);b.removeEventListener('pointerup',end);b.removeEventListener('pointercancel',end);if(!flipped&&ev.type==='pointerup')manualSkill(i)};
       b.addEventListener('pointermove',mv);b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);
     });
     skWrap.appendChild(b);skBtns.push(b)}
@@ -2975,13 +2989,18 @@ function updatePlayer(dt){
   if(!P.target)P.fatk=false; /* F attack mode ends when the target is gone or you walk away */
   if(P.sel&&(P.sel.dead||(P.sel.isPl&&(!MP||!NET.peers.has(P.sel.id)))))P.sel=null;
 
+  P.rsvA=-1;
+  if(P.rsv>=0){const rid=EQ[P.rsv];P.rsvT-=dt;
+    if(P.dead>0||P.rsvT<=0||rid<0||SCD[rid]>0||!skCanPay(SKILLS[rid]))P.rsv=-1;
+    else if(!(P.skLock>0)||P.rsv>=AUTO_SLOTS){const r=P.rsv;P.rsv=-1;useSkill(r)}} /* v5_189 reserved skill fires first, as soon as it is ready */
   if((auto||P.fatk||(P.target&&!P.target.dead))&&P.tp<=0){ /* v5_111 skills with AUTO lit cast in EVERY attack mode: auto-hunt, F, Space, click / double-click attack, Attack button, PvP attack and fight-back */
     const t=P.target;
     if(t&&!t.dead){
       const d=dist(t.x,t.y,P.x,P.y);
       let near=0;for(const m of (pvpOnly()?foes():mons))if(!m.dead&&dist(m.x,m.y,P.x,P.y)<120)near++;
-      if(!(P.skLock>0)&&!wantsMove())for(let i=0;i<AUTO_SLOTS;i++){ /* v5_153 AUTO skills wait while you steer (keys / joystick): stop moving and they cast again */const id=EQ[i];if(id<0||!AUTOSK[i])continue;const ty=SKILLS[id].t; /* slot 1 first, then 2, 3 ... */
-        const cu=clsAuto(ty,d,t,near),u=cu!==undefined?cu:ty==='heal'||ty==='mend'?P.hp<maxHp()*.5:ty==='nova'?near>=2||(d<=90&&t.boss):ty==='drain'?near>=2||(near&&P.hp<maxHp()*.8):ty==='might'?(t.boss||near>=3)&&P.bfT<=0:ty==='shadowstep'?d>120&&d<420:ty==='bladestorm'?near>=2||d<=130:ty==='smoke'?(t.boss||near>=3)&&P.vlT<=0:ty==='execute'?d<=200:ty==='siphon'?d<=170&&P.hp<maxHp()*.9:ty==='rush'?d>150&&d<380:ty==='strike'||ty==='flurry'?d<=170:ty==='cleave'?d<=200:ty==='leap'?d>170&&d<360:ty==='meteor'||ty==='chain'?d<420:d<420;
+      {let bs=1e9;for(let i=0;i<AUTO_SLOTS;i++){const id=EQ[i];if(id<0||!AUTOSK[i])continue;const k=SKILLS[id];if(!autoWants(k.t,d,t,near)||!skCanPay(k))continue;const w=Math.max(0,SCD[id]);if(w<bs){bs=w;P.rsvA=i}}} /* v5_189 next auto skill = ready soonest (slot order breaks ties) */
+      if(!(P.skLock>0)&&!(P.rsv>=0)&&!wantsMove())for(let i=0;i<AUTO_SLOTS;i++){ /* v5_190 a manually reserved skill is the NEXT cast: auto skills wait for it */ /* v5_153 AUTO skills wait while you steer (keys / joystick): stop moving and they cast again */const id=EQ[i];if(id<0||!AUTOSK[i])continue;const ty=SKILLS[id].t; /* slot 1 first, then 2, 3 ... */
+        const u=autoWants(ty,d,t,near);
         if(u&&useSkill(i,true))break} /* first skill that really fired wins; the rest wait for the next cast */
     }
   }
@@ -4118,6 +4137,8 @@ function hud(){
   $('bPot').style.opacity=P.pots.hp>0?1:.5;$('bPotQ').style.opacity=P.pots.qi>0?1:.5;
   st($('viewLb'),MODE3D?'3D':'2D');
   renderOnline();
+  if(rsvEl){const ri=P.rsv>=0?P.rsv:P.rsvA,rk=ri>=0?SKILLS[EQ[ri]]:null,key=rk?EQ[ri]+(P.rsv>=0?'m':'a'):'';
+    if(key!==rsvKey){rsvKey=key;rsvEl.hidden=!rk;if(rk){rsvEl.style.borderColor=rk.col;rsvEl.classList.toggle('man',P.rsv>=0);rsvEl.innerHTML='<b style="color:'+rk.col+'">'+(GLYPH[rk.t]||'\u2726')+'</b><u>Reserved</u>'}}} /* v5_189 */
   skBtns.forEach((b,i)=>{const id=EQ[i],k=SKILLS[id],cd=k?Math.max(0,SCD[id]):0;
     sh(b.lastElementChild,k?(cd/k.cd*100)+'%':'0');
     st(b.children[2],cd>0?fmtT(cd):'');

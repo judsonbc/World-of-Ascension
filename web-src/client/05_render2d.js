@@ -287,13 +287,18 @@ function updatePlayer(dt){
   if(!P.target)P.fatk=false; /* F attack mode ends when the target is gone or you walk away */
   if(P.sel&&(P.sel.dead||(P.sel.isPl&&(!MP||!NET.peers.has(P.sel.id)))))P.sel=null;
 
+  P.rsvA=-1;
+  if(P.rsv>=0){const rid=EQ[P.rsv];P.rsvT-=dt;
+    if(P.dead>0||P.rsvT<=0||rid<0||SCD[rid]>0||!skCanPay(SKILLS[rid]))P.rsv=-1;
+    else if(!(P.skLock>0)||P.rsv>=AUTO_SLOTS){const r=P.rsv;P.rsv=-1;useSkill(r)}} /* v5_189 reserved skill fires first, as soon as it is ready */
   if((auto||P.fatk||(P.target&&!P.target.dead))&&P.tp<=0){ /* v5_111 skills with AUTO lit cast in EVERY attack mode: auto-hunt, F, Space, click / double-click attack, Attack button, PvP attack and fight-back */
     const t=P.target;
     if(t&&!t.dead){
       const d=dist(t.x,t.y,P.x,P.y);
       let near=0;for(const m of (pvpOnly()?foes():mons))if(!m.dead&&dist(m.x,m.y,P.x,P.y)<120)near++;
-      if(!(P.skLock>0)&&!wantsMove())for(let i=0;i<AUTO_SLOTS;i++){ /* v5_153 AUTO skills wait while you steer (keys / joystick): stop moving and they cast again */const id=EQ[i];if(id<0||!AUTOSK[i])continue;const ty=SKILLS[id].t; /* slot 1 first, then 2, 3 ... */
-        const cu=clsAuto(ty,d,t,near),u=cu!==undefined?cu:ty==='heal'||ty==='mend'?P.hp<maxHp()*.5:ty==='nova'?near>=2||(d<=90&&t.boss):ty==='drain'?near>=2||(near&&P.hp<maxHp()*.8):ty==='might'?(t.boss||near>=3)&&P.bfT<=0:ty==='shadowstep'?d>120&&d<420:ty==='bladestorm'?near>=2||d<=130:ty==='smoke'?(t.boss||near>=3)&&P.vlT<=0:ty==='execute'?d<=200:ty==='siphon'?d<=170&&P.hp<maxHp()*.9:ty==='rush'?d>150&&d<380:ty==='strike'||ty==='flurry'?d<=170:ty==='cleave'?d<=200:ty==='leap'?d>170&&d<360:ty==='meteor'||ty==='chain'?d<420:d<420;
+      {let bs=1e9;for(let i=0;i<AUTO_SLOTS;i++){const id=EQ[i];if(id<0||!AUTOSK[i])continue;const k=SKILLS[id];if(!autoWants(k.t,d,t,near)||!skCanPay(k))continue;const w=Math.max(0,SCD[id]);if(w<bs){bs=w;P.rsvA=i}}} /* v5_189 next auto skill = ready soonest (slot order breaks ties) */
+      if(!(P.skLock>0)&&!(P.rsv>=0)&&!wantsMove())for(let i=0;i<AUTO_SLOTS;i++){ /* v5_190 a manually reserved skill is the NEXT cast: auto skills wait for it */ /* v5_153 AUTO skills wait while you steer (keys / joystick): stop moving and they cast again */const id=EQ[i];if(id<0||!AUTOSK[i])continue;const ty=SKILLS[id].t; /* slot 1 first, then 2, 3 ... */
+        const u=autoWants(ty,d,t,near);
         if(u&&useSkill(i,true))break} /* first skill that really fired wins; the rest wait for the next cast */
     }
   }

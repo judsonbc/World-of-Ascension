@@ -1,3 +1,19 @@
+DELAY BETWEEN CASTS BACK TO 1 s (v5_193, 02_combat.js SKILL_GCD 2 -> 1).
+
+DELAY BETWEEN CASTS 2 s (v5_192, 02_combat.js SKILL_GCD 1 -> 2). R / T priority slots still ignore it.
+
+RESERVE ONLY READY SKILLS (v5_191, 02_combat.js manualSkill, 05_render2d.js)
+  - A skill can only be clicked / reserved when it is ready (off cooldown and Qi / HP available). A ready skill pressed during the 1 s lock after another cast is reserved and is the next cast; a skill on cooldown or without Qi / HP does nothing and is never reserved. A reservation is dropped if the skill stops being ready.
+
+RESERVED SKILL FIRST + 1 s BETWEEN CASTS (v5_190, 02_combat.js SKILL_GCD, 05_render2d.js)
+  - Delay between two skill casts (manual or auto): 0.45 s -> 1 s. The R / T priority slots still ignore it.
+  - While a skill is reserved by hand, auto-cast skills no longer cast: the reserved skill is guaranteed to be the next one cast (auto resumes after it fires, or after the reservation expires: 10 s).
+
+RESERVED SKILL (v5_189, web-src 02_combat 04 05 07, 01_core, web/index.html .rsv)
+  - A skill pressed / tapped while it (or the 0.45 s global lock, or Qi / HP for it) is not ready is RESERVED: its icon shows above the skill bar labelled 'Reserved' and it is cast the moment it is ready (before any auto skill). Pressing / tapping another skill replaces the reservation. Expires after RSV_MAX = 10 s (a skill with more than 10 s of cooldown left is not reserved), on death and on class switch.
+  - With no manual reservation, the Reserved icon shows the auto-cast skill that will fire next (the ready-soonest auto skill whose condition is true). The auto condition now lives in autoWants() (02_combat.js), used by both the auto loop and this display.
+  - Code: manualSkill() / RSV_MAX (02_combat.js), P.rsv / P.rsvT / P.rsvA.
+
 QI COST -10%, QI-REGEN SKILLS COST HP (v5_188, web-src 01_core.js 02_combat.js 04 07; web/game.js rebuilt)
   - Qi cost of every skill is 10% lower: QI_COST_MUL .99 -> .891 (all classes, signature skills included; read through skCost).
   - Skills that give Qi back no longer cost Qi, they cost HP (QI_REGEN_T in 01_core.js): Lotus Ward line (mend), Soul Burst (soulburst), Soul Heal (soulheal), and the signature skills Heaven's Breath (sg_c25), Soul Lantern (sg_s25), Ancestral Chorus (sg_s300).

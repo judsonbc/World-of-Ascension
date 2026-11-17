@@ -8,7 +8,7 @@ window.addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();
   keys[k]=true;
   if(e.repeat)return;
-  if(SLOTKEYS.includes(k))useSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='c')cycleSkin();
+  if(SLOTKEYS.includes(k))manualSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='c')cycleSkin();
   else if(k===' ')doJump(); /* v5_169 Space = jump (attack nearest is F) */
   else if(k==='e')startMine();
   else if(k==='f'){const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null;P.fatk=true}} /* F = attack nearest */
@@ -210,7 +210,7 @@ $('bAuto').addEventListener('click',()=>{if(started)toggleAuto()});
 $('bMine').addEventListener('click',()=>{if(started)startMine()});
 $('bForge').addEventListener('click',openForge);
 
-const skWrap=$('skills');let skBtns=[],armed=3;
+const skWrap=$('skills');let skBtns=[],armed=3,rsvEl=null,rsvKey='';
 const GLYPH={pierce:'\u2197',fan:'\u224b',nova:'\u2738',meteor:'\u2604',chain:'\u26a1',drain:'\u263e',might:'\u25b2',mend:'\u271a',heal:'\u271a',strike:'\u2694',cleave:'\u263d',leap:'\u27a4',flurry:'\u2736',kunai:'\u2734',shadowstep:'\u21af',venom:'\u2623',bladestorm:'\u274b',smoke:'\u2601',execute:'\u2620',siphon:'\u2665',rush:'\u21d2',bash:'\u25a3',charge:'\u27a4',quake:'\u2301',bulwark:'\u26e8',roar:'\u2742',counter:'\u21ba',hammer:'\u2692',ironskin:'\u25c6',shockwave:'\u224b',arrow:'\u27b6',volley:'\u2917',rain:'\u2602',blast:'\u2739',eagle:'\u25ce',gale:'\u21e0',trap:'\u26a1',stormarrow:'\u21af',wolves:'\u2658',soulburst:'\u2735',wail:'\u224b',chains:'\u26d3',soulheal:'\u271a',harvest:'\u2766',guardian:'\u2656',spiritbomb:'\u2600'};
 for(const c of SIGD)for(const y of c)GLYPH[y[0]]=y[6]; /* v5_160 signature skill icons */
 /* [right, bottom] of each button's centre, in HUD units, measured from the bottom-right corner (round slots 1-12, then the two large ones) */
@@ -222,6 +222,7 @@ function buildBar(){
   atk.innerHTML='<b>\u2694</b>';place(atk,52,67,64);
   atk.addEventListener('pointerdown',e=>{e.preventDefault();if(!started)return;if(P.sel&&!P.sel.dead&&P.sel.isPl){startPvp(P.sel);return}const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null}});
   skWrap.appendChild(atk);
+  rsvEl=document.createElement('div');rsvEl.className='rsv';rsvEl.hidden=true;rsvKey='';skWrap.appendChild(rsvEl);
   for(let i=0;i<NSLOT;i++){const s=SKILLS[EQ[i]],b=document.createElement('button');b.type='button';b.className='sk'+(i>=12?' big':'');
     if(i<12)place(b,SLOTPOS[i][0],SLOTPOS[i][1],40); /* R (12) and T (13) are positioned in CSS, left of the dodge pad */
     if(s)b.style.borderColor=s.col;b.title=(s?s.n:'Empty slot (K to equip)')+' ['+SLOTKEYS[i].toUpperCase()+']';
@@ -231,7 +232,7 @@ function buildBar(){
       e.preventDefault();const sy=e.clientY,u=parseFloat(getComputedStyle($('hud')).getPropertyValue('--u'))||1,thr=Math.max(14,14*u);let flipped=false;
       try{b.setPointerCapture(e.pointerId)}catch(_){}
       const mv=ev=>{if(!flipped&&sy-ev.clientY>thr){flipped=true;toggleAutoSkill(i)}};
-      const end=ev=>{b.removeEventListener('pointermove',mv);b.removeEventListener('pointerup',end);b.removeEventListener('pointercancel',end);if(!flipped&&ev.type==='pointerup')useSkill(i)};
+      const end=ev=>{b.removeEventListener('pointermove',mv);b.removeEventListener('pointerup',end);b.removeEventListener('pointercancel',end);if(!flipped&&ev.type==='pointerup')manualSkill(i)};
       b.addEventListener('pointermove',mv);b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);
     });
     skWrap.appendChild(b);skBtns.push(b)}
