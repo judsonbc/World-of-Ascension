@@ -1,0 +1,23 @@
+UPGRADING THREE.JS (the game ships on r128, the default page still uses it)
+
+WHAT WAS PREPARED (v5_173)
+  - The code already uses the current API (BufferGeometry, setAttribute, InstancedMesh ...). Nothing of the removed r128-era API (Geometry, Face3, *BufferGeometry names) is used.
+  - The two things that DO change the picture on a newer Three.js are handled by web/three-compat.js + the LK factor in web/game.js:
+      r152+  colour management / output colour space   -> switched to the old (linear) behaviour so colours stay as designed
+      r155+  physical light units                      -> every light intensity is multiplied by PI (LK = window.T3_LIGHT_K)
+    On r128 both do nothing, so the default page is unchanged.
+  - web/modern.html (generated) loads a Three.js file from web/ instead of the CDN, as a separate page so you can compare it with the normal one.
+
+HOW TO TRY IT
+  1. Download a Three.js release from https://github.com/mrdoob/three.js/releases and copy build/three.module.min.js into web/
+     (from r171 on three.js is split in two files: also copy build/three.core.min.js next to it)
+  2. node tools/make_modern_index.js        (writes web/modern.html from web/index.html)
+  3. build.bat, start the server, open  /modern.html  and compare it with  /
+  4. Look for: colours too bright / dark (tune LK in three-compat.js), the 3 preview windows (Wardrobe / Bag / Forge), night lighting, a console error on the first frame.
+     If something is wrong, the normal page is untouched - nothing to roll back.
+  5. When you are happy: make index.html load the module the way modern.html does (or rename modern.html to index.html), and add three.module.min.js to CORE in web/sw.js.
+
+NOT DONE (needs a browser to check, not possible while writing this)
+  - The modern path has not been run. Expect small things to fix (see step 4).
+  - Real bloom / post-processing needs EffectComposer from Three's examples/addons (modules). It can be added on top of modern.html once step 3 looks right.
+  - MeshStandardMaterial for the hero / bosses was left out: without an environment map it renders darker and flatter than the current Lambert look, and it costs phones frame time.

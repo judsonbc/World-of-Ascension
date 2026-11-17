@@ -73,7 +73,7 @@ const (
 	// The Arena (world 0) is the PvP arena. No monsters, small round map, PvP is always on
 	// for everyone outside the safe hub. Must match ARENA / ARENA_R in web/game.js.
 	arenaWi = 0 // World 0, the Arena, is the PvP arena
-	arenaR  = 1500.0
+	arenaR  = 2250.0 // v5_177: 1500 -> 2250
 	arenaLo = 1 // unused level band (the Colosseum has no monsters)
 
 	// Random boss waves: each wave brings 1..maxBosses bosses with random type, level (any level of the world) and place.

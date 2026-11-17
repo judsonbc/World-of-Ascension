@@ -52,7 +52,7 @@ const STEPS=[
  {id:'attack',title:'Fight it',kind:'task',target:['#skills .sk.atk','#tg'],
   text:()=>(phone()
     ?'<b>Tap the same monster again</b> to attack, or press the big <b>sword button</b> (bottom-right) to hit the nearest one.'
-    :'<b>Click the same monster again</b> to attack. '+kb('Space')+' or '+kb('F')+' (or the big sword button, bottom-right) attacks the nearest one.')
+    :'<b>Click the same monster again</b> to attack. '+kb('F')+' (or the big sword button, bottom-right) attacks the nearest one. '+kb('Space')+' jumps.')
    +' Your hero walks up and fights on its own until the monster falls.',
   task:'Defeat a monster',
   enter:c=>{c.ref=monSel();c.e0=G(()=>W().P.exp,0);c.l0=G(()=>W().P.lvl,1)},

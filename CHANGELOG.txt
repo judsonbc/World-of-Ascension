@@ -1,3 +1,17 @@
+SUN BOX FIX (v5_177, web/fx3d.js BODY_F)
+  - A pale square showed around the sun (and the Sundered Sun) whenever it was low: the horizon tint (oc=mix(oc,horC,hk)) added a flat colour to the whole additive quad. Additive bodies now tint by their own brightness (black stays black), so the quad edge adds exactly nothing. Moons, planets, black hole, eclipsed star, dragon's eye and clock were already clean (alpha fades to 0 before the quad edge). Checked all 8 body kinds at two horizon strengths: edge deviation from the sky is 0 for every one.
+
+SKY SEAM FIX (v5_177, web/fx3d.js)
+  - A hard vertical line with a brightness step cut through the night sky (worlds with aurora / Milky Way, e.g. the Arena). Cause: the aurora curtain and the Milky Way dust used atan(z,x) as a noise coordinate, which is discontinuous where the angle wraps (one compass direction). Both now use a continuous direction vector instead. Same fix for the Dragon's Eye moon texture (it had its own seam).
+  - Planets / moons / dragon eye: their alpha now fades to 0 before the edge of their quad, so no faint square can show. The bodies themselves were not merged into the sky; their disc edges are unchanged.
+
+BIGGER ARENA + TIMER FIXES (v5_177)
+  - PvP Arena radius 1500 -> 2250 (arenaR in game.go, ARENA_R in web-src/client/01_core.js; tools/check_constants.js still passes). The 3 lone landmarks now sit in the outer 60%-RIM-200 ring, and the scenery keeps its old density.
+  - Arena landmarks 3 -> 6: placed 60 degrees apart around the arena, alternating an inner and an outer ring, so no side is bare or crowded (findSite in genVillages, web-src/client/01_core.js).
+  - Buff icons: Spirit Wolves / Guardian Spirit / Dao Clone / Stone Sentinels showed the NUMBER of spirits ("1") instead of the time left. They now show the longest remaining time; the count is in the tooltip ("x2 active").
+  - Signature-skill buffs (Lotus Domain, Iron Banner, Soul Lantern, Nightshade Bloom, Netherworld Gate) were timed with the wall clock while the game runs on capped frame time, so they drifted on slow frames / lag. They use a game clock (HBCLK) now.
+  - Every timer label (buff icons, tooltips, skill cooldown overlay, potion / scroll cooldowns) goes through fmtT: whole seconds from 10 s up, tenths below 10 s, so the last second no longer reads "1" for up to a second.
+
 TAP TO MOVE OPTION (phones) (v5_134)
   - New checkbox in the Menu window (phone mode only): 'Tap to move'. On (default, as before): tapping the ground walks your hero there. Off: tapping the ground does nothing and the joystick is the only way to walk. Tapping monsters (select / double tap to attack), ore veins, other players and the shop still works either way, and turning it off cancels a walk already in progress.
   - The choice is saved with your character (same place as 'Fight back' and 'Auto-use potions'). The option is hidden on desktop, where clicking to move is unchanged.
@@ -1037,3 +1051,132 @@ v5_163  OTHER PLAYERS: VISIBLE DASHES, SMOOTHER LAG RECOVERY (client only, no se
   - After a lag spike (no update for .25 s+) the player slides to the new position at running speed (450 units/s, up to .6 s) instead of freezing and then zipping across. A standing player that starts walking still does not slide.
   - Only a very big jump (over 900 units: respawn, Home Scroll, world change) snaps. Before, any jump over 400 snapped. Constants: PEER_BLINK / PEER_SNAP / PEER_RUN / PEER_STILL next to peerSample in web/game.js.
 
+v5_164  BUFF ICONS: EVERY BUFF SHOWN, PHONE TAP TOOLTIP
+  - The buff row next to the realm tag now also shows: Spirit Wolves / Guardian Spirit / Dao Clone / Stone Sentinels (one icon each, with count and time left, Pack Frenzy noted), Gale Step (+40% arrows), Untouchable, and the timed skills that had no timer before: Lotus Domain, Iron Banner, Soul Lantern, Nightshade Bloom, Netherworld Gate (SIGHUD / HB in web/game.js). 'Veil' is now called 'Haste' (it is also given by Gale Step, Windrunner, Afterimage, Tempest).
+  - Phone: tap a buff to open its tooltip, tap it again or anywhere else to close (auto-closes after 4 s). Cause of the old bug: the emulated mouseover opened the tip and the click closed it at once; the row was also rebuilt every second, which swallowed taps. Now only pointer events are used and the icons are rebuilt only when the set of buffs changes. Buff icons are a bit bigger on phones.
+
+v5_165  SUMMONS ARE EASY TO SEE (visual only, no damage / balance change)
+  - Spirit Wolves, Guardian Spirit, Dao Clone and Stone Sentinels were a single tiny orbiting spark. Each is now a large glowing body: wolf = head / body / tail with bright eyes and a wake, guardian = big orb with 4 satellites, clone = tall light figure, sentinel = glowing pillar, all with a ground ring pulsing under them (SPV / spiritViz in web/game.js). Pack Frenzy turns them red-orange and makes them orbit faster. They orbit wider so they separate from the player.
+  - Strike warning: a spirit marks its target (red ring + line from the spirit) 0.35 s (at most 60% of its strike interval) before the hit lands. The hit cadence is unchanged.
+  - Other players see your summons too: when your spirits change (cast, expire, die) one small 'sp' effect message is sent (the server already forwards 'fx' messages, so game.go is unchanged); receivers draw them locally for the time left.
+  - NOTE: spirits still only hit monsters / bosses, never players.
+
+v5_166  SMOOTHER OTHER-PLAYER MOVEMENT (client only)
+  - PEER_DELAY .12 -> .2 s: other players are shown 200 ms late (3 updates of buffer instead of under 2), so a late packet no longer empties the buffer (freeze, then jump).
+  - Update time stamps are evened out (kept 45-90 ms apart, re-synced if they drift more than 150 ms) so network bursts do not turn into stop-and-go motion.
+  - The drawn position eases toward the interpolated one (about 30 ms), hiding small hiccups; jumps over 150 units (dashes / teleports) still go straight there.
+  - If it still blinks: the server on a busy laptop is the usual cause (a tick that runs late sends several steps at once). Keep the server PC idle, use -lan with 5 GHz Wi-Fi or a cable.
+
+v5_167  GROUND TEXTURE AND SOLID STRUCTURES
+  - Ground texture (3D and 2D): a tileable procedural tile of soil patches, grass tufts, rocks and pebbles (groundTile in web/game.js) multiplies with each world's own ground colour, so every world keeps its look but is no longer flat. 3D terrain also blends by shape: steep slopes turn to bare rock, flat noisy patches to soil, a few patches to dry grass (partial blends).
+  - The town plaza is now cobblestone (3D: a textured disc over the terrain, 2D: a pattern).
+  - Solid structures: you cannot walk through the buildings any more. 3D hub: pagoda, forge + anvil, the two world-gate pillars, potion stall, the 12 lantern posts. 2D hub: shrine, anvil, healer flowers, potion stall (the 2D hub is drawn differently, so it has its own list). SOL3 / SOL2 / solidPush in web/game.js. You slide along walls; a dash or teleport that ends inside a building pushes you out to the nearest side; a click-to-move that keeps pressing into a wall is cancelled after 0.35 s. Monsters, trees, rocks and ore are not solid.
+  - Tested in 2D mode (textures drawn, collision pushes out of every building, free ground untouched). The 3D terrain change could not be run here (no WebGL / three.js available): if 3D looks wrong, the old look is one line (the terrain material in rebuild3).
+
+v5_168  SCENERY IS SOLID (trees, rocks, crystals, ruin blocks ...)
+  - Every world prop outside the hub now blocks the player, in 3D and 2D: trees, rocks, bushes, crystals, ruin pillars / walls / blocks, mushrooms, mounds, snow rocks, dead trees. Flat flowers / ponds (2D) and thin grass blades (3D fungal / grass kit) stay walk-through. You slide along them like the hub buildings (decoPush / DECO_R3 / DG grid in web/game.js; a 256-unit grid keeps it cheap).
+  - 3D radius = a fraction of the prop's drawn size, per world kit (forest, crystal, ruins, fungal, snow). 2D uses its own radii (tree 9 x scale, rock 14 x scale).
+  - Phones (low quality 3D) draw only every 3rd prop, so only those drawn props are solid.
+  - Monsters and ore nodes are not affected. Tested in 2D (tree and rock stop the player, flowers do not); the 3D radii could not be run here.
+
+v5_169  JUMP
+  - Space = jump (new). A small round JUMP button sits directly above the Dodge pad (PC and phone), skill-slot look, greys out while you are in the air / just landed. A hop lasts 0.7 s, 80 units high, with a landing ring and dust; you cannot jump again until you land (+0.25 s). Works while walking, fighting or dashing; not while dead.
+  - While high enough you hop over low scenery: rocks and blocks (not trees, not buildings).
+  - The character is drawn lifted in 2D and 3D (shadow stays on the ground). Other players see your jump (one small 'jp' effect message, visual only; the server already forwards fx).
+  - ATTACK NEAREST: Space used to do this; it is now F only (F already worked, and the big sword button). Help text, menu hint and the tutorial were updated.
+  - Constants: JUMP_T / JUMP_H / JUMP_CD / JUMP_CLEAR next to SOL_R in web/game.js; button CSS #jump in web/index.html. Tested in 2D (PC and phone layout, jump arc, rock clearing); the 3D lift could not be run here.
+
+v5_170  JUMP: STAND ON STRUCTURES, 10% HIGHER, RING HIDDEN IN THE AIR
+  - Jump is 10% higher (apex 80 -> 88 units) and now uses real jump physics (up speed + gravity, same 0.7 s on flat ground).
+  - You can land on structures and stand on them. Every solid has a top height: below its top it blocks you, above it you pass over it, and coming down on it you land and stay there (your height is P.jz). Low tops (12 units or less, e.g. the pagoda's base platform) are simply walked up. Walk off an edge and you fall. You can jump again from the top.
+      3D hub tops: pagoda base 9, pagoda body 54, forge 42, anvil 19, potion stall 21, lantern posts 39, gate pillars 105 (too high). 2D hub: shrine 60, anvil 22, stall 24, healer flowers 14.
+      Scenery tops per world kit (DECO_H3): rocks / blocks / ruin walls / mounds are standable, trees, crystals and mushrooms are not (always solid). 2D: rocks only.
+  - The level / aura ring and the forge ring around the character are hidden while he is off the ground (2D and 3D), and come back when he lands.
+  - The 3D camera follows the height smoothly. Other players see your height (one small 'jz' effect message, at most 10 per second and only while you are off the ground; replaces the v5_169 'jp' message).
+  - Tested in 2D: blocked from the side, jump onto the shrine and stand, walk off the far edge and fall, hop over a rock, rock blocks when walking, tree never standable.
+
+
+v5_171  VILLAGES: BUILDINGS AND HOUSES IN ALL WORLDS (client only, game.go unchanged)
+  - Every world (all 15 hunting worlds and the Arena) now has villages: about 50 per hunting world (10 x MAP_K), 4 small ones in the Arena. Each village has 4-8 houses with pitched roofs, doors, lit windows
+    and a chimney, plus a centre piece: a big hall or a watchtower (some houses are small towers too). About 340 buildings per hunting world, 9 in the Arena.
+  - Wall and roof colours follow each world's hue (4 palettes per world), so every world's villages look different. Scenery inside a village is removed so nothing grows through a wall.
+    Villages keep clear of the hub, the map rim, each other (min 1100 units) and the water of the island worlds.
+  - Same places for every player and every visit (seeded per world, separate generator: the monster / ore / scenery numbers are unchanged).
+  - SOLID: you cannot walk through houses, halls or towers (you slide along walls, a dash / teleport that ends inside pushes you out). House and hall roofs are always solid.
+    WATCHTOWERS have a flat top at height 72: jump onto it from the ground, stand there, jump again, walk off the edge to fall (same rules as the hub structures, v5_170).
+  - 3D: one InstancedMesh each for bodies, roofs, doors and caps (chimneys / tower tops) = 4 draw calls for the whole village layer. Bodies sink 40 units into the ground and sit on the highest corner of the footprint, so they never float on a slope. Phones draw all buildings (they are few).
+  - 2D: front wall, pitched roof, door, windows, chimney; watchtowers are drawn as a stone block with battlements.
+  - Code (web/game.js): bld / BG / genVillages / buildBldGrid next to the scenery grid; collision in supportH + solidPush; drawing in the 2D scenery loop and in rebuild3.
+  - Tested in 2D (all 16 worlds build, no errors, blocked by a house wall, jump onto a watchtower and stand). The 3D block was run against a stubbed three.js (instance counts, colours) but not in a real WebGL view: if the 3D look needs tuning, the sizes are wh / hw / hh in genVillages and the roof height factors in rebuild3.
+  - Monsters are not blocked by buildings (as with trees and rocks).
+
+v5_172  BUILDING VARIETY: 15 KINDS, A DIFFERENT ARCHITECTURE PER WORLD, SCATTERED EVERYWHERE, TALL LANDMARKS (client only, game.go unchanged)
+  - 15 building kinds (CUL / genVillages / drawB2 / the 3D block in rebuild3, all in web/game.js):
+      0 cottage (hip roof, gable roof, flat adobe roof with a roof cabin, tall townhouse)   1 hall (columns, gilded ridge)   2 watchtower (flat top 72 you can jump onto)
+      3 PAGODA (3-5 tiers, 200-350 tall)   4 SKYSCRAPER (stepped setback tower with antenna, slab with a pyramid crown, or round glass tower with a dome; 250-520 tall, lit window bands)
+      5 domed temple with 4 minarets   6 round tower with a cone roof and battlements   7 yurt   8 OBELISK (tapered, gold tip, 280-440 tall)   9 ZIGGURAT (3 nested tiers 26 / 52 / 78 you climb by jumping, shrine on top)
+      10 WINDMILL (with sails)   11 CRYSTAL SPIRE (glowing shards)   12 longhouse   13 LIGHTHOUSE (striped, lit lamp)   14 well (low, jump on it)
+  - Every world has its own culture (CUL table): which kinds it builds and its colours. Ashen Reach = lacquered pagodas, Crimson = war forts, Starfall = observatories and crystals, Ember = forge ziggurats,
+    Heavenfall = celestial spires and domes, Tideglass = harbour with lighthouses, Verdant = yurts and windmills, Stormcrown = sky fortresses, Bloodmoon = gothic spires,
+    Sunforged = sandstone domes and ziggurats, Mirrorveil = glass towers, Voidmaw = obsidian, Dragonbone = bone halls, Chronos = clockwork windmills, Heaven-Sundering = monuments, Arena = ruined ziggurats.
+    Colours (wall, roof, accent, trim, glass) are per building with small random shifts, so no two look the same.
+  - Arrangement is no longer one village pattern. Per hunting world: ~40 villages (ring, street, grid or scattered layouts, with a landmark or a well in the middle, doors facing the middle / the road),
+    ~50 hamlets / farmsteads of 2-3 buildings, ~70 lone landmarks (some twins, some with a few homes around them) and 'downtowns' (4-7 tall towers in a cluster with different heights).
+    About 650-800 buildings per world (13 in the Arena). They are spread over the whole map, away from the hub, the rim, each other and the water of the island worlds.
+  - SOLID: rectangular and now ROUND footprints (towers, windmills, lighthouses, yurts, wells use a circle). Standable: watchtower top, the 3 ziggurat tiers, wells. Everything else is solid with unreachable tops.
+  - 3D: every building is a set of parts drawn as instances of 9 shared shapes (box, pyramid, cylinder, cone, dome, gable prism, octahedron, tapered square and round) = 9 draw calls for the whole layer. Bodies sink 40 units into the ground and sit on the highest point of the footprint.
+  - 2D: each kind has its own drawing (tiered pagoda, setback towers with lit windows, domes with minarets, tapered obelisk, striped lighthouse, windmill sails, crystal shards ...), drawn back to front.
+  - Tested in 2D (all 16 worlds, every kind rendered, round and rectangular collision, ziggurat tiers, watchtower, well); the 3D block was run for all 16 worlds against a stubbed three.js (instance counts, colours, no errors) but not in real WebGL.
+    If the 3D proportions need tuning: kind sizes are in dims() in genVillages, shapes in the 3D block (bld.forEach in rebuild3). Tall towers (up to ~520) can hide the player from the 3D camera when they stand between: lower the heights in dims() case 4 / 8 / 13 if that bothers you.
+
+v5_173  CLIENT SOURCE SPLIT, 3D SKY / GLOW / LIGHT PILLARS, THREE.JS UPGRADE PREPARATION (client only, game.go unchanged)
+  - web/game.js is now GENERATED from 10 parts in web-src/client/ (node tools/build_client.js, run by build.bat; --check tells you if game.js is stale). The result is byte-identical to v5_172's game.js apart from the lines below.
+    The game is a single closure that shares its state, so the parts are slices of it, not separate runtime modules. Edit the parts, not web/game.js.
+  - NEW web/fx3d.js (3D mode only, self-contained; an error in it only switches it off; ?fx3=0 or localStorage woa_fx3='0' turns it off):
+      sky: gradient dome (deeper overhead, the old colour at the horizon) + stars that fade in at night
+      glow: soft additive sprites on spells, bosses, drops, ore veins, spell rings and, at night, your hero (the 3D view had no point glows; the 2D view did)
+      light pillars: the level-up 'beams' are now drawn in 3D (before they only existed in 2D mode)
+      Low-quality phones: smaller pool (10 glows, no drop / ore / ring glows).
+  - NEW web/three-compat.js + LK light factor in game.js (7 light sites): no change on r128; lets a newer Three.js look the same. THREE_UPGRADE.txt has the steps, tools/make_modern_index.js generates a separate /modern.html for testing a current Three.js.
+  - index.html / sw.js: three-compat.js and fx3d.js added to the script list, the preloader and the cached core files.
+  - Written without a browser: please look at the sky, a night scene, a boss and a level-up in 3D once, and report anything odd.
+
+v5_174  CAMERA CAN LOOK UP AT THE SKY (client only, game.go unchanged)
+  - The camera tilt control now continues past its lowest orbit (17 degrees above the ground): the camera stays there and pitches UP by the extra amount, up to 57 degrees, so the sky fills the screen (the v5_173 gradient sky and night stars are visible).
+    Same controls as before: right/middle-drag up (PC), two-finger drag up (phone), PageDown; Home resets. Dragging down / PageUp brings the view back to the hero.
+  - While looking high up the hero is off the bottom of the screen; movement, clicking and the minimap keep working (clicking the sky does nothing, as before).
+
+v5_175  BETTER SKY, FOG, AND A DIFFERENT SET OF CELESTIAL BODIES ON EVERY WORLD (client only, game.go unchanged)
+  - web/fx3d.js rewritten (sky part). Everything is procedural (shaders), no assets. Off switch unchanged: ?fx3=0 or localStorage woa_fx3='0'.
+  - SKY: shader dome with a zenith / mid / horizon gradient per world, sun glow, warm dawn + dusk horizon (on the sun's side), a Milky Way band at night,
+    twinkling stars of different sizes and tints, drifting procedural clouds (thickness and colour per world: clear in the Sunforged Wastes, overcast in Stormcrown, a bright cloud sea in Heavenfall),
+    auroras (Arena, Starfall, Heavenfall, Mirrorveil, Heaven-Sundering), shooting stars (Starfall, Arena, Chronos, Heaven-Sundering), lightning (Stormcrown, a little in Heaven-Sundering).
+    Clouds pass in FRONT of the sun / moons; hills, buildings and monsters pass in front of the whole sky (the sky layers are depth tested now).
+  - FOG: per-world density and tint (WP table in fx3d.js: fogT / fogA / fogD), thicker at dawn and dusk, breathing slowly, plus drifting ground-mist banks (soft sprites that fade out near the camera and at the edge of the ring).
+    Lightning briefly lights the fog. The scene's sun / ambient light colour gets a small per-world tint and goes warm at sunset.
+  - CELESTIAL BODIES (index = world number):
+      0 Arena            white-gold sun, a pale ringed 'creation' world, a moon
+      1 Ashen Reach      mist-veiled pale sun, grey moon, tiny ash moon
+      2 Crimson Dominion huge bloated red sun, two rust moons
+      3 Starfall Expanse small pale sun, big silver moon, blue moon, auroras, many shooting stars
+      4 Ember Throne     dim orange sun, ember-ringed planet
+      5 Heavenfall       golden sun, pale moon, pastel ringed planet, sea of clouds
+      6 Tideglass        sun, big pearl moon + coral tide moon
+      7 Verdant Eternity green-gold sun, a living green marble moon, the World Tree's star
+      8 Stormcrown       dim sun behind a storm deck, lightning
+      9 Bloodmoon        giant blood-red moon that never sets
+     10 Sunforged Wastes twin suns, no moon
+     11 Mirrorveil       two mirrored moons (one upside down), floating shards, prism auroras
+     12 Voidmaw          black hole with accretion disk, an eclipsed star, no sun
+     13 Dragonbone       a dragon's-eye moon with a slit pupil, bone-white moon, ember sun
+     14 Chronos Spiral   a great broken clock (stuttering hands), a small reversed clock, falling sand-stars
+     15 Heaven-Sundering one huge sun split by a blazing crack, gold auroras, falling sparks
+    Suns follow the existing day / night clock; moons rise and set on their own periods (a moon opposite the sun is full); 'static' bodies hang at a fixed place.
+    To change a world: edit its entry in WP (fx3d.js). A body is SUN({...}) / MOON({...}) / PLAN({...}) or a plain object with k = kind (0 moon, 1 sun, 2 planet, 3 black hole, 4 eclipsed star, 5 dragon eye, 6 clock, 7 sundered sun).
+  - web-src/client/06_render3d.js: fx3dFrame now also passes the world number (FXC.world) and the light factor (FXC.LK). Rebuilt web/game.js from the parts.
+  - Checked: the shaders compile in a WebGL1 context and the bodies / dome / clouds / aurora were rendered on their own. NOT run inside the game (no Three.js / browser session while writing): please look at day, dusk, night and a few worlds once.
+    If fog feels too thick on a world lower its fogD in WP; if the sky is slow on a phone, ?fx3=0 turns the whole layer off.
+
+v5_175b  FEWER STRUCTURES IN THE PVP ARENA (client only)
+  - Arena (World 0): 3 lone landmarks instead of 6, placed only in the outer ring (900-1300 from the centre); no downtown clusters, no twin towers, no homes around them. Scenery (trees / rocks) cut from 1 in 4 to 1 in 14.
+    The middle of the arena is open ground. Other worlds unchanged. Buildings are generated from the same seed on every client, so all players still see the same arena.
