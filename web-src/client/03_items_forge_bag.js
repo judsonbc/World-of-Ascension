@@ -145,10 +145,11 @@ $('forge').addEventListener('click',e=>{if(e.target===$('forge')){$('forge').hid
 $('worlds').addEventListener('click',e=>{if(e.target===$('worlds'))$('worlds').hidden=true});
 
 /* ---------- bag, potions and the Potion Merchant ---------- */
-const POTS={hp:{n:'Health Potion',c:'#ff8a80',d:'Restores 5% of your max HP (5 s cooldown)'},qi:{n:'Mana Potion',c:'#8fd0ff',d:'Restores 10% of your max mana'},tp:{n:'Home Scroll',c:'#d2b4ff',d:'Teleports you to your hub after a 3s channel (moving or taking damage cancels it)'}};
-const POT_SH={hp:'HP potion',qi:'MP potion',tp:'Home Scroll'};
+const POTS={hp:{n:'Health Potion',c:'#ff8a80',d:'Restores 5% of your max HP (5 s cooldown)'},qi:{n:'Mana Potion',c:'#8fd0ff',d:'Restores 10% of your max mana'},tp:{n:'Home Scroll',c:'#d2b4ff',d:'Teleports you to your hub after a 3s channel (moving or taking damage cancels it)'},ck:{n:'Fried Chicken',c:'#f0b25a',d:'Instantly restores 50% of your max HP (60 s cooldown). Made by frying a Chicken pet in the bag'}};
+const POT_SH={hp:'HP potion',qi:'MP potion',tp:'Home Scroll',ck:'Fried Chicken'};
 const TP_DROP=.03,TP_CHANNEL=3,TP_CD=10,tpPrice=()=>Math.max(50,Math.round(P.lvl*8)),priceOf=k=>k==='tp'?tpPrice():potPrice();
 const MP_POT_PCT=.1; /* v5_139 Mana Potion restores 10% of max Qi (v5_138: 5%, originally 40%) */
+const CK_PCT=.5,CK_CD=60; /* Fried Chicken: instant 50% max HP, own 60 s cooldown (separate from the HP potion's 5 s). Made from a Chicken pet (fryChicken in 03_pets.js) */
 const HP_POT_PCT=.05,POT_CD=5; /* v5_72: Health Potion heals 5% of max HP (was 35%), shared 5 s cooldown */
 const POT_MAX=9999,POT_DROP=.1,potPrice=()=>Math.max(10,Math.round(P.lvl*4));
 const NPC={x:C-165,y:C-105}; /* behind the pagoda (hub is 1.5x) */
@@ -245,10 +246,11 @@ function finishTp(){
 function usePot(k,auto){
   if(k==='tp'){useTp();return}
   if(!started||P.dead>0||pot[k]>0)return;
-  if(P.pots[k]<=0){if(!auto)say('No '+POTS[k].n+'s left. Buy some from the Potion Merchant (N in your hub).','#8d9aa2');return}
-  if(k==='hp'){if(P.hp>=maxHp())return;const h=healP(Math.round(maxHp()*HP_POT_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#ff8a80',15);spark(P.x,P.y,'#ff9a8a',10,70,.8,2.6,50)}
+  if(P.pots[k]<=0){if(!auto)say(k==='ck'?'No Fried Chicken. Fry a Chicken pet in your bag (Bag > Chicken > Fry).':'No '+POTS[k].n+'s left. Buy some from the Potion Merchant (N in your hub).','#8d9aa2');return}
+  if(k==='ck'){if(P.hp>=maxHp()){say('HP is already full.','#8d9aa2');return}const h=healP(Math.round(maxHp()*CK_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#f0b25a',17);spark(P.x,P.y,'#f0b25a',16,90,.9,2.8,60);ring(P.x,P.y,60,'#f0b25a')}
+  else if(k==='hp'){if(P.hp>=maxHp())return;const h=healP(Math.round(maxHp()*HP_POT_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#ff8a80',15);spark(P.x,P.y,'#ff9a8a',10,70,.8,2.6,50)}
   else{if(P.qi>=maxQi())return;const q=Math.round(maxQi()*MP_POT_PCT);P.qi=Math.min(maxQi(),P.qi+q);pop(P.x,P.y-30,'+'+q+' MP','#8fd0ff',14);spark(P.x,P.y,'#8fd0ff',10,70,.8,2.6,50)}
-  P.pots[k]--;pot[k]=POT_CD;SFX('potion');save();if(!$('bag').hidden)renderBag();
+  P.pots[k]--;pot[k]=k==='ck'?CK_CD:POT_CD;SFX('potion');save();if(!$('bag').hidden)renderBag();
 }
 function autoPot(){if(!P.autoPot||!started||P.dead>0)return;if(P.hp<maxHp()*(P.apHp||35)/100)usePot('hp',true);if(P.qi<maxQi()*(P.apQi||20)/100)usePot('qi',true)}
 function bagRow(label,val,col){const d=document.createElement('div');d.className='row';const b=document.createElement('b');b.textContent=label;if(col)b.style.color=col;const v=document.createElement('span');v.textContent=val;d.appendChild(b);d.appendChild(v);return d}
@@ -260,6 +262,7 @@ function flaskSvg(a,b){const id='fg'+a.slice(1);return '<svg viewBox="0 0 64 64"
 const ICONS={
   hp:()=>flaskSvg('#ff5a5a','#7a0b12'),qi:()=>flaskSvg('#4aa0ff','#12348a'),
   tp:()=>svgW('<rect x="14" y="8" width="36" height="48" rx="4" fill="#f1e4c3" stroke="#8a5a2b" stroke-width="2"/><rect x="10" y="5" width="44" height="7" rx="3" fill="#b3302c"/><rect x="10" y="52" width="44" height="7" rx="3" fill="#b3302c"/><path d="M32 20l10 8h-4v12H26V28h-4z" fill="#7a4fd0"/><circle cx="32" cy="46" r="3" fill="#7a4fd0"/>'),
+  ck:()=>svgW('<ellipse cx="26" cy="34" rx="20" ry="17" transform="rotate(-35 26 34)" fill="#c9772b" stroke="#6b3410" stroke-width="2"/><ellipse cx="22" cy="28" rx="9" ry="5" transform="rotate(-35 22 28)" fill="#f0b25a" fill-opacity=".7"/><path d="M38 40 L50 52" stroke="#f1e4c3" stroke-width="6" stroke-linecap="round"/><circle cx="48" cy="50" r="5" fill="#f1e4c3" stroke="#8a8a7a" stroke-width="1.5"/><circle cx="53" cy="55" r="5" fill="#f1e4c3" stroke="#8a8a7a" stroke-width="1.5"/>'),
   coin:()=>svgW('<g fill="#e3b559" stroke="#7a5a10" stroke-width="2"><ellipse cx="32" cy="46" rx="20" ry="8"/><rect x="12" y="38" width="40" height="8" stroke="none"/><ellipse cx="32" cy="38" rx="20" ry="8"/><rect x="12" y="30" width="40" height="8" stroke="none"/><ellipse cx="32" cy="30" rx="20" ry="8" fill="#f6d27a"/></g>'),
   ore:()=>svgW('<polygon points="32,6 44,26 38,56 24,56 18,26" fill="#4fc3d9"/><polygon points="32,6 44,26 32,30" fill="#a8f0ff"/><polygon points="32,30 44,26 38,56" fill="#2a8aa0"/><polygon points="12,34 20,30 24,56 8,56" fill="#3aa8bf"/><polygon points="52,38 58,56 42,56" fill="#2a8aa0"/>'),
   ear:c=>svgW('<circle cx="32" cy="16" r="7" fill="none" stroke="{c}" stroke-width="4"/><path d="M32 26 L41 44 L32 58 L23 44Z" fill="{c}" stroke="#fff" stroke-width="1.5"/>',c),
@@ -279,7 +282,7 @@ function bagItems(){
   const a=[];
   if(P.coins>0)a.push({id:'coins',n:'Coins',v:P.coins,t:fmtQ(P.coins),r:'leg',ic:ICONS.coin(),d:'Spend them at the Potion Merchant.'});
   if(P.ore>0)a.push({id:'ore',n:'Darksteel Ore',v:P.ore,t:fmtQ(P.ore),r:'leg',ic:ICONS.ore(),d:'Temper your gear at the Lotus Forge (O in a hub).'});
-  for(const k of ['hp','qi','tp'])if(P.pots[k]>0)a.push({id:k,n:POTS[k].n,v:P.pots[k],t:fmtQ(P.pots[k]),r:k==='hp'?'epic':(k==='tp'?'leg':''),ic:ICONS[k](),d:POTS[k].d+'.',pot:k});
+  for(const k of ['hp','ck','qi','tp'])if(P.pots[k]>0)a.push({id:k,n:POTS[k].n,v:P.pots[k],t:fmtQ(P.pots[k]),r:k==='hp'||k==='ck'?'epic':(k==='tp'?'leg':''),ic:ICONS[k](),d:POTS[k].d+'.',pot:k});
   if(P.wlv>0&&P.gear.wpn.g===0)a.push({id:'blade',n:'Primary Weapon (Blade)',v:P.wlv,t:'+'+P.wlv,r:'epic',eq:1,ic:ICONS.blade('#e3b559'),d:'Your starting Blade, forge level +'+P.wlv+'. A boss-dropped Primary Weapon can replace it. Temper it at the Lotus Forge.'});
   if(P.alv>0&&P.gear.robe.g===0)a.push({id:'robe',n:'Robe',v:P.alv,t:'+'+P.alv,r:'epic',eq:1,ic:ICONS.robe(skinOf(SKIN).robe),d:'Your starting Robe, forge level +'+P.alv+'. A boss-dropped Robe can replace it. Temper it at the Lotus Forge.'});
   for(const q of GEAR){const o=P.gear[q.k];if(o.g>0)a.push({id:'g_'+q.k,n:gearName(q,o),v:o.r*1e6+Math.round(gearScore(o)*100)+o.lv,t:'+'+o.lv,r:RAR[o.r].cls||'rare',eq:1,ic:ICONS[q.k](RAR[o.r].c),d:gearDesc(q,o)})}

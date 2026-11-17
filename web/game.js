@@ -232,7 +232,7 @@ const AUTOSK=new Array(NSLOT).fill(true);
 /* slot hotkeys: 12 round slots, then the two large ones */
 const SLOTKEYS=['1','2','3','4','5','6','7','8','9','0','-','=','r','t'];
 /* potion cooldowns (5s) */
-const pot={hp:0,qi:0,tp:0};
+const pot={hp:0,qi:0,tp:0,ck:0};
 
 
 function rngSeed(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -308,7 +308,7 @@ const P={x:C,y:C+110,r:14,lvl:1,exp:0,hp:100,qi:60,coins:0,gold:0,ore:0,wlv:0,al
   face:0,anim:0,mvAmt:0,dir:1,atkCd:0,bf:0,bfT:0,sh:0,shT:0,inv:0,hurt:0,dead:0,swing:0,target:null,mv:null,task:null,mine:0,qiT:0,pvpT:0,pvpKills:0};
 let PVPLVL=0,PVPMODE=false; /* v5_158 PvP mode 0 Peaceful / 1 Lawful / 2 Hostile / 3 Carnal (saved, sent to the server), and the 'ATK Players Only' toggle */
 P.gear={};for(const g of GEAR){P.gear[g.k]={g:0,lv:0,r:0,st:{}};if(g.core)Object.defineProperty(P.gear[g.k],'lv',{enumerable:true,get:()=>P[g.core],set:v=>{P[g.core]=v}})}
-P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.recent=[];
+P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0,ck:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.recent=[];
 /* the core slots (weapon / robe) already add their ATK / DEF / HP forge bonus in atkVal / defVal / maxHp; every other stat gets it here */
 const CORE_FORGED={atk:1,def:1,hp:1};
 /* v5_148 PERCENT FORGE (replaces the v5_143 exponential flat forge). The forge no longer adds a flat amount of ATK / HP / DEF: that was huge at level 1 (+100 gave x200 power)
@@ -787,7 +787,7 @@ function load(){
     const parseGear=(arr,cap)=>{const out=[];if(Array.isArray(arr))for(const o of arr.slice(0,cap)){const q=o&&GEAR.find(z=>z.k===o.slot);if(!q)continue;const it={slot:q.k,g:clamp(o.g|0,1,NW),r:clamp(o.r|0,0,RAR.length-1),st:{}};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE||k in SPECIAL){const v=+o.st[k];if(v>=0&&v<1e6)it.st[k]=r2(v*gm(k))}addQrg(it,q);it.col=RAR[it.r].c;it.u=bagUid++;out.push(it)}return out};
     P.bag=parseGear(s.bag,200);P.wh=parseGear(s.wh,WH_CAP);P.eggs=clamp(s.eg|0,0,99999);P.pets=parsePets(s.pt);P.pet=petLoad(s.sp);P.pf=null;
     PVPLVL=clamp(s.pm|0,0,3);
-    if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;
+    if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999),ck:clamp(s.pots.ck|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;
     let wi=s.wi|0;if(s.wv!==2&&wi<=10)wi++; /* older saves: world numbers started at 0 for Ashen Reach */
     wi=clamp(wi,0,NW-1);if(wi===ARENA)wi=1;if(wi!==curWorld)buildWorld(wi);
     P.cls=clamp(s.cl|0,0,CLASSES.length-1);loadLooks(s);CLS_STORE.fill(null);
@@ -889,7 +889,7 @@ const BAG_CAP=50,WH_CAP=100;let bagUid=1; /* bag holds 50 slots; the hub Warehou
 const bagArr=()=>P.bag||(P.bag=[]);
 const whArr=()=>P.wh||(P.wh=[]);
 const oreOf=it=>(2+it.g*2)*(1+it.r);
-function bagCount(){let n=(P.coins>0)+(P.ore>0)+(P.wlv>0&&P.gear.wpn.g===0)+(P.alv>0&&P.gear.robe.g===0)+(P.eggs>0)+petStacks()+bagArr().length;for(const k of ['hp','qi','tp'])if(P.pots[k]>0)n++;for(const q of GEAR)if(P.gear[q.k].g>0)n++;return n}
+function bagCount(){let n=(P.coins>0)+(P.ore>0)+(P.wlv>0&&P.gear.wpn.g===0)+(P.alv>0&&P.gear.robe.g===0)+(P.eggs>0)+petStacks()+bagArr().length;for(const k of ['hp','ck','qi','tp'])if(P.pots[k]>0)n++;for(const q of GEAR)if(P.gear[q.k].g>0)n++;return n}
 /* the bag used to hold 100: anything over the cap moves to the warehouse (up to its 100 slots) */
 function fixBagOverflow(){const A=bagArr(),W=whArr();let n=0;while(bagCount()>BAG_CAP&&A.length&&W.length<WH_CAP){W.push(A.pop());n++}if(n){bagLog(n+' spare piece'+(n>1?'s':'')+' moved to the Warehouse (bag is now '+BAG_CAP+' slots)','#8d9aa2');save()}}
 function takeGear(it){
@@ -1757,10 +1757,11 @@ $('forge').addEventListener('click',e=>{if(e.target===$('forge')){$('forge').hid
 $('worlds').addEventListener('click',e=>{if(e.target===$('worlds'))$('worlds').hidden=true});
 
 /* ---------- bag, potions and the Potion Merchant ---------- */
-const POTS={hp:{n:'Health Potion',c:'#ff8a80',d:'Restores 5% of your max HP (5 s cooldown)'},qi:{n:'Mana Potion',c:'#8fd0ff',d:'Restores 10% of your max mana'},tp:{n:'Home Scroll',c:'#d2b4ff',d:'Teleports you to your hub after a 3s channel (moving or taking damage cancels it)'}};
-const POT_SH={hp:'HP potion',qi:'MP potion',tp:'Home Scroll'};
+const POTS={hp:{n:'Health Potion',c:'#ff8a80',d:'Restores 5% of your max HP (5 s cooldown)'},qi:{n:'Mana Potion',c:'#8fd0ff',d:'Restores 10% of your max mana'},tp:{n:'Home Scroll',c:'#d2b4ff',d:'Teleports you to your hub after a 3s channel (moving or taking damage cancels it)'},ck:{n:'Fried Chicken',c:'#f0b25a',d:'Instantly restores 50% of your max HP (60 s cooldown). Made by frying a Chicken pet in the bag'}};
+const POT_SH={hp:'HP potion',qi:'MP potion',tp:'Home Scroll',ck:'Fried Chicken'};
 const TP_DROP=.03,TP_CHANNEL=3,TP_CD=10,tpPrice=()=>Math.max(50,Math.round(P.lvl*8)),priceOf=k=>k==='tp'?tpPrice():potPrice();
 const MP_POT_PCT=.1; /* v5_139 Mana Potion restores 10% of max Qi (v5_138: 5%, originally 40%) */
+const CK_PCT=.5,CK_CD=60; /* Fried Chicken: instant 50% max HP, own 60 s cooldown (separate from the HP potion's 5 s). Made from a Chicken pet (fryChicken in 03_pets.js) */
 const HP_POT_PCT=.05,POT_CD=5; /* v5_72: Health Potion heals 5% of max HP (was 35%), shared 5 s cooldown */
 const POT_MAX=9999,POT_DROP=.1,potPrice=()=>Math.max(10,Math.round(P.lvl*4));
 const NPC={x:C-165,y:C-105}; /* behind the pagoda (hub is 1.5x) */
@@ -1857,10 +1858,11 @@ function finishTp(){
 function usePot(k,auto){
   if(k==='tp'){useTp();return}
   if(!started||P.dead>0||pot[k]>0)return;
-  if(P.pots[k]<=0){if(!auto)say('No '+POTS[k].n+'s left. Buy some from the Potion Merchant (N in your hub).','#8d9aa2');return}
-  if(k==='hp'){if(P.hp>=maxHp())return;const h=healP(Math.round(maxHp()*HP_POT_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#ff8a80',15);spark(P.x,P.y,'#ff9a8a',10,70,.8,2.6,50)}
+  if(P.pots[k]<=0){if(!auto)say(k==='ck'?'No Fried Chicken. Fry a Chicken pet in your bag (Bag > Chicken > Fry).':'No '+POTS[k].n+'s left. Buy some from the Potion Merchant (N in your hub).','#8d9aa2');return}
+  if(k==='ck'){if(P.hp>=maxHp()){say('HP is already full.','#8d9aa2');return}const h=healP(Math.round(maxHp()*CK_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#f0b25a',17);spark(P.x,P.y,'#f0b25a',16,90,.9,2.8,60);ring(P.x,P.y,60,'#f0b25a')}
+  else if(k==='hp'){if(P.hp>=maxHp())return;const h=healP(Math.round(maxHp()*HP_POT_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#ff8a80',15);spark(P.x,P.y,'#ff9a8a',10,70,.8,2.6,50)}
   else{if(P.qi>=maxQi())return;const q=Math.round(maxQi()*MP_POT_PCT);P.qi=Math.min(maxQi(),P.qi+q);pop(P.x,P.y-30,'+'+q+' MP','#8fd0ff',14);spark(P.x,P.y,'#8fd0ff',10,70,.8,2.6,50)}
-  P.pots[k]--;pot[k]=POT_CD;SFX('potion');save();if(!$('bag').hidden)renderBag();
+  P.pots[k]--;pot[k]=k==='ck'?CK_CD:POT_CD;SFX('potion');save();if(!$('bag').hidden)renderBag();
 }
 function autoPot(){if(!P.autoPot||!started||P.dead>0)return;if(P.hp<maxHp()*(P.apHp||35)/100)usePot('hp',true);if(P.qi<maxQi()*(P.apQi||20)/100)usePot('qi',true)}
 function bagRow(label,val,col){const d=document.createElement('div');d.className='row';const b=document.createElement('b');b.textContent=label;if(col)b.style.color=col;const v=document.createElement('span');v.textContent=val;d.appendChild(b);d.appendChild(v);return d}
@@ -1872,6 +1874,7 @@ function flaskSvg(a,b){const id='fg'+a.slice(1);return '<svg viewBox="0 0 64 64"
 const ICONS={
   hp:()=>flaskSvg('#ff5a5a','#7a0b12'),qi:()=>flaskSvg('#4aa0ff','#12348a'),
   tp:()=>svgW('<rect x="14" y="8" width="36" height="48" rx="4" fill="#f1e4c3" stroke="#8a5a2b" stroke-width="2"/><rect x="10" y="5" width="44" height="7" rx="3" fill="#b3302c"/><rect x="10" y="52" width="44" height="7" rx="3" fill="#b3302c"/><path d="M32 20l10 8h-4v12H26V28h-4z" fill="#7a4fd0"/><circle cx="32" cy="46" r="3" fill="#7a4fd0"/>'),
+  ck:()=>svgW('<ellipse cx="26" cy="34" rx="20" ry="17" transform="rotate(-35 26 34)" fill="#c9772b" stroke="#6b3410" stroke-width="2"/><ellipse cx="22" cy="28" rx="9" ry="5" transform="rotate(-35 22 28)" fill="#f0b25a" fill-opacity=".7"/><path d="M38 40 L50 52" stroke="#f1e4c3" stroke-width="6" stroke-linecap="round"/><circle cx="48" cy="50" r="5" fill="#f1e4c3" stroke="#8a8a7a" stroke-width="1.5"/><circle cx="53" cy="55" r="5" fill="#f1e4c3" stroke="#8a8a7a" stroke-width="1.5"/>'),
   coin:()=>svgW('<g fill="#e3b559" stroke="#7a5a10" stroke-width="2"><ellipse cx="32" cy="46" rx="20" ry="8"/><rect x="12" y="38" width="40" height="8" stroke="none"/><ellipse cx="32" cy="38" rx="20" ry="8"/><rect x="12" y="30" width="40" height="8" stroke="none"/><ellipse cx="32" cy="30" rx="20" ry="8" fill="#f6d27a"/></g>'),
   ore:()=>svgW('<polygon points="32,6 44,26 38,56 24,56 18,26" fill="#4fc3d9"/><polygon points="32,6 44,26 32,30" fill="#a8f0ff"/><polygon points="32,30 44,26 38,56" fill="#2a8aa0"/><polygon points="12,34 20,30 24,56 8,56" fill="#3aa8bf"/><polygon points="52,38 58,56 42,56" fill="#2a8aa0"/>'),
   ear:c=>svgW('<circle cx="32" cy="16" r="7" fill="none" stroke="{c}" stroke-width="4"/><path d="M32 26 L41 44 L32 58 L23 44Z" fill="{c}" stroke="#fff" stroke-width="1.5"/>',c),
@@ -1891,7 +1894,7 @@ function bagItems(){
   const a=[];
   if(P.coins>0)a.push({id:'coins',n:'Coins',v:P.coins,t:fmtQ(P.coins),r:'leg',ic:ICONS.coin(),d:'Spend them at the Potion Merchant.'});
   if(P.ore>0)a.push({id:'ore',n:'Darksteel Ore',v:P.ore,t:fmtQ(P.ore),r:'leg',ic:ICONS.ore(),d:'Temper your gear at the Lotus Forge (O in a hub).'});
-  for(const k of ['hp','qi','tp'])if(P.pots[k]>0)a.push({id:k,n:POTS[k].n,v:P.pots[k],t:fmtQ(P.pots[k]),r:k==='hp'?'epic':(k==='tp'?'leg':''),ic:ICONS[k](),d:POTS[k].d+'.',pot:k});
+  for(const k of ['hp','ck','qi','tp'])if(P.pots[k]>0)a.push({id:k,n:POTS[k].n,v:P.pots[k],t:fmtQ(P.pots[k]),r:k==='hp'||k==='ck'?'epic':(k==='tp'?'leg':''),ic:ICONS[k](),d:POTS[k].d+'.',pot:k});
   if(P.wlv>0&&P.gear.wpn.g===0)a.push({id:'blade',n:'Primary Weapon (Blade)',v:P.wlv,t:'+'+P.wlv,r:'epic',eq:1,ic:ICONS.blade('#e3b559'),d:'Your starting Blade, forge level +'+P.wlv+'. A boss-dropped Primary Weapon can replace it. Temper it at the Lotus Forge.'});
   if(P.alv>0&&P.gear.robe.g===0)a.push({id:'robe',n:'Robe',v:P.alv,t:'+'+P.alv,r:'epic',eq:1,ic:ICONS.robe(skinOf(SKIN).robe),d:'Your starting Robe, forge level +'+P.alv+'. A boss-dropped Robe can replace it. Temper it at the Lotus Forge.'});
   for(const q of GEAR){const o=P.gear[q.k];if(o.g>0)a.push({id:'g_'+q.k,n:gearName(q,o),v:o.r*1e6+Math.round(gearScore(o)*100)+o.lv,t:'+'+o.lv,r:RAR[o.r].cls||'rare',eq:1,ic:ICONS[q.k](RAR[o.r].c),d:gearDesc(q,o)})}
@@ -2267,14 +2270,14 @@ function petCanCombine(p){return p.s>0&&p.c<PET_CLS.length-1}
 function petCombineReady(){
   if(!petComb||!petComb.b)return false;
   const A=petParse(petComb.a),B=petParse(petComb.b),o=petsObj();
-  if(A.c!==B.c||!petCanCombine(A)||!petCanCombine(B))return false;
+  if(A.s!==B.s||A.c!==B.c||!petCanCombine(A)||!petCanCombine(B))return false;
   return petComb.a===petComb.b?(o[petComb.a]|0)>=2:(o[petComb.a]|0)>=1&&(o[petComb.b]|0)>=1;
 }
 function doCombine(){
   if(!petCombineReady())return;
   const A=petParse(petComb.a),B=petParse(petComb.b),c=A.c,ch=PET_UP[c];
   if(rnd()*100<ch){
-    const s=rnd()<.5?A.s:B.s;
+    const s=A.s;
     petTake(A.s,c,1);petTake(B.s,c,1);petAdd(s,c+1,1);
     const msg='Combine success! '+PET_SP[A.s].n+' + '+PET_SP[B.s].n+' became a '+PET_SP[s].n+' [Class '+PET_CLS[c+1]+']!';
     say(msg,PET_CLS_COL[c+1],9000);pop(P.x,P.y-60,'\u2605 Class '+PET_CLS[c+1]+' '+PET_SP[s].n,PET_CLS_COL[c+1],18);spark(P.x,P.y-20,PET_CLS_COL[c+1],34,220,.9,3.2);
@@ -2297,7 +2300,7 @@ function petBagItems(a){
   const o=petsObj(),ks=Object.keys(o).filter(k=>o[k]>0).sort((x,y)=>{const a=petParse(x),b=petParse(y);return b.c-a.c||a.s-b.s});
   for(const k of ks){const p=petParse(k),n=o[k];
     a.push({id:'pet_'+k,n:p.s===0?'Chicken':PET_SP[p.s].n+' (Class '+PET_CLS[p.c]+')',v:n,t:p.s===0?'\u00d7'+fmtQ(n):PET_CLS[p.c]+(n>1?' \u00d7'+n:''),r:p.s===0?'cm':PET_CLS_SLOT[p.c],ic:petIcon(p.s,p.c),
-      d:p.s===0?'A common pet. It cannot be combined.':'Class '+PET_CLS[p.c]+' pet.'+(petCanCombine(p)?' Combine two Class '+PET_CLS[p.c]+' pets for a '+PET_UP[p.c]+'% chance of a Class '+PET_CLS[p.c+1]+' pet; on failure 1 of the 2 is destroyed.':' The highest class.'),pet:{key:k,s:p.s,c:p.c,n:n}})}
+      d:p.s===0?'A common pet. It cannot be combined.':'Class '+PET_CLS[p.c]+' pet.'+(petCanCombine(p)?' Combine two Class '+PET_CLS[p.c]+' '+PET_SP[p.s].n+'s (same pet only) for a '+PET_UP[p.c]+'% chance of a Class '+PET_CLS[p.c+1]+' pet; on failure 1 of the 2 is destroyed.':' The highest class.'),pet:{key:k,s:p.s,c:p.c,n:n}})}
   return a;
 }
 /* returns true when the tap was a combine-mode tap (and was handled) */
@@ -2305,7 +2308,7 @@ function petCombTap(it){
   if(!petComb)return false;
   if(!it.pet){petComb=null;return false}
   const A=petParse(petComb.a);
-  if(it.pet.c!==A.c||!petCanCombine(it.pet)){say('Pick a special pet of the same class (Class '+PET_CLS[A.c]+').','#8d9aa2',3000);return true}
+  if(it.pet.s!==A.s||it.pet.c!==A.c||!petCanCombine(it.pet)){say('Pick another '+PET_SP[A.s].n+' of the same class (Class '+PET_CLS[A.c]+').','#8d9aa2',3000);return true}
   if(it.pet.key===petComb.a&&!petComb.b&&it.pet.n<2){return true}
   if(petComb.b===it.pet.key){petComb.b=null;renderBag();return true}
   if(it.pet.key===petComb.a&&!petComb.b&&it.pet.n>=2){petComb.b=it.pet.key;renderBag();return true}
@@ -2316,12 +2319,21 @@ function petCombPanel(info){
   const A=petParse(petComb.a),d=document.createElement('div'),sm=document.createElement('small'),nm=document.createElement('b');
   nm.textContent='Combine pets \u2014 Class '+PET_CLS[A.c];nm.style.color=PET_CLS_COL[A.c];d.appendChild(nm);
   const ch=PET_UP[A.c],ready=petCombineReady();
-  sm.textContent=ready?(PET_SP[A.s].n+' + '+PET_SP[petParse(petComb.b).s].n+': '+ch+'% chance of a Class '+PET_CLS[A.c+1]+' pet (species of one of the two). On failure 1 of the 2 is destroyed. Cannot be undone.')
-    :(PET_SP[A.s].n+' selected. Tap a second Class '+PET_CLS[A.c]+' pet'+((petsObj()[petComb.a]|0)>=2?' (or the same stack again)':'')+'. '+ch+'% chance of Class '+PET_CLS[A.c+1]+'.');
+  sm.textContent=ready?(PET_SP[A.s].n+' + '+PET_SP[A.s].n+': '+ch+'% chance of a Class '+PET_CLS[A.c+1]+' '+PET_SP[A.s].n+'. On failure 1 of the 2 is destroyed. Cannot be undone.')
+    :(PET_SP[A.s].n+' selected. Tap a second Class '+PET_CLS[A.c]+' '+PET_SP[A.s].n+((petsObj()[petComb.a]|0)>=2?' (or the same stack again)':'')+'. '+ch+'% chance of Class '+PET_CLS[A.c+1]+'.');
   d.appendChild(sm);info.appendChild(d);
   const w=document.createElement('div');w.className='bagact';
   const mk=(t,c,f,dis)=>{const b=document.createElement('button');b.type='button';b.className='btn'+(c?' '+c:'');b.textContent=t;b.disabled=!!dis;b.addEventListener('click',f);w.appendChild(b)};
   mk('Combine','pri',doCombine,!ready);mk('Cancel','',()=>{petComb=null;renderBag()});info.appendChild(w);
+}
+/* Fry n Chicken pets (species 0) into n Fried Chicken potions (50% HP, 60 s cooldown, no summon needed) */
+function fryChicken(n){
+  const have=petsObj()['0:0']|0;n=Math.min(n|0,have,POT_MAX-P.pots.ck);
+  if(n<=0){say(have>0?'Your bag cannot hold more Fried Chicken.':'No Chicken to fry.','#8d9aa2');return}
+  petTake(0,0,n);P.pots.ck+=n;petValidate();
+  if(!P.pet)netInfo(true);
+  bagLog('Fried '+n+' Chicken \u2192 '+n+' Fried Chicken','#f0b25a');say('Fried '+n+' Chicken. Use Fried Chicken (Y) to heal 50% HP.','#f0b25a',4000);
+  bagSel=null;save();renderBag();
 }
 function petBagActions(sel,info){
   const w=document.createElement('div');w.className='bagact';
@@ -2330,12 +2342,13 @@ function petBagActions(sel,info){
   else if(sel.pet){
     const on=P.pet===sel.pet.key;
     mk(on?'Dismiss':'Summon',on?'':'pri',()=>on?petDismiss():petSummon(sel.pet.key));
+    if(sel.pet.s===0){mk('Fry (\u2192 Fried Chicken)','pri',()=>fryChicken(1));if(sel.pet.n>1)mk('Fry all ('+sel.pet.n+')','',()=>fryChicken(sel.pet.n))}
     if(petCanCombine(sel.pet))mk('Combine','',()=>{petComb={a:sel.pet.key,b:null};renderBag()},sel.pet.n<2&&petPartners(sel.pet)<1);
   }
   if(w.children.length)info.appendChild(w);
 }
 /* how many OTHER special pets of the same class exist (so Combine is only enabled when a partner exists) */
-function petPartners(p){let n=0;const o=petsObj();for(const k in o){if(k===p.key)continue;const q=petParse(k);if(q.s>0&&q.c===p.c)n+=o[k]}return n}
+function petPartners(p){let n=0;const o=petsObj();for(const k in o){if(k===p.key)continue;const q=petParse(k);if(q.s===p.s&&q.c===p.c)n+=o[k]}return n}
 function petCombValidate(){if(!petComb)return;const o=petsObj();if(!(o[petComb.a]>0))petComb=null;else if(petComb.b&&!(o[petComb.b]>0))petComb.b=null}
 
 /* ---------- summon: ONE pet follows beside you (any pet, common or special). Summoning another replaces it. Summoning does not use the pet up. ---------- */
@@ -2477,7 +2490,7 @@ window.addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();
   keys[k]=true;
   if(e.repeat)return;
-  if(SLOTKEYS.includes(k))manualSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='c')cycleSkin();
+  if(SLOTKEYS.includes(k))manualSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='y')usePot('ck');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='c')cycleSkin();
   else if(k===' ')doJump(); /* v5_169 Space = jump (attack nearest is F) */
   else if(k==='e')startMine();
   else if(k==='f'){const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null;P.fatk=true}} /* F = attack nearest */
@@ -3207,7 +3220,7 @@ function updatePlayer(dt){
   P.atkCd-=dt;P.hurt-=dt;P.swing-=dt;
   P.pvpT=(MP&&PVPLVL>0&&P.dead<=0&&!inTown())?1:0; /* v5_158 legacy flag, now simply 'my mode lets me attack players' (the old 30 s flag and the always-on Arena are gone) */
   const ox0=P.x,oy0=P.y;
-  pot.hp=Math.max(0,pot.hp-dt);pot.qi=Math.max(0,pot.qi-dt);pot.tp=Math.max(0,pot.tp-dt);
+  pot.hp=Math.max(0,pot.hp-dt);pot.qi=Math.max(0,pot.qi-dt);pot.tp=Math.max(0,pot.tp-dt);pot.ck=Math.max(0,pot.ck-dt);
   if(P.tp>0){if(dist(P.x,P.y,P.tpx,P.tpy)>30)cancelTp('Teleport cancelled: you moved.');else{P.tp-=dt;tpFx(dt);if(P.tp<=0)finishTp()}}
   autoPot();for(let i=0;i<SCD.length;i++)if(SCD[i]>0)SCD[i]-=dt;P.bfT-=dt;P.vlT-=dt;P.drT-=dt;P.ceT-=dt;if(P.lsT>0)P.lsT-=dt;if(P.rfT>0)P.rfT-=dt;if(P.linkT>0)P.linkT-=dt;if(P.markT>0)P.markT-=dt;if(P.absT>0)P.absT-=dt;if(P.gsT>0)P.gsT-=dt;if(P.galeLock>0)P.galeLock-=dt;P.inv-=dt;if(P.shT>0){P.shT-=dt;if(P.shT<=0)P.sh=0}
   P.qi=Math.min(maxQi(),P.qi+dt*(3+P.lvl*.1+maxQi()*qrgVal()/100));
@@ -4407,7 +4420,7 @@ function hud(){
   if(bk!==buffKey){buffKey=bk;const bx=$('buffs');bx.innerHTML='';for(const x of bs){const e=document.createElement('div');e.className='bf';e.dataset.n=x[3];e.style.color=x[2];e.textContent=x[0];const em=document.createElement('em');em.textContent=x[1];e.appendChild(em);bx.appendChild(e)}}
   bfTipRefresh(bs);
   /* potions */
-  st($('potN'),kfmt(P.pots.hp));st($('potQN'),kfmt(P.pots.qi));
+  st($('potN'),kfmt(P.pots.hp));st($('ckN'),kfmt(P.pots.ck));$('ckCd').hidden=pot.ck<=0;st($('ckCd'),fmtT(pot.ck)+'s');$('bCk').style.opacity=P.pots.ck>0?1:.5;st($('potQN'),kfmt(P.pots.qi));
   $('potCd').hidden=pot.hp<=0;st($('potCd'),fmtT(pot.hp)+'s');$('potQCd').hidden=pot.qi<=0;st($('potQCd'),fmtT(pot.qi)+'s');
   {const tb=$('tpBar');tb.hidden=!(P.tp>0);if(P.tp>0)sw($('tpFill'),Math.round((1-P.tp/TP_CHANNEL)*100)+'%')}
   st($('tpN'),kfmt(P.pots.tp));$('tpCd').hidden=!(pot.tp>0||P.tp>0);st($('tpCd'),P.tp>0?fmtT(P.tp)+'s':fmtT(pot.tp)+'s');$('bTp').style.opacity=P.pots.tp>0?1:.5;
@@ -4495,6 +4508,7 @@ $('bLogoutGame').addEventListener('click',()=>{if(!confirm('Log out? Your progre
 $('bOre').addEventListener('click',()=>{if(started)openForge()});
 $('bPot').addEventListener('pointerdown',e=>{e.preventDefault();usePot('hp')});
 $('bPotQ').addEventListener('pointerdown',e=>{e.preventDefault();usePot('qi')});
+$('bCk').addEventListener('pointerdown',e=>{e.preventDefault();usePot('ck')});
 $('bTp').addEventListener('pointerdown',e=>{e.preventDefault();useTp()});
 /* the HUD is laid out on a 1000x534 canvas and scaled to fit the window */
 function fitHud(){if(!$('hud'))return;$('hud').style.setProperty('--u',Math.max(.55,Math.min(innerWidth/1000,innerHeight/534,2.6))+'px')}
@@ -5128,7 +5142,7 @@ const CMDS={
     say('Added '+(n>1?n+' pets: ':'a pet: ')+given.map(k=>{const p=petParse(k);return petName(p.s,p.c)}).join(', ')+'.','#ffe14a',6000)},
   egg(a){const n=clamp(CMDNUM(a[0],1)|0,1,9999);P.eggs=clamp((P.eggs|0)+n,0,99999);save();if(!$('bag').hidden)renderBag();say('Pet Eggs: '+P.eggs.toLocaleString(),'#f4ecd8')},
   petreset(){P.pets={};P.eggs=0;P.pet=null;P.pf=null;petComb=null;if(typeof bagSel==='string'&&(bagSel==='egg'||bagSel.indexOf('pet_')===0))bagSel=null;save();if(!$('bag').hidden)renderBag();say('All pets and eggs removed.','#e3b559')},
-  pots(a){const n=CMDNUM(a[0],10)|0;for(const k of ['hp','qi','tp'])P.pots[k]=clamp(P.pots[k]+n,0,POT_MAX);save();say('Potions and scrolls '+(n>=0?'+':'')+n+' each.','#e3b559')},
+  pots(a){const n=CMDNUM(a[0],10)|0;for(const k of ['hp','ck','qi','tp'])P.pots[k]=clamp(P.pots[k]+n,0,POT_MAX);save();say('Potions and scrolls '+(n>=0?'+':'')+n+' each.','#e3b559')},
   minimap(a){const w=String(a[0]||'').toLowerCase();MINI_MAX=w==='max';if(!MINI_MAX)MINI_R=w==='min'?500:clamp(CMDNUM(a[0],2000),500,3080*MAP_K);say('Minimap range: '+(MINI_MAX?RIM+' units (maximum radius = whole map)':MINI_R+' units.'),'#e3b559')},
   boss(a){bossNear(clamp(CMDNUM(a[0],1)|0,1,BOSS_MAX),CMDNUM(a[1],0)|0)},
   bossclear(){let n=0;for(const m of mons)if(m.boss&&!m.dead){m.dead=true;m.dieT=0;m.respawn=1e9;n++}say('Removed '+n+' boss(es).','#e3b559')},

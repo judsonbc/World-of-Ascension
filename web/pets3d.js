@@ -8,6 +8,7 @@ window.PET3D=(function(){
 'use strict';
 let T=null,LITE=false,cur=null;
 const GC={},TC={},PI=Math.PI;
+const FST=[[0,.16,.09,.06],[.3,.42,.22,.09],[.62,.95,.48,.1],[1,1,.86,.32]],TST=[[0,.85,.3,.06],[.55,1,.62,.12],[1,1,.9,.4]];   /* phoenix feather colour ramps (r,g,b 0..1 from root to tip) */
 const CLSC=['#c4cdd2','#5aa9ff','#c07bff','#ff6a4a','#ffb02e','#4de3b0','#ff7ae0'];
 function init(THREE,lite){T=THREE;LITE=!!lite}
 
@@ -25,6 +26,9 @@ function geo(k){
     case 'tor':g=new T.TorusGeometry(.5,.07,8,LITE?22:44);break;
     case 'ring':g=new T.RingGeometry(.93,1,LITE?36:72).rotateX(-PI/2);break;
     case 'disc':g=new T.CircleGeometry(1,LITE?24:48).rotateX(-PI/2);break;
+    case 'fcone':case 'tcone':{g=new T.ConeGeometry(.5,1,cs,6);const p=g.attributes.position,col=new Float32Array(p.count*3),st=k==='fcone'?FST:TST;   /* v5_203b vertex-coloured feather cone: root -> tip ramp */
+      for(let i=0;i<p.count;i++){const u=Math.min(1,Math.max(0,p.getY(i)+.5));let a=0;while(a<st.length-2&&u>st[a+1][0])a++;const s0=st[a],s1=st[a+1],f=(u-s0[0])/(s1[0]-s0[0]);for(let c=0;c<3;c++)col[i*3+c]=s0[1+c]+(s1[1+c]-s0[1+c])*f}
+      g.setAttribute('color',new T.BufferAttribute(col,3));break}
     case 'box':g=new T.BoxGeometry(1,1,1);break;
     case 'oct':g=new T.OctahedronGeometry(.5);break;
     case 'wingFairy':{const s=new T.Shape();s.moveTo(0,0);s.bezierCurveTo(3,9,14,19,23,14);s.bezierCurveTo(26,8,15,1,0,0);g=new T.ShapeGeometry(s,14);break}
@@ -33,6 +37,20 @@ function geo(k){
     default:throw new Error('PET3D: unknown geometry '+k);
   }
   return GC[k]=g;
+}
+/* v5_203d vertex-coloured body parts: the colour is a function of the position on the BODY (bronze at the head / chest -> the orange of the tail root at the rump), so the body and the tail
+   read as one bird instead of a brown ball with a gold tail stuck on. Geometry is cached per key; p / s / r = the mesh's position / scale / rotation, off = the parent group's offset in body space. */
+function bodyCol(x,y,z,gain){
+  const sm=(a,b,v)=>{const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t)};
+  const r=sm(5,-12,z),k=(1-.2*sm(15,28,y)*(1-r))*(gain||1),c0=[.66,.4,.19],c1=[.92,.4,.07];   /* c1 = the root colour of the tail plumes (TST[0]) */
+  return[(c0[0]+(c1[0]-c0[0])*r)*k,(c0[1]+(c1[1]-c0[1])*r)*k,(c0[2]+(c1[2]-c0[2])*r)*k];
+}
+function bodyGeo(key,p,s,r,off,gain,mk){
+  if(GC[key])return GC[key];
+  const g=mk?mk():new T.SphereGeometry(.5,LITE?14:28,LITE?10:20),pos=g.attributes.position,col=new Float32Array(pos.count*3);
+  const m=new T.Matrix4().compose(new T.Vector3(p[0]+off[0],p[1]+off[1],p[2]+off[2]),new T.Quaternion().setFromEuler(new T.Euler(r[0],r[1],r[2])),new T.Vector3(s[0],s[1],s[2])),v=new T.Vector3();
+  for(let i=0;i<pos.count;i++){v.fromBufferAttribute(pos,i).applyMatrix4(m);const c=bodyCol(v.x,v.y,v.z,gain);col[i*3]=c[0];col[i*3+1]=c[1];col[i*3+2]=c[2]}
+  g.setAttribute('color',new T.BufferAttribute(col,3));return GC[key]=g;
 }
 function A(par,g,m,p,s,r){
   const q=new T.Mesh(typeof g==='string'?geo(g):g,m);
@@ -158,11 +176,12 @@ function texSoft(){return tex('soft',(g,W)=>{
 function fsp(color,op,k){const m=new T.SpriteMaterial({map:k==='soft'?texSoft():texFlame(),color:color,transparent:true,opacity:op,blending:T.AdditiveBlending,depthWrite:false});if(cur)cur.push(m);return m}
 /* a sprite parked in a group; flames hang from their bottom edge (anchor .5,.1) so they rise from what they burn on */
 function SP(par,mat,p,sx,sy,flame){const q=new T.Sprite(mat);q.position.set(p[0],p[1],p[2]);q.scale.set(sx,sy,1);if(flame)q.center.set(.5,.1);par.add(q);return q}
-function texPhoenix(){return tex('phoenix',(g,W)=>{
-  const gr=g.createLinearGradient(0,0,0,W);gr.addColorStop(0,'#a8160a');gr.addColorStop(.45,'#ee4a14');gr.addColorStop(.8,'#ff9a26');gr.addColorStop(1,'#ffd25a');
+function texPhoenix(){return tex('phoenix2',(g,W)=>{   /* v5_203d light neutral plumage: the colour comes from the vertex colours (bodyCol), the texture only adds feather scallops */
+  const gr=g.createLinearGradient(0,0,0,W);gr.addColorStop(0,'#d9c6b0');gr.addColorStop(.5,'#f2e4d0');gr.addColorStop(1,'#ffffff');
   g.fillStyle=gr;g.fillRect(0,0,W,W);
   for(let row=0;row<18;row++)for(let i=0;i<14;i++){const x=i*W/14+(row%2?W/28:0),y=row*W/18+6;
-    g.strokeStyle='rgba(255,230,120,.30)';g.lineWidth=1.6;g.beginPath();g.arc(x,y,W/30,.1*PI,.9*PI);g.stroke()}
+    g.strokeStyle='rgba(120,55,0,.22)';g.lineWidth=1.6;g.beginPath();g.arc(x,y,W/30,.1*PI,.9*PI);g.stroke();
+    g.strokeStyle='rgba(255,225,150,.30)';g.lineWidth=1.1;g.beginPath();g.arc(x,y+2.4,W/30,.15*PI,.85*PI);g.stroke()}
 })}
 
 /* ---------------------------------------------------------------- class effects (ring, sparks, ticks, halo, motes, rainbow) */
@@ -310,82 +329,123 @@ function mkFairy(B){
   }};
 }
 
+/* v5_203b PHOENIX REDESIGN after the reference picture: raised V-shaped wings of long feathers (dark bronze root -> orange -> glowing gold tips), a dark bronze body and chest,
+   a hooked golden beak with a swept-back golden crest, golden talons, and ONE long sweeping tail that curls up into a spiral (a few plumes nested like the swirl in the picture)
+   instead of the old flat fan of plumes. The flames that burned on the back / crest are gone: the glow now sits on the feathers (barbs, tips, halo shells) and in the wings.
+   Tune: wing lift = LIFT in anim; tail = NT / NS / plume() (L0 length, cv curl per segment, x0 start droop); colours = FST / TST at the top of the file, texPhoenix. */
 function mkPhoenix(B){
-  const skin=lam(0xffffff,{map:texPhoenix(),emissive:0x2a0800}),gold=phg(0xffc83a,{shininess:80,emissive:0x4a2a00}),eyeM={},aura=fsp(0xff7a22,.3,'soft'),ember=fsp(0xffb040,.9,'soft');
-  const fcol=[0xb81408,0xd9300e,0xee5a14,0xff8a1e,0xffb02e,0xffd24a],fm=fcol.map(c=>lam(c,{emissive:0x7a2a00,side:T.DoubleSide})),
-    fireO=fsp(0xff3a08,.5),fireM=fsp(0xff8a1c,.55),fireC=fsp(0xffd666,.6),flm=[],wfl=[],tng=[],
-    eg1=bas(0xff9a28,{side:T.DoubleSide}),eg2=bas(0xffd860,{side:T.DoubleSide}),halo=glow(0xff8a1c,.2); /* v5_200h edge glow = flame colours (orange / yellow), unlit so they glow */ /* v5_200 fire layers: outer red-orange, middle orange, hot yellow core */
+  const skin=lam(0xffffff,{map:texPhoenix(),vertexColors:true,emissive:0x5a2c00}),gold=phg(0xffc83a,{shininess:80,emissive:0x4a2a00}),eyeM={},aura=fsp(0xff7a22,.26,'soft'),ember=fsp(0xffb040,.9,'soft');
+  const fv=lam(0xffffff,{vertexColors:true,emissive:0x3a1800,side:T.DoubleSide}),   /* wing feathers: vertex-coloured, dark bronze at the root -> orange -> gold tip */
+    tv=lam(0xffffff,{vertexColors:true,emissive:0x5a2c00,side:T.DoubleSide}),       /* tail plumes: deep orange -> bright gold */
+    crm=lam(0xffd24a,{emissive:0x8a5a00,side:T.DoubleSide}),
+    fireM=fsp(0xff8a1c,.5),fireC=fsp(0xffd666,.55),flm=[],wfl=[],tng=[],
+    eg1=bas(0xff9a28,{side:T.DoubleSide}),eg2=bas(0xffd860,{side:T.DoubleSide}),halo=glow(0xffa22a,.26);   /* unlit edge glow in the flame colours */
   const body=G(B,[0,9,0]);
-  SP(body,aura,[0,15,-3],54,50);   /* soft halo, no hard edge */
-  A(body,'sph',skin,[0,15,0],[11,12.4,18],[-.35,0,0]);
-  A(body,'sph',lam(0xffb23a,{emissive:0x3a1e00}),[0,15,6],[9,10,9]);
-  A(body,'sph',skin,[0,21,8.4],[6.4,8,6.6],[-.4,0,0]);
+  SP(body,aura,[0,18,-3],60,56);   /* soft halo, no hard edge */
+  const bo=[0,0,0],sz=(k,p,sc,r,o,g)=>A(body,bodyGeo(k,p,sc,r,o||bo,g),skin,p,sc,r);
+  sz('phB',[0,15,0],[11,12.4,18],[-.35,0,0]);
+  sz('phC',[0,15,6],[9,10,9],[0,0,0],bo,1.12);                                  /* chest */
+  sz('phN',[0,21,8.4],[6.4,8,6.6],[-.4,0,0]);
   const head=G(body,[0,25,10.4]);
-  A(head,'sph',skin,[0,0,0],[7.6,7.4,8.2]);
+  A(head,bodyGeo('phH',[0,0,0],[7.6,7.4,8.2],[0,0,0],[0,25,10.4]),skin,[0,0,0],[7.6,7.4,8.2]);
   A(head,'cone',gold,[0,-.8,6],[3.2,5.8,2.4],[PI/2,0,0]);A(head,'cone',gold,[0,-1.9,5],[2.6,4,1.6],[PI/2,0,0]);
-  for(const s of [-1,1]){eye(head,s*2.9,.7,2.9,1.15,0xffb02e,eyeM);SP(head,fsp(0xffe080,.5,'soft'),[s*3.8,-1.2,2.2],4.4,4.4)}
+  A(head,'cone',gold,[0,-2.3,8.3],[2.1,3.8,1.7],[PI/2+.95,0,0]);          /* the hooked tip of the beak */
+  for(const s of [-1,1]){eye(head,s*2.9,.7,2.9,1.15,0xffb02e,eyeM);SP(head,fsp(0xffe080,.4,'soft'),[s*3.8,-1.2,2.2],4.2,4.2)}
+  /* swept-back golden crest plumes */
   const crest=G(head,[0,3.2,-1.2]);
-  for(let i=0;i<5;i++){const k=i/4;feather(crest,fm[4-Math.round(k*2)],10-Math.abs(k-.5)*5,1.7,.7,[(k-.5)*2.6,0,0],PI+(k-.5)*.6,.55)}
-  /* v5_200g ONE merged flame instead of separate tongues: many wide flames of random size / offset that overlap heavily, over a soft base glow, so the outline is ragged and joined */
+  for(let i=0;i<4;i++){const k=i/3;feather(crest,crm,14-Math.abs(k-.5)*6,1.5,.6,[(k-.5)*2.2,0,0],PI+(k-.5)*.7,.5+k*.12)}
+  SP(crest,fsp(0xffd666,.35,'soft'),[0,2,-4],13,13);
   const R=rng(91),fo2=fsp(0xff3a08,.3),fm2=fsp(0xff8a1c,.34),fc2=fsp(0xffd666,.4),fsoft=fsp(0xff6a14,.3,'soft');
   const mass=(par,cx,cy,cz,sx,sz,n,w,h,arr)=>{
     SP(par,fsoft,[cx,cy+h*.2,cz],sx*2+w*1.2+sz,h*.95);
     for(let i=0;i<n;i++){const u=(i+.5)/n,e=Math.abs(u-.5)*2,hh=h*(.55+.6*R())*(1-e*e*.55),ww=w*(.8+.5*R()),m=SP(par,[fo2,fm2,fm2,fc2][(R()*4)|0],[cx+(R()-.5)*sx,cy,cz+(u-.5)*sz],ww,hh,1);arr.push({m:m,sx:ww,sy:hh,ph:R()*6.28})}};
-  mass(crest,0,2.2,-.6,2.4,2.4,5,5.5,12,tng);
+  /* RAISED WINGS: long feathers fanned in the wing plane; the whole wing is lifted into a V in anim() */
   const wings=[];
   for(const s of [-1,1]){
     const w=G(body,[s*5.2,17.5,1.5]);w.scale.x=s;
-    const tp=[];
-    for(let i=0;i<8;i++){const a=-.15+i*.23,yaw=Math.atan2(Math.cos(a),-Math.sin(a)),L=24-Math.abs(i-1.5)*1.7,mi=Math.min(5,1+((i*5/7)|0)),fg=feather(w,fm[mi],L,5.2,1,[0,0,0],yaw,0);
-      barbs(fg,eg1,L,5.2,.3,.82,LITE?2:4,L*.24,.5);                                                     /* glowing barbs along both edges */
+    const tp=[],wf=[];w.userData.wf=wf;
+    for(let i=0;i<9;i++){const a=-.2+i*.21,yaw=Math.atan2(Math.cos(a),-Math.sin(a)),L=32-Math.abs(i-2)*2.3,fg=G(w,[0,0,0]);fg.rotation.order='ZYX';fg.rotation.set(0,yaw,0);wf.push({g:fg,r:Math.cos(a)*L,yaw:yaw});
+      A(fg,'fcone',fv,[0,0,L/2],[5.4,L,1],[PI/2,0,0]);
+      barbs(fg,eg1,L,5.4,.3,.82,LITE?2:4,L*.24,.5);                                                     /* glowing barbs along both edges */
       for(const sd of [-1,1])A(fg,'cone',eg2,[sd*.5,0,L*.92],[1.1,L*.18,.5],[PI/2,0,-sd*.4]);          /* glowing forked tip */
-      if(!LITE)A(fg,'cone',halo,[0,0,L*.5],[5.2*1.55,L*1.04,1.2],[PI/2,0,0]);                         /* soft feather-shaped glow around the whole feather */
+      if(!LITE)A(fg,'cone',halo,[0,0,L*.5],[5.4*1.55,L*1.04,1.2],[PI/2,0,0]);                         /* soft feather-shaped glow */
       tp.push([Math.sin(yaw)*L,Math.cos(yaw)*L])}
-    for(let i=0;i<6;i++){const a=.05+i*.26,yaw=Math.atan2(Math.cos(a),-Math.sin(a)),L=12-Math.abs(i-2)*.8,mi=Math.min(5,2+((i*3/5)|0)),fg=feather(w,fm[mi],L,4.6,.9,[0,.9,.4],yaw,0);
-      barbs(fg,eg1,L,4.6,.4,.78,LITE?1:2,L*.26,.45);if(!LITE)A(fg,'cone',halo,[0,0,L*.5],[4.6*1.55,L*1.04,1.1],[PI/2,0,0])}
-    /* v5_200h the wing fire starts in the MIDDLE of the wing and stays concentrated there (no flames at the feather edges); the edges only glow in the flame colours */
+    for(let i=0;i<6;i++){const a=.05+i*.26,yaw=Math.atan2(Math.cos(a),-Math.sin(a)),L=14-Math.abs(i-2)*.9,fg=G(w,[0,.9,.4]);fg.rotation.order='ZYX';fg.rotation.set(0,yaw,0);wf.push({g:fg,r:Math.cos(a)*L,yaw:yaw});
+      A(fg,'fcone',fv,[0,0,L/2],[4.8,L,.9],[PI/2,0,0]);
+      barbs(fg,eg1,L,4.8,.4,.78,LITE?1:2,L*.26,.45);if(!LITE)A(fg,'cone',halo,[0,0,L*.5],[4.8*1.55,L*1.04,1.1],[PI/2,0,0])}
     {let ax=0,az=0;tp.forEach(q=>{ax+=q[0]/tp.length;az+=q[1]/tp.length});
-     mass(w,ax*.24,.2,az*.24,2.6,5,LITE?5:7,9.5,16,wfl);mass(w,ax*.5,.2,az*.5,2.2,4,LITE?3:5,7.5,12,wfl)}
+     mass(w,ax*.55,.2,az*.55,2.6,5,LITE?4:6,9,14,wfl);mass(w,ax*.85,.2,az*.85,2.2,4,LITE?3:4,7.5,11,wfl)}   /* the glow burns in the outer half of the wing */
     wings.push(w)}
-  /* v5_200 LONG FIERY TAIL: 9 plumes (7 on low quality), each a chain of 6 tapering segments (about 4x the old length) that droop, wave along their length and burn with
-     additive flame layers. Plumes 0..NT-1 fan out behind the body. */
-  const tail=G(body,[0,12,-9]),tf=[],flames=[],NT=LITE?7:9,NS=LITE?5:6,MID=(NT-1)/2;
+  /* ONE LONG SPIRAL TAIL: NT plumes (nested like the swirl in the picture), each a chain of NS tapering segments. A plume starts drooping down behind the bird (x0), then each segment
+     turns a little upward (cv) and gets shorter, so it sweeps down, back and curls up into a spiral. The tail group is leaned sideways (rotation.z) so the swirl is seen from the front too. */
+  const NT=LITE?13:23,NS=LITE?7:9,MID=(NT-1)/2,LS=LITE?1.25:1;   /* v5_203c: a wide FAN of many separate feathers (was 5 plumes that overlapped into one rope) */
+  const plume=(k,i)=>{const a=Math.abs(k);return{L0:(13-a*4.5)*LS*(i===MID?1.1:(Math.abs(i-MID)%2?.84:1)),cv:2.3/(NS-1)-a*.04,x0:.45-a*.3,w0:3.8-a*.9,yaw:k*.8}};
+  const segL=(pp,j)=>pp.L0*(1-j*(.6/(NS-1)));
+  /* v5_203g the tail starts ON THE BACK LINE: backY() = height of the top of the body at (x,z) (the body ellipsoid is pitched -.35), so the back runs on into the tail in an almost straight line */
+  const backY=(x,z)=>{const c=Math.cos(.35),sn=Math.sin(.35);for(let y=40;y>0;y-=.1){const yc=y-15,yl=yc*c-z*sn,zl=yc*sn+z*c;if((x/5.5)*(x/5.5)+(yl/6.2)*(yl/6.2)+(zl/9)*(zl/9)<=1)return y}return 15};   /* v5_203j: the REAL radii of the body (it was given the diameters, so the tail floated ~6 units above the back) */
+  const tz=-4,ty=backY(0,tz)-1.6,tf=[],flames=[],tail=G(body,[0,ty,tz]);tail.rotation.z=.1;
+  const mid=plume(0,MID),cpath=[];{let up=0,bk=0;for(let j=0;j<NS;j++){const ph=mid.x0-mid.cv*j,L=segL(mid,j);cpath.push([up,bk]);up+=-Math.sin(ph)*L*.6;bk+=Math.cos(ph)*L*.6}cpath.push([up,bk])}
   for(let i=0;i<NT;i++){
-    const k=(i-MID)/MID,L0=(15.5-Math.abs(k)*5)+(i===MID?2:0),root=G(tail,[k*1.6,0,0]);
-    root.rotation.order='YXZ';root.rotation.set(-.2+Math.abs(k)*.1,PI+k*.46,0);
-    const mi=Math.min(5,i<2||i>NT-3?1:(i===MID?5:(Math.abs(k)>.5?2:3))),mat=fm[mi];let par=root;const segs=[];
+    const k=(i-MID)/MID,pp=plume(k,i),root=G(tail,[k*3.4,backY(k*3.4,tz)-ty-1.4,0]);
+    root.rotation.order='YXZ';root.rotation.set(pp.x0,PI+pp.yaw,0);
+    let par=root;const segs=[];
     for(let j=0;j<NS;j++){
-      const sg=G(par,[0,0,j?L0*.6:0]);sg.rotation.x=j?.08:0;
-      const w=Math.max(1.5,(5.4-j*.78)*(1-Math.abs(k)*.1));
-      A(sg,'cone',mat,[0,0,L0*.5],[w,L0,.9],[PI/2,0,0]);
-      if(j>0)barbs(sg,eg1,L0,w,.28,.74,LITE?1:2,L0*.42,.45,.7);                                     /* glowing edge barbs on every tail segment */
-      if(!LITE)A(sg,'cone',halo,[0,0,L0*.5],[w*1.5,L0*1.03,1.2],[PI/2,0,0]);                         /* soft glow around each segment */
-      if(j===NS-1){A(sg,'cone',eg2,[0,0,L0*.96],[w*.55,L0*.62,.6],[PI/2,0,0]);for(const sd of [-1,1])A(sg,'cone',eg1,[sd*.6,0,L0*.7],[.9,L0*.4,.45],[PI/2,0,-sd*.5])}   /* long glowing tip with a fork */
-      if(j>0&&Math.abs(k)<.55&&(!LITE||j%2===1)){   /* flames only on the centre plumes: the tail burns in the middle, the outer plumes just glow */
-        const sx=w*2.8+4,sy=L0*.85+w*1.5;
-        flames.push({m:SP(sg,j%2?fireM:fireO,[0,.5,L0*.5],sx,sy,1),sx:sx,sy:sy,i:i,j:j});
-        if(j%2===0&&Math.abs(k)<.6){const cx=sx*.5,cy=sy*.55;flames.push({m:SP(sg,fireC,[0,.5,L0*.5],cx,cy,1),sx:cx,sy:cy,i:i,j:j+3})}
-      }
-      par=sg;segs.push(sg);
+      const L=segL(pp,j),sg=G(par,[0,0,j?segL(pp,j-1)*.6:0]);sg.rotation.x=j?-pp.cv:0;
+      const w=Math.max(1.3,pp.w0*(1-j/NS*.82));
+      A(sg,'tcone',tv,[0,0,L*.5],[w,L,.9],[PI/2,0,0]);
+      if(j>0)barbs(sg,eg1,L,w,.3,.7,1,L*.42,.45,.7);                                       /* glowing edge barbs */
+      if(!LITE)A(sg,'cone',halo,[0,0,L*.5],[w*1.5,L*1.03,1.2],[PI/2,0,0]);                           /* soft glow around each segment */
+      if(j===NS-1){A(sg,'cone',eg2,[0,0,L*.96],[w*.55,L*.62,.6],[PI/2,0,0]);for(const sd of [-1,1])A(sg,'cone',eg1,[sd*.6,0,L*.7],[.9,L*.4,.45],[PI/2,0,-sd*.5])}   /* long glowing tip with a fork */
+      if(i===MID&&j>1&&j%2===(NS%2)){const sx=w*2.2+3,sy=L*.8+w;flames.push({m:SP(sg,j%4<2?fireM:fireC,[0,.5,L*.5],sx,sy,1),sx:sx,sy:sy,i:i,j:j})}   /* a little fire only along the middle plume */
+      par=sg;segs.push({g:sg,cv:pp.cv});
     }
     tf.push(segs);
   }
-  const tem=[];for(let i=0;i<(LITE?10:18);i++)tem.push(SP(tail,i%3?fireM:fireC,[0,0,0],4,4));   /* sparks drifting off the tail */
-  for(const s of [-1,1]){const g=G(body,[s*3.2,7.2,2.4]);A(g,'cyl',gold,[0,-1.4,0],[1.3,6.4,1.3]);
-    for(const tx of [-1.3,0,1.3])A(g,'cone',gold,[tx,-4.6,1.6],[1,3.2,1],[PI/2,0,tx*.2])}
-  mass(body,0,23.2,0,2.4,9,12,11,18,tng);mass(body,0,24,-1,1.4,4,4,6.5,25,tng);   /* one big flame along the back, with a few tall licks in it */
+  /* v5_203j NO RUMP: the cone and the bridge are gone. The tail now grows out of the BACK of the body itself (tz / ty from backY with the true body radii), and a second layer of SHORT feathers
+     (NT2 plumes, NS2 segments, L0 about 7.5 -> 5) sits in front of the long fan, rooted on the back line and fanned wider, so they cover the joint like covert feathers and the long plumes come out
+     of a feathered base instead of a bare seam. Same material / colours / glow as the long plumes. Tune: NT2, NS2, L0 / w0 / x0 / yaw in the loop, the root offsets (sx, z). */
+  const NT2=LITE?9:15,NS2=LITE?3:4,MID2=(NT2-1)/2;
+  for(let i=0;i<NT2;i++){
+    const k=(i-MID2)/MID2,a=Math.abs(k),L0=(7.6-a*2.4)*(i%2?.8:1),cv=1.9/(NS2-1),x0=.42-a*.12,w0=3.5-a*.6,sx=k*4,rz=1.4-a*.5;
+    const root=G(tail,[sx,backY(sx,tz+rz)-ty-1.1,rz]);
+    root.rotation.order='YXZ';root.rotation.set(x0,PI+k*1.05,0);
+    let par=root;const segs=[];
+    for(let j=0;j<NS2;j++){
+      const L=L0*(1-j*(.5/(NS2-1))),sg=G(par,[0,0,j?L0*(1-(j-1)*(.5/(NS2-1)))*.6:0]);sg.rotation.x=j?-cv:0;
+      const w=Math.max(1.2,w0*(1-j/NS2*.7));
+      A(sg,'tcone',tv,[0,0,L*.5],[w,L,.9],[PI/2,0,0]);
+      if(j>0)barbs(sg,eg1,L,w,.3,.7,1,L*.42,.45,.7);
+      if(!LITE)A(sg,'cone',halo,[0,0,L*.5],[w*1.5,L*1.03,1.2],[PI/2,0,0]);
+      if(j===NS2-1)A(sg,'cone',eg2,[0,0,L*.96],[w*.55,L*.62,.6],[PI/2,0,0]);   /* glowing tip */
+      par=sg;segs.push({g:sg,cv:cv});
+    }
+    tf.push(segs);
+  }
+  SP(body,fsp(0xff8a1c,.3,'soft'),[0,ty,tz-1],24,18);
+  /* v5_203e the body glows like the wing roots: the same soft additive feather-glow shells (halo) around body / chest / rump, and a burning mass of flame on the back */
+  A(body,'sph',halo,[0,15,0],[14,15.4,21],[-.35,0,0]);A(body,'sph',halo,[0,15,6],[11.5,12.5,11]);
+  mass(body,0,19,-2,6,12,LITE?4:6,9,13,wfl);mass(body,0,17,-8,5,6,LITE?3:4,7.5,11,wfl);
+  const tem=[];for(let i=0;i<(LITE?10:18);i++)tem.push(SP(tail,i%3?fireM:fireC,[0,0,0],4,4));   /* sparks drifting along the spiral */
+  for(const s of [-1,1]){const g=G(body,[s*3.2,7.2,2.4]);A(g,'cyl',gold,[0,-1.6,0],[1.3,7,1.3]);
+    for(const tx of [-1.3,0,1.3])A(g,'cone',gold,[tx,-5.2,1.8],[1,3.8,1],[PI/2+.15,0,tx*.2])}   /* golden talons */
+  SP(body,fsp(0xff9a30,.32,'soft'),[0,24,-2],28,22);   /* a warm glow between the wings (no flames on the back any more) */
   const em=[];for(let i=0;i<12;i++)em.push(SP(B,ember,[0,0,0],3,3));
-  return{fr:19,hh:36,k:.78,anim(t,mv){
+  const LIFT=1.0;
+  return{fr:19,hh:44,k:.74,anim(t,mv){
     const f=Math.sin(t*(6+mv*3))*.5,lift=Math.sin(t*6.6+.5);
-    wings[0].rotation.z=-.1-f;wings[1].rotation.z=.1+f;
+    wings[0].rotation.z=-(LIFT+f);wings[1].rotation.z=LIFT+f;
+    /* v5_203f the wing BENDS like a real bird's: each feather follows the flap a little later the farther out it is (lag = its reach), so the tips trail the root on the way up and down and
+       the feather line becomes a curve; the outer feathers also sweep back a little on the downstroke */
+    {const om=6+mv*3;for(const w of wings)for(const q of w.userData.wf){const lag=q.r*.055,d=(Math.sin(t*om-lag)-Math.sin(t*om))*.5+Math.cos(t*om-lag)*.06*q.r/32;q.g.rotation.z=d;q.g.rotation.y=q.yaw+Math.cos(t*om-lag)*.05*q.r/32}}
     body.position.y=9+Math.sin(t*3.3)*1.7+mv*1.2+lift*.5;body.rotation.x=-.06*mv;
     head.rotation.y=Math.sin(t*1.1)*.22;head.rotation.x=Math.sin(t*1.9)*.05;
-    tail.rotation.y=Math.sin(t*1.7)*.18;tail.rotation.x=Math.sin(t*2.4)*.05+(f>0?.04:0);
-    tf.forEach((segs,i)=>segs.forEach((sg,j)=>{if(j){sg.rotation.x=.08+Math.sin(t*2.6-j*.8+i*.35)*.07+mv*.05;sg.rotation.y=Math.sin(t*1.9-j*.7+i*.5)*.09}}));
+    tail.rotation.y=Math.sin(t*1.7)*.14;tail.rotation.x=Math.sin(t*2.4)*.04+(f>0?.03:0);
+    tf.forEach((segs,i)=>segs.forEach((o,j)=>{if(j){o.g.rotation.x=-o.cv+Math.sin(t*2.6-j*.8+i*.35)*.035+mv*.02;o.g.rotation.y=Math.sin(t*1.9-j*.7+i*.5)*.07}}));
     flames.forEach(f=>{const q=1+Math.sin(t*9+f.j*1.3+f.i*2.1)*.17+Math.sin(t*17+f.i*3+f.j)*.08;f.m.scale.set(f.sx*(1+(q-1)*.5),f.sy*q,1)});
     wfl.forEach(f=>{const q=1+Math.sin(t*10+f.ph)*.2+Math.sin(t*19+f.ph*2)*.1;f.m.scale.set(f.sx*(1-(q-1)*.3),f.sy*q,1)});
     tng.forEach(f=>{const q=1+Math.sin(t*11+f.ph)*.18+Math.sin(t*23+f.ph*3)*.1;f.m.scale.set(f.sx*(1-(q-1)*.4),f.sy*q,1)});
-    tem.forEach((q,i)=>{const u=((t*.32+i/tem.length)%1),a=i*2.4+t*2;q.position.set(Math.sin(a)*(1.5+u*5),2+u*9+Math.sin(a*1.3)*1.2,-4-u*50);q.scale.setScalar((2.4*(1-u*.85)+.2)*2.6)});
+    tem.forEach((q,i)=>{const u=((t*.28+i/tem.length)%1),a=i*2.4+t*2,x=u*(cpath.length-1),j=Math.min(cpath.length-2,x|0),fr=x-j,p0=cpath[j],p1=cpath[j+1];
+      q.position.set(Math.sin(a)*(1.4+u*2.5),p0[0]+(p1[0]-p0[0])*fr+Math.sin(a*1.3)*1.2,-(p0[1]+(p1[1]-p0[1])*fr));q.scale.setScalar((2.4*(1-u*.85)+.2)*2.6)});
     em.forEach((q,i)=>{const k=((t*.45+i*.083)%1),a=i*1.9+t;q.position.set(Math.cos(a)*(5+k*9),12+k*26,Math.sin(a)*(5+k*9)-5);q.scale.setScalar((2.2*(1-k)+.1)*2.4)});
   }};
 }

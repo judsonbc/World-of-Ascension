@@ -68,14 +68,14 @@ function petCanCombine(p){return p.s>0&&p.c<PET_CLS.length-1}
 function petCombineReady(){
   if(!petComb||!petComb.b)return false;
   const A=petParse(petComb.a),B=petParse(petComb.b),o=petsObj();
-  if(A.c!==B.c||!petCanCombine(A)||!petCanCombine(B))return false;
+  if(A.s!==B.s||A.c!==B.c||!petCanCombine(A)||!petCanCombine(B))return false;
   return petComb.a===petComb.b?(o[petComb.a]|0)>=2:(o[petComb.a]|0)>=1&&(o[petComb.b]|0)>=1;
 }
 function doCombine(){
   if(!petCombineReady())return;
   const A=petParse(petComb.a),B=petParse(petComb.b),c=A.c,ch=PET_UP[c];
   if(rnd()*100<ch){
-    const s=rnd()<.5?A.s:B.s;
+    const s=A.s;
     petTake(A.s,c,1);petTake(B.s,c,1);petAdd(s,c+1,1);
     const msg='Combine success! '+PET_SP[A.s].n+' + '+PET_SP[B.s].n+' became a '+PET_SP[s].n+' [Class '+PET_CLS[c+1]+']!';
     say(msg,PET_CLS_COL[c+1],9000);pop(P.x,P.y-60,'\u2605 Class '+PET_CLS[c+1]+' '+PET_SP[s].n,PET_CLS_COL[c+1],18);spark(P.x,P.y-20,PET_CLS_COL[c+1],34,220,.9,3.2);
@@ -98,7 +98,7 @@ function petBagItems(a){
   const o=petsObj(),ks=Object.keys(o).filter(k=>o[k]>0).sort((x,y)=>{const a=petParse(x),b=petParse(y);return b.c-a.c||a.s-b.s});
   for(const k of ks){const p=petParse(k),n=o[k];
     a.push({id:'pet_'+k,n:p.s===0?'Chicken':PET_SP[p.s].n+' (Class '+PET_CLS[p.c]+')',v:n,t:p.s===0?'\u00d7'+fmtQ(n):PET_CLS[p.c]+(n>1?' \u00d7'+n:''),r:p.s===0?'cm':PET_CLS_SLOT[p.c],ic:petIcon(p.s,p.c),
-      d:p.s===0?'A common pet. It cannot be combined.':'Class '+PET_CLS[p.c]+' pet.'+(petCanCombine(p)?' Combine two Class '+PET_CLS[p.c]+' pets for a '+PET_UP[p.c]+'% chance of a Class '+PET_CLS[p.c+1]+' pet; on failure 1 of the 2 is destroyed.':' The highest class.'),pet:{key:k,s:p.s,c:p.c,n:n}})}
+      d:p.s===0?'A common pet. It cannot be combined.':'Class '+PET_CLS[p.c]+' pet.'+(petCanCombine(p)?' Combine two Class '+PET_CLS[p.c]+' '+PET_SP[p.s].n+'s (same pet only) for a '+PET_UP[p.c]+'% chance of a Class '+PET_CLS[p.c+1]+' pet; on failure 1 of the 2 is destroyed.':' The highest class.'),pet:{key:k,s:p.s,c:p.c,n:n}})}
   return a;
 }
 /* returns true when the tap was a combine-mode tap (and was handled) */
@@ -106,7 +106,7 @@ function petCombTap(it){
   if(!petComb)return false;
   if(!it.pet){petComb=null;return false}
   const A=petParse(petComb.a);
-  if(it.pet.c!==A.c||!petCanCombine(it.pet)){say('Pick a special pet of the same class (Class '+PET_CLS[A.c]+').','#8d9aa2',3000);return true}
+  if(it.pet.s!==A.s||it.pet.c!==A.c||!petCanCombine(it.pet)){say('Pick another '+PET_SP[A.s].n+' of the same class (Class '+PET_CLS[A.c]+').','#8d9aa2',3000);return true}
   if(it.pet.key===petComb.a&&!petComb.b&&it.pet.n<2){return true}
   if(petComb.b===it.pet.key){petComb.b=null;renderBag();return true}
   if(it.pet.key===petComb.a&&!petComb.b&&it.pet.n>=2){petComb.b=it.pet.key;renderBag();return true}
@@ -117,12 +117,21 @@ function petCombPanel(info){
   const A=petParse(petComb.a),d=document.createElement('div'),sm=document.createElement('small'),nm=document.createElement('b');
   nm.textContent='Combine pets \u2014 Class '+PET_CLS[A.c];nm.style.color=PET_CLS_COL[A.c];d.appendChild(nm);
   const ch=PET_UP[A.c],ready=petCombineReady();
-  sm.textContent=ready?(PET_SP[A.s].n+' + '+PET_SP[petParse(petComb.b).s].n+': '+ch+'% chance of a Class '+PET_CLS[A.c+1]+' pet (species of one of the two). On failure 1 of the 2 is destroyed. Cannot be undone.')
-    :(PET_SP[A.s].n+' selected. Tap a second Class '+PET_CLS[A.c]+' pet'+((petsObj()[petComb.a]|0)>=2?' (or the same stack again)':'')+'. '+ch+'% chance of Class '+PET_CLS[A.c+1]+'.');
+  sm.textContent=ready?(PET_SP[A.s].n+' + '+PET_SP[A.s].n+': '+ch+'% chance of a Class '+PET_CLS[A.c+1]+' '+PET_SP[A.s].n+'. On failure 1 of the 2 is destroyed. Cannot be undone.')
+    :(PET_SP[A.s].n+' selected. Tap a second Class '+PET_CLS[A.c]+' '+PET_SP[A.s].n+((petsObj()[petComb.a]|0)>=2?' (or the same stack again)':'')+'. '+ch+'% chance of Class '+PET_CLS[A.c+1]+'.');
   d.appendChild(sm);info.appendChild(d);
   const w=document.createElement('div');w.className='bagact';
   const mk=(t,c,f,dis)=>{const b=document.createElement('button');b.type='button';b.className='btn'+(c?' '+c:'');b.textContent=t;b.disabled=!!dis;b.addEventListener('click',f);w.appendChild(b)};
   mk('Combine','pri',doCombine,!ready);mk('Cancel','',()=>{petComb=null;renderBag()});info.appendChild(w);
+}
+/* Fry n Chicken pets (species 0) into n Fried Chicken potions (50% HP, 60 s cooldown, no summon needed) */
+function fryChicken(n){
+  const have=petsObj()['0:0']|0;n=Math.min(n|0,have,POT_MAX-P.pots.ck);
+  if(n<=0){say(have>0?'Your bag cannot hold more Fried Chicken.':'No Chicken to fry.','#8d9aa2');return}
+  petTake(0,0,n);P.pots.ck+=n;petValidate();
+  if(!P.pet)netInfo(true);
+  bagLog('Fried '+n+' Chicken \u2192 '+n+' Fried Chicken','#f0b25a');say('Fried '+n+' Chicken. Use Fried Chicken (Y) to heal 50% HP.','#f0b25a',4000);
+  bagSel=null;save();renderBag();
 }
 function petBagActions(sel,info){
   const w=document.createElement('div');w.className='bagact';
@@ -131,12 +140,13 @@ function petBagActions(sel,info){
   else if(sel.pet){
     const on=P.pet===sel.pet.key;
     mk(on?'Dismiss':'Summon',on?'':'pri',()=>on?petDismiss():petSummon(sel.pet.key));
+    if(sel.pet.s===0){mk('Fry (\u2192 Fried Chicken)','pri',()=>fryChicken(1));if(sel.pet.n>1)mk('Fry all ('+sel.pet.n+')','',()=>fryChicken(sel.pet.n))}
     if(petCanCombine(sel.pet))mk('Combine','',()=>{petComb={a:sel.pet.key,b:null};renderBag()},sel.pet.n<2&&petPartners(sel.pet)<1);
   }
   if(w.children.length)info.appendChild(w);
 }
 /* how many OTHER special pets of the same class exist (so Combine is only enabled when a partner exists) */
-function petPartners(p){let n=0;const o=petsObj();for(const k in o){if(k===p.key)continue;const q=petParse(k);if(q.s>0&&q.c===p.c)n+=o[k]}return n}
+function petPartners(p){let n=0;const o=petsObj();for(const k in o){if(k===p.key)continue;const q=petParse(k);if(q.s===p.s&&q.c===p.c)n+=o[k]}return n}
 function petCombValidate(){if(!petComb)return;const o=petsObj();if(!(o[petComb.a]>0))petComb=null;else if(petComb.b&&!(o[petComb.b]>0))petComb.b=null}
 
 /* ---------- summon: ONE pet follows beside you (any pet, common or special). Summoning another replaces it. Summoning does not use the pet up. ---------- */

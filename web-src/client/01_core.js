@@ -230,7 +230,7 @@ const AUTOSK=new Array(NSLOT).fill(true);
 /* slot hotkeys: 12 round slots, then the two large ones */
 const SLOTKEYS=['1','2','3','4','5','6','7','8','9','0','-','=','r','t'];
 /* potion cooldowns (5s) */
-const pot={hp:0,qi:0,tp:0};
+const pot={hp:0,qi:0,tp:0,ck:0};
 
 
 function rngSeed(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -306,7 +306,7 @@ const P={x:C,y:C+110,r:14,lvl:1,exp:0,hp:100,qi:60,coins:0,gold:0,ore:0,wlv:0,al
   face:0,anim:0,mvAmt:0,dir:1,atkCd:0,bf:0,bfT:0,sh:0,shT:0,inv:0,hurt:0,dead:0,swing:0,target:null,mv:null,task:null,mine:0,qiT:0,pvpT:0,pvpKills:0};
 let PVPLVL=0,PVPMODE=false; /* v5_158 PvP mode 0 Peaceful / 1 Lawful / 2 Hostile / 3 Carnal (saved, sent to the server), and the 'ATK Players Only' toggle */
 P.gear={};for(const g of GEAR){P.gear[g.k]={g:0,lv:0,r:0,st:{}};if(g.core)Object.defineProperty(P.gear[g.k],'lv',{enumerable:true,get:()=>P[g.core],set:v=>{P[g.core]=v}})}
-P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.recent=[];
+P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0,ck:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.recent=[];
 /* the core slots (weapon / robe) already add their ATK / DEF / HP forge bonus in atkVal / defVal / maxHp; every other stat gets it here */
 const CORE_FORGED={atk:1,def:1,hp:1};
 /* v5_148 PERCENT FORGE (replaces the v5_143 exponential flat forge). The forge no longer adds a flat amount of ATK / HP / DEF: that was huge at level 1 (+100 gave x200 power)
@@ -785,7 +785,7 @@ function load(){
     const parseGear=(arr,cap)=>{const out=[];if(Array.isArray(arr))for(const o of arr.slice(0,cap)){const q=o&&GEAR.find(z=>z.k===o.slot);if(!q)continue;const it={slot:q.k,g:clamp(o.g|0,1,NW),r:clamp(o.r|0,0,RAR.length-1),st:{}};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE||k in SPECIAL){const v=+o.st[k];if(v>=0&&v<1e6)it.st[k]=r2(v*gm(k))}addQrg(it,q);it.col=RAR[it.r].c;it.u=bagUid++;out.push(it)}return out};
     P.bag=parseGear(s.bag,200);P.wh=parseGear(s.wh,WH_CAP);P.eggs=clamp(s.eg|0,0,99999);P.pets=parsePets(s.pt);P.pet=petLoad(s.sp);P.pf=null;
     PVPLVL=clamp(s.pm|0,0,3);
-    if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;
+    if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999),ck:clamp(s.pots.ck|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;
     let wi=s.wi|0;if(s.wv!==2&&wi<=10)wi++; /* older saves: world numbers started at 0 for Ashen Reach */
     wi=clamp(wi,0,NW-1);if(wi===ARENA)wi=1;if(wi!==curWorld)buildWorld(wi);
     P.cls=clamp(s.cl|0,0,CLASSES.length-1);loadLooks(s);CLS_STORE.fill(null);

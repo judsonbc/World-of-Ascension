@@ -86,7 +86,7 @@ const BAG_CAP=50,WH_CAP=100;let bagUid=1; /* bag holds 50 slots; the hub Warehou
 const bagArr=()=>P.bag||(P.bag=[]);
 const whArr=()=>P.wh||(P.wh=[]);
 const oreOf=it=>(2+it.g*2)*(1+it.r);
-function bagCount(){let n=(P.coins>0)+(P.ore>0)+(P.wlv>0&&P.gear.wpn.g===0)+(P.alv>0&&P.gear.robe.g===0)+(P.eggs>0)+petStacks()+bagArr().length;for(const k of ['hp','qi','tp'])if(P.pots[k]>0)n++;for(const q of GEAR)if(P.gear[q.k].g>0)n++;return n}
+function bagCount(){let n=(P.coins>0)+(P.ore>0)+(P.wlv>0&&P.gear.wpn.g===0)+(P.alv>0&&P.gear.robe.g===0)+(P.eggs>0)+petStacks()+bagArr().length;for(const k of ['hp','ck','qi','tp'])if(P.pots[k]>0)n++;for(const q of GEAR)if(P.gear[q.k].g>0)n++;return n}
 /* the bag used to hold 100: anything over the cap moves to the warehouse (up to its 100 slots) */
 function fixBagOverflow(){const A=bagArr(),W=whArr();let n=0;while(bagCount()>BAG_CAP&&A.length&&W.length<WH_CAP){W.push(A.pop());n++}if(n){bagLog(n+' spare piece'+(n>1?'s':'')+' moved to the Warehouse (bag is now '+BAG_CAP+' slots)','#8d9aa2');save()}}
 function takeGear(it){

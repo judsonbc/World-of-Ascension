@@ -230,7 +230,7 @@ function updatePlayer(dt){
   P.atkCd-=dt;P.hurt-=dt;P.swing-=dt;
   P.pvpT=(MP&&PVPLVL>0&&P.dead<=0&&!inTown())?1:0; /* v5_158 legacy flag, now simply 'my mode lets me attack players' (the old 30 s flag and the always-on Arena are gone) */
   const ox0=P.x,oy0=P.y;
-  pot.hp=Math.max(0,pot.hp-dt);pot.qi=Math.max(0,pot.qi-dt);pot.tp=Math.max(0,pot.tp-dt);
+  pot.hp=Math.max(0,pot.hp-dt);pot.qi=Math.max(0,pot.qi-dt);pot.tp=Math.max(0,pot.tp-dt);pot.ck=Math.max(0,pot.ck-dt);
   if(P.tp>0){if(dist(P.x,P.y,P.tpx,P.tpy)>30)cancelTp('Teleport cancelled: you moved.');else{P.tp-=dt;tpFx(dt);if(P.tp<=0)finishTp()}}
   autoPot();for(let i=0;i<SCD.length;i++)if(SCD[i]>0)SCD[i]-=dt;P.bfT-=dt;P.vlT-=dt;P.drT-=dt;P.ceT-=dt;if(P.lsT>0)P.lsT-=dt;if(P.rfT>0)P.rfT-=dt;if(P.linkT>0)P.linkT-=dt;if(P.markT>0)P.markT-=dt;if(P.absT>0)P.absT-=dt;if(P.gsT>0)P.gsT-=dt;if(P.galeLock>0)P.galeLock-=dt;P.inv-=dt;if(P.shT>0){P.shT-=dt;if(P.shT<=0)P.sh=0}
   P.qi=Math.min(maxQi(),P.qi+dt*(3+P.lvl*.1+maxQi()*qrgVal()/100));

@@ -82,7 +82,7 @@ function hud(){
   if(bk!==buffKey){buffKey=bk;const bx=$('buffs');bx.innerHTML='';for(const x of bs){const e=document.createElement('div');e.className='bf';e.dataset.n=x[3];e.style.color=x[2];e.textContent=x[0];const em=document.createElement('em');em.textContent=x[1];e.appendChild(em);bx.appendChild(e)}}
   bfTipRefresh(bs);
   /* potions */
-  st($('potN'),kfmt(P.pots.hp));st($('potQN'),kfmt(P.pots.qi));
+  st($('potN'),kfmt(P.pots.hp));st($('ckN'),kfmt(P.pots.ck));$('ckCd').hidden=pot.ck<=0;st($('ckCd'),fmtT(pot.ck)+'s');$('bCk').style.opacity=P.pots.ck>0?1:.5;st($('potQN'),kfmt(P.pots.qi));
   $('potCd').hidden=pot.hp<=0;st($('potCd'),fmtT(pot.hp)+'s');$('potQCd').hidden=pot.qi<=0;st($('potQCd'),fmtT(pot.qi)+'s');
   {const tb=$('tpBar');tb.hidden=!(P.tp>0);if(P.tp>0)sw($('tpFill'),Math.round((1-P.tp/TP_CHANNEL)*100)+'%')}
   st($('tpN'),kfmt(P.pots.tp));$('tpCd').hidden=!(pot.tp>0||P.tp>0);st($('tpCd'),P.tp>0?fmtT(P.tp)+'s':fmtT(pot.tp)+'s');$('bTp').style.opacity=P.pots.tp>0?1:.5;
@@ -170,6 +170,7 @@ $('bLogoutGame').addEventListener('click',()=>{if(!confirm('Log out? Your progre
 $('bOre').addEventListener('click',()=>{if(started)openForge()});
 $('bPot').addEventListener('pointerdown',e=>{e.preventDefault();usePot('hp')});
 $('bPotQ').addEventListener('pointerdown',e=>{e.preventDefault();usePot('qi')});
+$('bCk').addEventListener('pointerdown',e=>{e.preventDefault();usePot('ck')});
 $('bTp').addEventListener('pointerdown',e=>{e.preventDefault();useTp()});
 /* the HUD is laid out on a 1000x534 canvas and scaled to fit the window */
 function fitHud(){if(!$('hud'))return;$('hud').style.setProperty('--u',Math.max(.55,Math.min(innerWidth/1000,innerHeight/534,2.6))+'px')}

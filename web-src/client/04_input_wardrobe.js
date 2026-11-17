@@ -8,7 +8,7 @@ window.addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();
   keys[k]=true;
   if(e.repeat)return;
-  if(SLOTKEYS.includes(k))manualSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='c')cycleSkin();
+  if(SLOTKEYS.includes(k))manualSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='y')usePot('ck');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='c')cycleSkin();
   else if(k===' ')doJump(); /* v5_169 Space = jump (attack nearest is F) */
   else if(k==='e')startMine();
   else if(k==='f'){const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null;P.fatk=true}} /* F = attack nearest */

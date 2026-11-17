@@ -423,7 +423,7 @@ html.phone #finv button{min-height:36px;padding:6px 12px;font-size:13px}
 #ab #bAuto{right:calc(375*var(--u))}#ab #bMine{right:calc(425*var(--u))}
 #bMine,#bAuto{border-color:#9ab3c4}
 #bMine{font-size:calc(19*var(--u))}#bAuto{font-size:calc(19*var(--u))}
-#bPot{font-size:calc(20*var(--u))}#bPotQ{font-size:calc(20*var(--u))}
+#bPot,#bCk{font-size:calc(20*var(--u))}#bPotQ{font-size:calc(20*var(--u))}
 #bOre{display:none!important}
 #bBell[hidden]{display:none!important}
 
@@ -860,6 +860,7 @@ html.phone .wdcard .wdnote{display:none}
     </div>
     <div id="qb">
       <button class="ic" id="bPot" type="button" title="Health Potion (Q): heals 5% HP (5 s cooldown)"><span>&#9879;</span><span class="cnt" id="potN">0</span><span class="cd" id="potCd" hidden></span><span class="lb">HP</span></button>
+      <button class="ic" id="bCk" type="button" title="Fried Chicken (Y): instantly restores 50% HP (60 s cooldown). Fry a Chicken pet in your bag to make it."><span>&#127831;</span><span class="cnt" id="ckN">0</span><span class="cd" id="ckCd" hidden></span><span class="lb">Chicken</span></button>
       <button class="ic" id="bPotQ" type="button" title="Mana Potion (Z): restores 10% mana"><span style="color:#6fb2ff">&#9879;</span><span class="cnt" id="potQN">0</span><span class="cd" id="potQCd" hidden></span><span class="lb">MP</span></button>
       <button class="ic" id="bTp" type="button" title="Home Scroll (X): teleport to your hub"><span style="color:#d2b4ff">&#10162;</span><span class="cnt" id="tpN">0</span><span class="cd" id="tpCd" hidden></span><span class="lb">Home</span></button>
       <button class="ic" id="bOre" type="button" title="Darksteel ore: open the forge"><span>&#9670;</span><span class="cnt" id="oreN">0</span><span class="lb">Ore</span></button>
@@ -904,7 +905,7 @@ html.phone .wdcard .wdnote{display:none}
       <b>Attack</b><span>Click · F = nearest</span>
       <b>Jump</b><span>Space · JUMP button</span>
       <b>Skills</b><span>1-0 - = · R T</span>
-      <b>Potions</b><span>Q hp · Z qi</span>
+      <b>Potions</b><span>Q hp · Y chicken · Z qi</span>
       <b>Auto / Mine</b><span>A · E</span>
       <b>Forge / World</b><span>F · G</span>
       <b>Skill book</b><span>K</span>
