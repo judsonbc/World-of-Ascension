@@ -802,7 +802,10 @@ func (h *Hub) run() {
 				found := false
 				for _, q := range h.players {
 					if q.joined && !q.gone && strings.EqualFold(q.email, string(e.msg)) {
-						q.send([]byte(`{"t":"flush"}`))
+						// v5_186 a login on another device signs this session out NOW (it saves first, see the client's kick handler), so it cannot keep
+						// playing on progress that the new device never sees
+						q.send([]byte(`{"t":"kick","m":"This account was logged in on another device. Your progress was saved and you have been signed out."}`))
+						h.onLeave(q)
 						found = true
 					}
 				}
@@ -1030,6 +1033,7 @@ type inMsg struct {
 	M    string  `json:"m"`
 	Tx   string  `json:"tx"`
 	Tok  string  `json:"token"`
+	Sid  string  `json:"sid"` // v5_186 page id (see accounts.go sidIsOwner)
 }
 
 func cleanName(s string) string {
@@ -1095,6 +1099,10 @@ func (h *Hub) onMsg(p *Player, raw []byte) {
 		ign := accts.ignOf(email)
 		if ign == "" {
 			p.send([]byte(`{"t":"kick","m":"Choose your in-game name on the title screen first."}`))
+			return
+		}
+		if !accts.sidIsOwner(email, in.Sid) {
+			p.send([]byte(`{"t":"kick","m":"This account is being played on another device. Log in again here to take over."}`))
 			return
 		}
 		// one active session per account: a new login signs the older one out

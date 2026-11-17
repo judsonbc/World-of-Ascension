@@ -156,7 +156,8 @@ function useSkill(i,auto){
   /* v5_90 no attacking in the safe hub: ranged classes cannot cast anything; every class loses its damaging skills (heals / shields / buffs still work) */
   if(inTown()&&(P.cls>=3||(s.m>0&&!HEAL_SKILL_T[t]))){if(!(P.hubSkMsg>0)){say('You cannot attack or use attack skills inside the safe hub.','#8d9aa2');P.hubSkMsg=2}return false}
   const prio=!auto&&i>=AUTO_SLOTS; /* v5_156 slots R and T (13, 14) are PRIORITY skills: pressed / clicked / tapped by hand they cast at any moment - they ignore the short global lock and interrupt a cast pose in progress */
-  if(SCD[id]>0||P.qi<skCost(s)||(P.skLock>0&&!prio))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack is NOT blocked by it */
+  if(SCD[id]>0||!skCanPay(s)||(P.skLock>0&&!prio))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack is NOT blocked by it */
+  const hpc=skHp(s)?skHpCost(s):0; /* v5_188b HP price fixed BEFORE the heal below */
   /* v5_122 skills work outside attack mode too: when nothing is targeted or selected and a monster is inside THIS skill's reach, the nearest one is selected
      (target frame shows it, you do not start auto-attacking) and the skill aims at it. Heals / buffs and the hub rules are unchanged. */
   if(!aimT()&&s.m>0&&!HEAL_SKILL_T[t]&&!inTown()){const e=nearest(AIM_REACH[t]||(P.cls<3?MELEE_SKILL_RANGE:520));if(e&&!e.dead&&!e.isPl)P.sel=e}
@@ -373,7 +374,7 @@ function useSkill(i,auto){
     if(t==='mend'){P.sh=Math.round(maxHp()*(.1+tr*.03));P.shT=8;P.qi=Math.min(maxQi(),P.qi+maxQi()*.1)}
     ring(P.x,P.y,70,'#5fd3a5');fxs({k:'ri',x:P.x,y:P.y,r:70,c:'#5fd3a5'});pop(P.x,P.y-30,'+'+h,'#5fd3a5',15);spark(P.x,P.y,'#f4b3c8',14,70,1,3,60);spark(P.x,P.y,'#8ff0c4',10,60,1,2.4,50);
   }
-  P.qi-=skCost(s);SCD[id]=s.cd;P.swing=.2;P.skLock=SKILL_GCD;sfxSkill(t);
+  skPay(s,hpc);SCD[id]=s.cd;P.swing=.2;P.skLock=SKILL_GCD;sfxSkill(t);
   /* v5_109 CASTING: casting a skill stops you for a moment and plays a cast pose (arms raised). Dash skills (CAST_NOROOT) keep moving you instead. Tune CAST_T / CAST_T_LONG. */
   if(!CAST_NOROOT[t]){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null} /* v5_153 casting roots you again (v5_152 removed the root while moving); v5_154 a move input does NOT cancel it, you move when the pose ends */
   return true;

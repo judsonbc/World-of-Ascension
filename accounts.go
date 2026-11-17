@@ -44,7 +44,7 @@ const (
 	secretFile = "secret.key"
 	pbkdfIter  = 120000
 	tokenTTL   = 30 * 24 * time.Hour
-	maxSave    = 64 * 1024
+	maxSave    = 512 * 1024 // v5_186: was 64 KB; a full bag + warehouse with rolled stats can come close to that, and an over-size save was refused (and the progress silently never reached the account)
 )
 
 var accts *Accounts
@@ -57,6 +57,12 @@ type User struct {
 	IGN     string          `json:"ign,omitempty"` // permanent in-game name, unique (case-insensitive), set once
 	Gold    int64           `json:"gold,omitempty"` // premium currency, server-side only (see coupons.go)
 	Save    json.RawMessage `json:"save,omitempty"`
+	// v5_186 save versioning: Ver counts accepted saves. A client sends the version it last loaded / saved (X-Base-Ver) and a per-page id (X-Sid);
+	// the page that last LOADED the account owns it (a login on another device kicks the old one). A save from any other page is a stale device
+	// (kicked, or woke up from sleep) and must not overwrite newer progress: it is kept in Stale (last 3) instead and the client is told to reload.
+	Ver     int64             `json:"ver,omitempty"`
+	Stale   []json.RawMessage `json:"stale,omitempty"`
+	Owner   string            `json:"-"` // page id (X-Sid) that last loaded this account = the live session; in memory only
 }
 
 type Accounts struct {
@@ -128,8 +134,10 @@ func loadAccounts() *Accounts {
 	return a
 }
 
+var lastBak time.Time
+
 func (a *Accounts) flusher() {
-	for range time.Tick(5 * time.Second) {
+	for range time.Tick(2 * time.Second) { // v5_186: 5 s -> 2 s, so a server stop loses at most ~2 s of saves
 		a.flush()
 	}
 }
@@ -149,6 +157,12 @@ func (a *Accounts) flush() {
 	a.mu.Unlock()
 	if err != nil {
 		return
+	}
+	if time.Since(lastBak) > time.Minute { // v5_186 a copy of the previous users file (at most once a minute)
+		if old, err := os.ReadFile(usersFile); err == nil && len(old) > 0 {
+			_ = os.WriteFile(usersFile+".bak", old, 0o600)
+		}
+		lastBak = time.Now()
 	}
 	tmp := usersFile + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
@@ -521,9 +535,21 @@ func (a *Accounts) handleLoad(w http.ResponseWriter, r *http.Request) {
 	a.flushActive(email)
 	a.mu.Lock()
 	save := a.users[email].Save
+	ver := a.users[email].Ver
+	a.users[email].Owner = r.Header.Get("X-Sid") // v5_186 this page is now the live session (the previous one was told to save and sign out by flushActive above)
 	a.mu.Unlock()
 	if len(save) == 0 {
 		save = json.RawMessage("null")
+	} else {
+		// v5_186 the save version rides along as "_ver" so the client knows which version it is based on
+		t := strings.TrimSpace(string(save))
+		if len(t) > 1 && t[0] == '{' {
+			sep := ","
+			if strings.HasPrefix(strings.TrimSpace(t[1:]), "}") {
+				sep = ""
+			}
+			save = json.RawMessage(`{"_ver":` + strconv.FormatInt(ver, 10) + sep + t[1:])
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -544,15 +570,43 @@ func (a *Accounts) handleSave(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "Bad save.")
 		return
 	}
+	sid := r.Header.Get("X-Sid")
+	var base int64
+	hasBase := false
+	if bs := r.Header.Get("X-Base-Ver"); bs != "" {
+		if n, perr := strconv.ParseInt(bs, 10, 64); perr == nil {
+			base, hasBase = n, true
+		}
+	}
 	a.mu.Lock()
-	a.users[email].Save = json.RawMessage(b)
+	u := a.users[email]
+	// accepted when: an old client (no page id), the first save, the owning page, or - if no page owns the account yet (server just restarted) - a page whose base version is current
+	allowed := sid == "" || len(u.Save) == 0 || u.Owner == sid || (u.Owner == "" && hasBase && base == u.Ver)
+	if !allowed {
+		u.Stale = append(u.Stale, json.RawMessage(b))
+		if len(u.Stale) > 3 {
+			u.Stale = u.Stale[len(u.Stale)-3:]
+		}
+		a.dirty = true
+		cur := u.Ver
+		a.mu.Unlock()
+		log.Printf("%s: refused a stale save (base %d, current %d) from another device; kept as a backup", email, base, cur)
+		writeJSON(w, http.StatusConflict, map[string]interface{}{"ok": false, "conflict": true, "ver": cur})
+		return
+	}
+	u.Save = json.RawMessage(b)
+	u.Ver++
+	if sid != "" && u.Owner == "" {
+		u.Owner = sid
+	}
 	if a.saveSeq == nil {
 		a.saveSeq = map[string]int64{}
 	}
 	a.saveSeq[email]++
 	a.dirty = true
+	nv := u.Ver
 	a.mu.Unlock()
-	writeJSON(w, 200, map[string]bool{"ok": true})
+	writeJSON(w, 200, map[string]interface{}{"ok": true, "ver": nv})
 }
 
 func (a *Accounts) routes(mux *http.ServeMux) {
@@ -693,4 +747,13 @@ func (a *Accounts) handleReset(w http.ResponseWriter, r *http.Request) {
 	a.flush()
 	log.Printf("password reset for %s", email)
 	writeJSON(w, 200, map[string]string{"token": a.makeToken(email), "email": email})
+}
+
+// sidIsOwner: may the page with this id join the game as this account? A page that is not the account's current owner (it was signed out by a
+// login on another device, then woke up) must not sign the live session out. Old clients (no id) and an unowned account are always allowed.
+func (a *Accounts) sidIsOwner(email, sid string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	u := a.users[email]
+	return u == nil || sid == "" || u.Owner == "" || u.Owner == sid
 }

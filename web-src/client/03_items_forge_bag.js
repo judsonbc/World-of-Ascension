@@ -579,5 +579,5 @@ function openShop(){
   renderShop();$('shop').hidden=false;walletLoad();
 }
 $('shopClose').addEventListener('click',()=>{closeBuy();closeXc();$('shop').hidden=true});
-setInterval(()=>{if(started)save()},20000);
+setInterval(()=>{if(started)save()},8000); /* v5_186 20 s -> 8 s */
 

@@ -27,7 +27,7 @@ function netInfo(force){
 }
 function netJoin(){
   NET.joined=true;NET.infoKey='';
-  netSend({t:'join',token:AUTH.token,name:NET.name,w:curWorld,cl:P.cls,sk:SKW(),lv:P.lvl,wl:P.wlv,al:P.alv,mh:maxHp(),df:defVal()});
+  netSend({t:'join',token:AUTH.token,sid:SID,name:NET.name,w:curWorld,cl:P.cls,sk:SKW(),lv:P.lvl,wl:P.wlv,al:P.alv,mh:maxHp(),df:defVal()});
   netSend({t:'pvpm',on:PVPLVL}); /* v5_158 tell the server my PvP mode */
 }
 function setNetStatus(){
@@ -328,7 +328,7 @@ function netMsg(m){
     case 'kick':{
       /* signed out because the account logged in elsewhere: SAVE FIRST (browser + account), only then drop the session */
       try{if(started&&AUTH.ok)save()}catch(e){}
-      try{cloudFlush()}catch(e){}try{pmSaveNow()}catch(e){}
+      try{cloudFlush(true)}catch(e){}try{pmSaveNow()}catch(e){}
       AUTH.ok=false;NET.giveUp=true;if(cloudT){clearTimeout(cloudT);cloudT=0}cloudStr=null;
       authForget();
       try{if(NET.ws)NET.ws.close()}catch(e){}

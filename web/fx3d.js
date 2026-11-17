@@ -108,9 +108,9 @@ const CLOUD_F=oct=>'#define OCT '+oct+'\nvarying vec3 vd;uniform vec3 cc,horC,su
 const STAR_V='attribute float aS;attribute float aP;attribute vec3 aC;uniform float t,vis,pr;uniform vec3 tint;varying vec3 vc;varying float va;\n'+
  'void main(){vc=aC*tint;va=vis*(.65+.35*sin(t*(1.5+aP)+aP*40.));gl_PointSize=aS*pr;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
 const STAR_F='varying vec3 vc;varying float va;void main(){float d=length(gl_PointCoord-vec2(.5));float a=smoothstep(.5,.08,d);gl_FragColor=vec4(vc,a*va);}';
-const BODY_V='varying vec2 vU;void main(){vU=uv*2.-1.;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
+const BODY_V='varying vec2 vU;varying vec3 vDir;void main(){vU=uv*2.-1.;vDir=(modelMatrix*vec4(position,1.0)).xyz-cameraPosition;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
 /* kinds: 0 moon  1 sun  2 planet (+rings)  3 black hole  4 eclipsed star  5 dragon eye  6 clock  7 sundered sun */
-const BODY_F='varying vec2 vU;uniform vec3 col,col2,glow,L,horC;uniform float ext,kind,ring,tilt,op,t,seed,gk,hk,rot;\n'+
+const BODY_F='varying vec2 vU;varying vec3 vDir;uniform vec3 col,col2,glow,L,horC;uniform float ext,kind,ring,tilt,op,t,seed,gk,hk,rot;\n'+
  'float h3(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}\n'+
  'float vn(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);\n'+
  ' return mix(mix(mix(h3(i),h3(i+vec3(1.,0.,0.)),f.x),mix(h3(i+vec3(0.,1.,0.)),h3(i+vec3(1.,1.,0.)),f.x),f.y),\n'+
@@ -159,7 +159,8 @@ const BODY_F='varying vec2 vU;uniform vec3 col,col2,glow,L,horC;uniform float ex
  '  vec3 face=col*(.45+.2*fb(vec3(p*2.,seed)));oc=mix(face,col2,mk);a=d*(.32+.68*mk)+(1.-d)*halo*.3;a*=fade;oc=mix(glow,oc,d);\n'+
  ' }\n'+
  ' if(kind<1.5&&kind>.5||kind>6.5){float lm=max(oc.r,max(oc.g,oc.b));vec3 hn=horC/max(max(horC.r,max(horC.g,horC.b)),.001);oc=mix(oc,hn*lm,hk);}else oc=mix(oc,horC,hk);\n'+
- ' if(kind<1.5&&kind>.5||kind>6.5)gl_FragColor=vec4(oc*op,1.);else gl_FragColor=vec4(oc,a*op*(1.-hk*.4)*(1.-smoothstep(ext*.8,ext,r)));}';
+ ' float hzc=smoothstep(-.006,.012,normalize(vDir).y); /* v5_177 clip at the sky horizon: bodies set and rise AT the horizon, never sink into the ground */\n'+
+ ' if(kind<1.5&&kind>.5||kind>6.5)gl_FragColor=vec4(oc*op*hzc,1.);else gl_FragColor=vec4(oc,a*op*hzc*(1.-hk*.4)*(1.-smoothstep(ext*.8,ext,r)));}';
 const MET_V='varying vec2 vU;void main(){vU=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
 const MET_F='varying vec2 vU;uniform vec3 col;uniform float op;void main(){float a=pow(vU.x,2.5)*(1.-abs(vU.y*2.-1.));gl_FragColor=vec4(col,a*op);}';
 
@@ -271,7 +272,7 @@ function frame(c){
     if(b.sun){const a2=sa+(b.da||0);dv.set(Math.cos(a2),Math.sin(a2),.3+(b.dz||0)).normalize()}
     else if(b.static){const ce=Math.cos(b.el);dv.set(ce*Math.cos(b.az),Math.sin(b.el),ce*Math.sin(b.az))}
     else{const am=time/b.per*TAU+b.ph;dv.set(Math.cos(am),Math.sin(am)*b.em,b.z0).normalize()}
-    if(dv.y<-b.sz*1.4){m.visible=false;continue}
+    if(dv.y<-(b.sun&&!b.static?.125:b.sz*1.4)){m.visible=false;continue}
     m.visible=true;m.position.copy(dv).multiplyScalar(.87);
     nV.copy(dv).negate();rV.crossVectors(S.UP,nV);if(rV.lengthSq()<1e-4)rV.set(1,0,0);rV.normalize();uV.crossVectors(nV,rV);
     mat.makeBasis(rV,uV,nV);m.quaternion.setFromRotationMatrix(mat);m.scale.setScalar(.87*b.sz*b.ext);

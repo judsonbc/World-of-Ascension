@@ -3,7 +3,7 @@ let MODE3D=true;try{MODE3D=localStorage.getItem('al3d')!=='0'}catch(e){}
 const PRS=[1,1.15,1.3,1.5]; /* phone render scale steps (was a fixed 0.85); auto-lowered if the phone cannot hold ~45 fps */
 const prWant=()=>LOW?Math.min(PRS[T3.lv],Math.max(1,window.devicePixelRatio||1))*(PQ.lock&&PQ.rs?PQ.rs:1):T3.pr0; /* very low: render at 0.5x resolution */
 const T3={r:null,fr:0,zoom:1,mp:new Map(),rp:new Map(),it:new Map(),or:new Map(),pj:new Map(),built:-1,cc:{}};let G3,hfn=()=>0;
-const WMAP=[['hills',40,.0017],['mesas',60,.0013],['ridged',55,.0021],['spires',90,.0016],['isles',50,.0012],['isles',60,.0019],['hills',55,.0015],['spires',100,.0022],['crater',70,.0014],['dunes',45,.0018],['mesas',70,.0017],['ridged',80,.0013]];
+const WMAP=[['hills',40,.0017],['mesas',60,.0013],['ridged',55,.0021],['spires',90,.0011],['isles',50,.0012],['isles',60,.0019],['hills',55,.0015],['spires',100,.0013],['crater',70,.0014],['dunes',45,.0018],['mesas',70,.0017],['ridged',80,.0013]];
 const KITS=[[['Cone',1,3.2,1,1.6,0],['Dodeca',1.2,.8,1.2,.4,2],['Sphere',.9,.6,.9,.3,1]],[['Octa',.8,3,.8,1.5,1],['Octa',1.2,1,1.2,.5,0],['Dodeca',.6,.5,.6,.2,3]],[['Box',.8,3.4,.8,1.7,2],['Box',1.4,.7,1.4,.35,3],['Cyl',.5,1.2,.5,.6,0]],[['Cyl',.35,1.8,.35,.9,3],['Sphere',1.4,.9,1.4,1.6,0],['Sphere',.7,.5,.7,.25,1]],[['Cone',.5,3.8,.5,1.9,0],['Cyl',.45,2.2,.45,1.1,1],['Dodeca',1,.6,1,.3,2]]];
 const KOF=[0,2,4,1,3,3,0,1,4,2,3,1];
 /* v5_107 gh3 = the height of the DRAWN terrain mesh (triangle interpolation of its vertex grid), not the smooth height function. The mesh cells are 90-200 units wide, so on
@@ -18,8 +18,9 @@ const tIx=i=>i===0?11:i<=11?i-1:i; /* keeps each world's terrain look from befor
 function mkH(i){const [t,a,sc]=WMAP[tIx(i)%12],ph=tIx(i)*1.37;
   return (x,z)=>{const u=x*sc+ph,v=z*sc*1.1+ph*1.7,n=Math.sin(u)*Math.cos(v*1.3)+.5*Math.sin(u*2.3+v*1.9)+.25*Math.sin(v*4.1-u*3.3);let h;
     if(t==='hills')h=a*n*.5;else if(t==='dunes')h=a*(1-Math.abs(Math.sin(u*1.2+v*.6+n*.5)))*1.2-a*.4;
-    else if(t==='mesas')h=a*Math.round(n*1.6)*.45;else if(t==='crater')h=Math.abs(n)<.35?-a:a*.3*n;
-    else if(t==='spires')h=a*Math.pow(Math.max(0,n),3)*1.6;else if(t==='isles')h=n>.25?a*.4*n:-a*.5;else h=a*(1-Math.abs(n));
+    else if(t==='mesas'){const q=n*1.6,f=Math.floor(q),tt=Math.min(1,Math.max(0,(q-f-.25)/.5));h=a*(f+tt*tt*(3-2*tt)+.0)*.45;} /* v5_184 terraces with sloped (not vertical) steps */else if(t==='crater')h=Math.abs(n)<.35?-a:a*.3*n;
+    else if(t==='spires'){const ns=Math.sin(u)*Math.cos(v*1.3)+.35*Math.sin(u*1.7+v*1.3),m=Math.max(0,ns);h=a*m*m*1.4;} /* v5_184 broad rounded mountains: was a*n^3*1.6 (needle-thin, slopes up to 4+, peaks ~800); now peaks ~230-250 with slopes under ~0.5 (the fine-detail terms are dropped so there are no spikes) */
+    else if(t==='isles')h=n>.25?a*.4*n:-a*.5;else h=a*(1-Math.abs(n));
     /* v5_108 EXTRA HILLS AND VALLEYS on every world: broad rolling relief (wavelength ~9000 units, +-75) plus medium hills and hollows (~2800 units, +-32) on top of the world's own terrain */
     const bx=x*.0007+ph*2.1,bz=z*.00077+ph*.8,mx=x*.0023+ph*3.3,mz=z*.0021+ph*1.1;
     h+=75*(Math.sin(bx)*Math.cos(bz*1.2)+.45*Math.sin(bx*2.1+bz*1.7))/1.45+32*(Math.sin(mx*1.1+Math.cos(mz))*Math.cos(mz*.9-Math.sin(mx*.7)));
@@ -36,7 +37,7 @@ function init3(){
   T3.dest=new THREE.Mesh(G3.ring,bm());T3.dest.material.color.set('#8fffd0');T3.dest.visible=false;T3.sc.add(T3.dest);
   T3.sel=new THREE.Mesh(G3.ring,bm());T3.sel.material.color.set('#e3b559');T3.sc.add(T3.sel);
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(3600),3));geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(3600),3));
-  T3.pp=new THREE.Points(geo,new THREE.PointsMaterial({size:9,vertexColors:true,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));T3.pp.frustumCulled=false;T3.sc.add(T3.pp);
+  T3.pp=new THREE.Points(geo,new THREE.PointsMaterial({size:13,vertexColors:true,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,map:T3.dotTex=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d'),r=g.createRadialGradient(24,24,2,32,32,31);r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.55,'rgba(255,255,255,.95)');r.addColorStop(.85,'rgba(255,255,255,.55)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,64,64);const t=new THREE.CanvasTexture(c);return t})()}) /* v5_183 round, softly shaded sprite instead of the default square point */);T3.pp.frustumCulled=false;T3.sc.add(T3.pp);
 }
 function rebuild3(){
   T3.hg=null;
@@ -80,12 +81,12 @@ function rebuild3(){
     const STONE='#76706a',DARKC='#1d150f',LITC='#ffd78a';
     bld.forEach((b,idx)=>{
       const hw=b.hw,hh=b.hh,wh=b.wh,k=b.k,rd=b.rd,W=hw*2,D=hh*2,fx=b.fx,fy=b.fy,hr=q=>{const t=Math.sin(b.sd*12.9898+q*78.233)*43758.5453;return t-Math.floor(t)};
-      let by=-1e9;const pts=rd?[[0,0],[1,0],[-1,0],[0,1],[0,-1]]:[[-1,-1],[1,-1],[-1,1],[1,1],[0,0]];for(const[dx,dy]of pts)by=Math.max(by,gh3(b.x+dx*hw,b.y+dy*hh));
+      let by=-1e9;const pts=rd?[[0,0],[1,0],[-1,0],[0,1],[0,-1]]:[[-1,-1],[1,-1],[-1,1],[1,1],[0,0]];let bmin=1e9;for(const[dx,dy]of pts){const gy2=gh3(b.x+dx*hw,b.y+dy*hh);by=Math.max(by,gy2);bmin=Math.min(bmin,gy2)}const fd=Math.max(41,Math.min(220,by-bmin+16)); /* v5_184 foundation reaches down to the lowest corner */
       const X=b.x-C,Z=b.y-C,out=[],A=(g,ox,oy,oz,sx,sy,sz,c,ry)=>out.push([g,ox,oy,oz,sx,sy,sz,c,ry||0]);
       /* a flat panel on the front face (door / window): t = offset along the face */
       const F=(t,oy,w,h,c)=>{if(fx)A('b',fx*(hw+.8),oy,t,3,h,w,c);else A('b',t,oy,fy*(hh+.8),w,h,3,c)};
       const door=(w,h)=>F(0,0,w||26,h||40,DARKC),wins=(oy,n,c)=>{for(let q=0;q<n;q++)F((q-(n-1)/2)*((fx?hh:hw)*1.1/Math.max(1,n-1+.4)),oy,11,13,c||LITC)};
-      const found=()=>{if(k!==14)rd?A('y',0,-40,0,W+6,41,D+6,STONE):A('b',0,-40,0,W+6,41,D+6,STONE)};
+      const found=()=>{if(k!==14)rd?A('y',0,1-fd,0,W+6,fd,D+6,STONE):A('b',0,1-fd,0,W+6,fd,D+6,STONE)};
       const bands=(w,d,h,y0,gap,c,rnd)=>{for(let y=y0;y<y0+h-14;y+=gap)rnd?A('y',0,y,0,w+3,8,d+3,c):A('b',0,y,0,w+3,8,d+3,c)};
       found();
       if(k===0){

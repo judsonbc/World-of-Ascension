@@ -1,3 +1,42 @@
+QI COST -10%, QI-REGEN SKILLS COST HP (v5_188, web-src 01_core.js 02_combat.js 04 07; web/game.js rebuilt)
+  - Qi cost of every skill is 10% lower: QI_COST_MUL .99 -> .891 (all classes, signature skills included; read through skCost).
+  - Skills that give Qi back no longer cost Qi, they cost HP (QI_REGEN_T in 01_core.js): Lotus Ward line (mend), Soul Burst (soulburst), Soul Heal (soulheal), and the signature skills Heaven's Breath (sg_c25), Soul Lantern (sg_s25), Ancestral Chorus (sg_s300).
+    HP price = a FIXED % of your MAX HP per skill (does not change with your level; the HP amount grows with max HP). The % = the skill's Qi cost / the class's max Qi, both at the skill's own unlock level (skHpPct / skHpCost). A cast needs remaining HP >= 2 x the HP price (QI_REGEN_SAFE), so it never kills you.
+    Skill Book shows '% of max HP' instead of 'Qi'; the button greys out when it can't be cast. Their Qi gain is unchanged.
+
+SAVE SAFETY: NOTHING LOST WHEN SIGNED OUT / LOGGED IN ELSEWHERE (v5_186, accounts.go game.go main.go; web-src 01_core 03 08 10)
+  Audit of every way progress could be lost, and what changed:
+  1. Login on a second device: the old session is now signed out IMMEDIATELY at the new device's /api/load (it saves first, the server waits for that save, then hands the new device the newest state). Before, the old device kept playing until the new one pressed Start, and everything it earned in that gap was overwritten.
+  2. A stale device can never overwrite newer progress. The page that last loaded the account owns it (page id X-Sid); a save from any other page (kicked, or a phone that wakes from sleep) is refused with 409 and kept in the account's 'stale' list (last 3, users.json) instead of replacing the live save; that page signs itself out (it does not log in again by itself, which would kick the live device). Old clients without a page id still work.
+  3. A stale page can no longer sign the live device out: the join message carries the page id and the server refuses a join from a page that is not the owner.
+  4. Save versions: /api/load returns '_ver' with the save, every save returns the new version; the browser copy remembers it ('sv'), so a browser copy that is based on an older account version is never treated as 'newer' (a wrong clock on a device could do that before).
+  5. Failed saves were dropped: a network error left the progress unsent until the next save. Now one request at a time, the newest state is kept and retried every 5 s, with a chat warning once a minute. Close / sign-out sends immediately.
+  6. A save over 60 KB was sent with keepalive (browser limit 64 KB) and silently failed; keepalive is only used below that. Server limit 64 KB -> 512 KB (a full bag + warehouse with rolled stats could be refused).
+  7. Logout only pushed an already queued save; it now saves the CURRENT state first (up to 20 s of play was lost). Timer save 20 s -> 8 s.
+  8. If the account's save cannot be loaded at login (network / server error) the game no longer continues with an old browser copy (it could later overwrite newer progress); it asks to log in again.
+  9. Server: accounts are written to disk every 2 s (was 5), a copy of the previous users.json is kept (users.json.bak, at most once a minute), and Ctrl+C / stop writes pending saves first.
+  NOTE: the Go changes could not be compiled in the environment this was made in: run build.bat (or 'go build') once; if it reports an error, send it to me.
+
+SPRITES: BIGGER, HALF AS MANY (v5_185, 01_core.js spark, 06_render3d.js)
+  - 3D mode: sprite point size 9 -> 13, and spark() now skips every other sprite it would spawn (works for single-sprite calls too), so all particle effects, spirits included, have half the sprites. 2D mode is unchanged.
+
+NO BUILDINGS ON MOUNTAINS, BROADER MOUNTAINS (v5_184, 01_core.js genVillages/findSite, 06_render3d.js mkH / building foundations)
+  - Buildings were placed with no look at the terrain, so on the spire worlds a hall could end up on top of a needle and look like it was floating. findSite now measures the relief (highest minus lowest ground over the site, centre + 2 rings of 8 points) and only accepts flat, even ground (about 35-50 units of relief at most, depending on the site size); it tries 110 spots and, failing that, takes the flattest one if it is not much worse. World 1 (built at start-up, before the terrain table exists) is plain low hills and skips the check.
+  - 3D buildings: the stone foundation now reaches down to the LOWEST corner of the footprint (was a fixed 40 units), so a building on a gentle slope never shows a gap underneath.
+  - Spire mountains: were a*n^3*1.6 with fine-detail noise: peaks up to ~800 and slopes over 3-4 (needles). Now a rounded, wide mountain a*n^2*1.4 from the two broad waves only, and the two spire worlds use a larger wavelength (.0016 -> .0011, .0022 -> .0013). Peaks are ~230-250 units and slopes stay under about 0.5 (was 11-16% of the ground steeper than 0.6, now ~0%). Tall = wide.
+  - Mesa worlds: the terraces had vertical cliff steps; the steps are now sloped (same height per level).
+
+SPIRITS: SLOWER ORBIT + ROUND SPRITES (v5_183, 05_render2d.js spiritViz, 06_render3d.js)
+  - Orbit speed about halved (SPV w: wolf 2.4 -> 1.1, guardian 1.1 -> .5, Dao clone .9 -> .4; satellites and the radius wobble slower too).
+  - 3D mode: the particle sprites (THREE.Points) were the default square points, which made the spirits look pixelated. They now use a round, softly shaded dot texture. Same sprites, same count, same sizes; only the shape changed (this also rounds every other particle in 3D).
+
+MINIMAP ARROW FOLLOWS THE CAMERA (v5_182, 05_render2d.js drawMini)
+  - The arrow in the middle of the minimap showed the character's facing (P.face), so it ignored camera rotation ([ ] keys / Home). In 3D mode it now points where the camera looks: atan2(-cos yaw, -sin yaw) from camView.yaw. Screen-up on the 3D view is always up-the-arrow. 2D mode (no camera rotation) still shows the character's facing.
+
+SUN / MOON / PLANET SETTING (v5_177, web/fx3d.js)
+  - Bodies were only hidden by the terrain's depth. The ground mesh ends well short of the sky horizon (and the camera sits high above it), so a setting sun kept shining in the haze below the horizon line and only vanished when it reached the far edge of the terrain, i.e. it looked like it sank into the ground. Every body (BODY_V / BODY_F) now also clips at the true sky horizon (view direction y = 0, ~1 degree soft edge), so sunrise / sunset / moonset happen exactly at the horizon. Hills in front still hide them as before.
+  - The sun was switched off while 23% visible (hide threshold -0.07 vs fade end -0.12), so its glow popped out; it now hides only once fully faded.
+
 SUN BOX FIX (v5_177, web/fx3d.js BODY_F)
   - A pale square showed around the sun (and the Sundered Sun) whenever it was low: the horizon tint (oc=mix(oc,horC,hk)) added a flat colour to the whole additive quad. Additive bodies now tint by their own brightness (black stays black), so the quad edge adds exactly nothing. Moons, planets, black hole, eclipsed star, dragon's eye and clock were already clean (alpha fades to 0 before the quad edge). Checked all 8 body kinds at two horizon strengths: edge deviation from the sky is 0 for every one.
 

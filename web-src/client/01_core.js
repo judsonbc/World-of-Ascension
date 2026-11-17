@@ -98,8 +98,21 @@ const TL={pierce:'Piercing bolt',fan:'Bolt volley',nova:'Burst',meteor:'Meteor',
 const QI_LV_ADD=.25;
 /* v5_137 every cast costs an extra 10% of the player's current level in Qi, on top of the skill's own cost (read everywhere through skCost) */
 const QI_PLVL_ADD=.1;
-const QI_COST_MUL=.99; /* v5_140 final Qi cost reduced by 10% (x.9); v5_162 then +10% on every skill of every class (x.9 x1.1 = x.99) */
-const skCost=s=>Math.max(1,Math.round((s.cost+Math.round((typeof P!=='undefined'&&P&&P.lvl?P.lvl:1)*QI_PLVL_ADD))*QI_COST_MUL));
+const QI_COST_MUL=.891; /* v5_188 another -10% (.99 x .9) */
+/* history: v5_140 final Qi cost reduced by 10% (x.9); v5_162 then +10% on every skill of every class (x.9 x1.1 = x.99) */
+const skCostAt=(s,l)=>Math.max(1,Math.round((s.cost+Math.round(l*QI_PLVL_ADD))*QI_COST_MUL));
+const skCost=s=>skCostAt(s,typeof P!=='undefined'&&P&&P.lvl?P.lvl:1);
+/* v5_188 Qi-REGEN skills (they give Qi back: soulburst, soulheal, mend + signature sg_c25 / sg_s25 / sg_s300) are paid with HP instead of Qi.
+   v5_188e HP price = a FIXED % of your MAX HP per skill (it does not change as you level). The % is the skill's Qi cost as a share of the class's max Qi, both taken at the skill's own unlock level (skHpPct, cached in s._hp).
+   A cast needs remaining HP >= QI_REGEN_SAFE (2) x the HP price, otherwise it does not cast. */
+const QI_REGEN_T={soulburst:1,soulheal:1,mend:1,sg_c25:1,sg_s25:1,sg_s300:1};
+const QI_REGEN_SAFE=2;
+const skHp=s=>!!QI_REGEN_T[s.t];
+const skHpPct=s=>{if(s._hp==null){const l=Math.max(1,s.lv|0),c=s.c||0;s._hp=skCostAt(s,l)/Math.round((60+l*4)*(CLB[c].qi||1)*QI_MUL)}return s._hp};
+const skHpCost=s=>Math.max(1,Math.round(maxHp()*skHpPct(s)));
+const skCanPay=s=>skHp(s)?P.hp>=skHpCost(s)*QI_REGEN_SAFE:P.qi>=skCost(s);
+const skPay=(s,hpc)=>{if(skHp(s))P.hp=Math.max(1,P.hp-(hpc==null?skHpCost(s):hpc));else P.qi-=skCost(s)};
+const skCostLbl=s=>skHp(s)?(Math.round(skHpPct(s)*1000)/10)+'% of max HP (needs HP \u2265 2x cost)':skCost(s)+' Qi';
 const SKILLS=[{n:'Sword Wave',t:'pierce',m:2.2,cost:10,cd:1.2,lv:1,col:'#cfe8ff',tier:0},{n:'Whirling Blade',t:'nova',m:2.6,cost:22,cd:4,lv:1,col:'#ff8c6e',tier:-1},{n:'Lotus Mend',t:'heal',m:.35,cost:30,cd:10,lv:1,col:'#5fd3a5',tier:0}];
 /* a new skill every 5 levels (k = 1..200 -> level k*5). kk keeps each skill as strong as the old every-10-levels skill of the same level */
 for(let k=1;k<=200;k++){const y=STY[(k-1)%8],tr=Math.floor((k-1)/8),kk=k/2;SKILLS.push({n:TIER[tr]+' '+y[1],t:y[0],m:y[2]*(1+kk*.06),cost:Math.round(y[3]*(1+kk*.05))+Math.round(k*5*QI_LV_ADD),cd:y[4],lv:k*5,col:TCOL[tr],tier:tr>>1,k:kk})}
@@ -478,8 +491,14 @@ function genVillages(i,R2){
   const H=(h,sa,l)=>'hsl('+(((Math.round(h)%360)+360)%360)+','+Math.round(Math.max(0,Math.min(100,sa)))+'%,'+Math.round(Math.max(4,Math.min(96,l)))+'%)'; /* whole numbers only: three.js r128 cannot parse decimals in hsl() */
   const hm=()=>{let k=pick(cu.home);if(k===14&&R2()<.8)k=pick(cu.home.filter(e=>e[0]!==14));return k}; /* wells are rare */
   const sites=[],lo=arena?Math.round(RIM*.6):TOWN+700,hi=arena?RIM-200:RIM-380; /* arena: landmarks only in the outer ring (60%-RIM-200 of the radius), the middle stays open */
-  const findSite=(r,fa,fd)=>{for(let t=0;t<70;t++){const a=fa!=null?fa+(R2()-.5)*.3:R2()*Math.PI*2,d=fa!=null?Math.max(lo,Math.min(hi,fd+(R2()-.5)*160)):lo+Math.sqrt(R2())*(hi-lo),x=C+Math.cos(a)*d,y=C+Math.sin(a)*d;
-    if(sites.some(q=>Math.hypot(q.x-x,q.y-y)<q.r+r+130)||bldWet(i,x,y))continue;const q={x,y,r};sites.push(q);return q}return null};
+  /* v5_184 FLAT GROUND ONLY: a building site must be on gentle, even ground. relief = highest minus lowest terrain height over the site (centre + 2 rings of 8 points); sites on mountain flanks are rejected, so nothing hangs on a slope or sits on a peak */
+  let hf=null;try{hf=mkH(i)}catch(e){} /* WMAP does not exist yet while World 1 is built at start-up: that world is plain low hills, no check */
+  const relief=(x,y,r)=>{if(!hf)return 0;let lo2=1e9,hi2=-1e9;const s=(dx,dy)=>{const h=hf(x-C+dx,y-C+dy);if(h<lo2)lo2=h;if(h>hi2)hi2=h};s(0,0);for(let q=0;q<8;q++){const a=q*.7854;for(const f of[.5,1])s(Math.cos(a)*r*f,Math.sin(a)*r*f)}return hi2-lo2};
+  const findSite=(r,fa,fd)=>{let best=null,bestR=1e9;const rr2=Math.min(r,230),lim=22+rr2*.12; /* allowed relief: ~35-50 units over the footprint */
+    for(let t=0;t<110;t++){const a=fa!=null?fa+(R2()-.5)*.3:R2()*Math.PI*2,d=fa!=null?Math.max(lo,Math.min(hi,fd+(R2()-.5)*160)):lo+Math.sqrt(R2())*(hi-lo),x=C+Math.cos(a)*d,y=C+Math.sin(a)*d;
+      if(sites.some(q=>Math.hypot(q.x-x,q.y-y)<q.r+r+130)||bldWet(i,x,y))continue;
+      const rl=relief(x,y,rr2);if(rl<bestR){bestR=rl;best={x,y}}if(rl>lim)continue;const q={x,y,r};sites.push(q);return q}
+    if(best&&bestR<=lim*1.6){const q={x:best.x,y:best.y,r};sites.push(q);return q}return null};
   let placed=[];
   const dims=(k)=>{ /* [hw, hh, wh, extra] */
     switch(k){
@@ -664,9 +683,11 @@ function feed(t,col,ms){
 function say(t,col,ms){feed(t,col,ms);cpPush({k:'sys',m:String(t),col:col||''})}
 function pop(x,y,txt,col,size){texts.push({x,y,txt,col:col||'#fff',size:size||13,t:0})}
 function ring(x,y,r,col,kind){fx.push({x,y,r,col,kind,t:0,max:kind==='whirl'?.5:.35})}
+let SPK_T=0; /* v5_185 3D mode draws HALF the sprites (every other spawn is skipped, also for single-sprite calls) and each one is bigger (point size 9 -> 13) */
 function spark(x,y,col,n,spd,life,size,up){
   if(parts.length>600)parts.splice(0,120);
-  for(let i=0;i<n;i++){const a=rnd()*6.2832,s=spd*(.3+rnd()*.7);parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-(up||0),life:life*(.6+rnd()*.4),max:life,col,size:size*(.6+rnd()*.8)})}
+  let half=false;try{half=MODE3D}catch(e){}
+  for(let i=0;i<n;i++){if(half){SPK_T^=1;if(SPK_T)continue}const a=rnd()*6.2832,s=spd*(.3+rnd()*.7);parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-(up||0),life:life*(.6+rnd()*.4),max:life,col,size:size*(.6+rnd()*.8)})}
 }
 function hexRgb(h){const n=parseInt(h.slice(1),16);return (n>>16)+','+((n>>8)&255)+','+(n&255)}
 function daylight(){const ph=((time/240)+.5)%1;return .5+.5*Math.sin(ph*6.2832-1.5708)}
@@ -698,7 +719,8 @@ function zoneName(){
 }
 
 /* ---------- save ---------- */
-const AUTH={token:'',email:'',ign:'',ok:false};
+const AUTH={token:'',email:'',ign:'',ok:false,ver:null}; /* ver = the server save version this page is based on (null = not loaded yet) */
+const SID=Math.random().toString(36).slice(2)+Date.now().toString(36); /* v5_186 one id per page load: lets the server tell a stale device from the live one */
 /* v5_79 two accounts in one browser: the login (token + email + name) is kept PER TAB in sessionStorage (survives a refresh of that tab) and
    also in localStorage as 'last login', which only a NEW tab uses. Before, every tab shared one localStorage slot, so logging in with a second account
    in another tab replaced the first tab's login and a refresh there showed the other account. */
@@ -709,22 +731,46 @@ const authForget=()=>{const t=AUTH.token; /* this tab's login is dropped; the sh
   try{if(!t||localStorage.getItem('al_token')===t){localStorage.removeItem('al_token');localStorage.removeItem('al_email')}}catch(e){}};
 try{AUTH.token=authGet('al_token')||'';AUTH.email=authGet('al_email')||''}catch(e){}
 const saveKey=()=>'ashenlotus_'+String(AUTH.email||'').toLowerCase();   /* one local save slot PER account, so two accounts in the same browser can never overwrite each other */
-let cloudT=0,cloudStr=null;
+let cloudT=0,cloudStr=null,cloudBusy=false,cloudRetryT=0,cloudWarnAt=0;
 function cloudPush(str){if(!AUTH.ok)return;cloudStr=str;if(!cloudT)cloudT=setTimeout(cloudFlush,2000)}
-function cloudFlush(){
+/* v5_186 CLOUD SAVE: one request in flight at a time (its completion sends the newest state), a failed save is KEPT and retried every 5 s (it used to be dropped),
+   a refused save (another device holds newer progress) reloads this page from the account instead of overwriting it. force = closing / being signed out: send now even if one is in flight. */
+function cloudFlush(force){
   if(cloudT){clearTimeout(cloudT);cloudT=0}
   if(!AUTH.ok||cloudStr===null)return;
-  const b=cloudStr;cloudStr=null;
-  fetch('/api/save',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json',Authorization:'Bearer '+AUTH.token},body:b}).catch(()=>{});
+  if(cloudBusy&&!force)return;
+  const b=cloudStr;cloudStr=null;cloudBusy=true;
+  const h={'Content-Type':'application/json',Authorization:'Bearer '+AUTH.token,'X-Sid':SID};if(AUTH.ver!==null)h['X-Base-Ver']=String(AUTH.ver);
+  fetch('/api/save',{method:'POST',keepalive:b.length<60000,headers:h,body:b}).then(r=>r.json().catch(()=>({})).then(j=>{
+    cloudBusy=false;
+    if(r.ok){if(j&&j.ver!==undefined)AUTH.ver=j.ver|0;cloudWarnAt=0;if(cloudStr!==null)cloudFlush();return}
+    if(r.status===409){cloudConflict();return}
+    if(r.status===401){if(!cloudWarnAt){cloudWarnAt=Date.now();try{say('Your login expired: the progress is kept in this browser. Log out and log in again to sync it.','#ff9a6a',12000)}catch(e){}}return}
+    cloudRetry(b)})).catch(()=>{cloudBusy=false;cloudRetry(b)});
 }
-/* closing the tab / browser without Logout: write the CURRENT state (not the last 8 s timer save) to the browser and the account */
-function saveNow(){if(started&&AUTH.ok){try{save()}catch(e){}}cloudFlush()}
+function cloudRetry(b){
+  if(cloudStr===null)cloudStr=b; /* a newer state may already be waiting: keep that one */
+  if(!cloudWarnAt||Date.now()-cloudWarnAt>60000){cloudWarnAt=Date.now();try{say('Could not reach the server to save your progress: retrying (it is also stored in this browser).','#ff9a6a',8000)}catch(e){}}
+  if(!cloudRetryT)cloudRetryT=setTimeout(()=>{cloudRetryT=0;cloudFlush()},5000);
+}
+/* the account is now played on ANOTHER device (this page is stale: it was signed out, or woke up from sleep): never overwrite that progress. The server keeps this page's save as a backup;
+   this page signs out (it must not log in again by itself: that would sign the live device out). The browser copy is kept: on the next login the newer account save wins over it (its 'sv' is older). */
+function cloudConflict(){
+  if(!AUTH.ok)return; /* already signed out / being kicked: that path handles it */
+  AUTH.ok=false;try{NET.giveUp=true}catch(e){}
+  if(cloudT){clearTimeout(cloudT);cloudT=0}if(cloudRetryT){clearTimeout(cloudRetryT);cloudRetryT=0}cloudStr=null;
+  authForget();
+  try{if(NET.ws)NET.ws.close()}catch(e){}
+  setTimeout(()=>{alert('This account is now being played on another device, so this page was signed out. Log in again to continue with the latest save.');location.reload()},50);
+}
+/* closing the tab / browser without Logout: write the CURRENT state (not the last timer save) to the browser and the account */
+function saveNow(){if(started&&AUTH.ok){try{save()}catch(e){}}cloudFlush(true)}
 let saveSoonT=0;function saveSoon(){if(saveSoonT||!started)return;saveSoonT=setTimeout(()=>{saveSoonT=0;try{save()}catch(e){}},1200)}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow()});
 window.addEventListener('pagehide',saveNow);window.addEventListener('beforeunload',saveNow);
 function save(){
   if(!AUTH.ok)return;
-  const str=JSON.stringify({v:2,pm:PVPLVL,ts:Date.now(),gv:GEAR_VER,lvl:P.lvl,exp:P.exp,coins:P.coins,ore:P.ore,wlv:P.wlv,alv:P.alv,wv:2,wi:curWorld===ARENA?1:curWorld,eq:EQ,as:AUTOSK.map(x=>x?1:0),sk:SKIN,lkv:2,lk:LOOKS.map((v,i)=>i===P.cls?SKIN:v),gear:P.gear,bag:bagArr(),pots:P.pots,wh:whArr(),fb:P.fightBack?1:0,tm:P.tapMove?1:0,mk:1,sg:1,cl:P.cls,cs:CLS_STORE.map(x=>x?{e:x.e,a:x.a.map(y=>y?1:0)}:null),ap:P.autoPot?1:0,ah:P.apHp,aq:P.apQi});
+  const str=JSON.stringify({v:2,pm:PVPLVL,ts:Date.now(),gv:GEAR_VER,sv:AUTH.ver===null?undefined:AUTH.ver,lvl:P.lvl,exp:P.exp,coins:P.coins,ore:P.ore,wlv:P.wlv,alv:P.alv,wv:2,wi:curWorld===ARENA?1:curWorld,eq:EQ,as:AUTOSK.map(x=>x?1:0),sk:SKIN,lkv:2,lk:LOOKS.map((v,i)=>i===P.cls?SKIN:v),gear:P.gear,bag:bagArr(),pots:P.pots,wh:whArr(),fb:P.fightBack?1:0,tm:P.tapMove?1:0,mk:1,sg:1,cl:P.cls,cs:CLS_STORE.map(x=>x?{e:x.e,a:x.a.map(y=>y?1:0)}:null),ap:P.autoPot?1:0,ah:P.apHp,aq:P.apQi});
   try{localStorage.setItem(saveKey(),str)}catch(e){}
   cloudPush(str);
   netInfo();

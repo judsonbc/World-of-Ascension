@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -142,5 +144,13 @@ func main() {
 	if !*noOpen {
 		go func() { time.Sleep(400 * time.Millisecond); openBrowser(local) }()
 	}
+	// v5_186 Ctrl+C / stop: write every pending account save to disk before exiting
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		<-c
+		accts.flush()
+		os.Exit(0)
+	}()
 	log.Fatal(http.Serve(ln, mux))
 }

@@ -362,21 +362,21 @@ function updateMonsters(dt){
    Summons used to be one tiny orbiting spark. Now every spirit is a bright, large body (wolf = head / body / tail + glowing eyes, guardian = big orb with 4 satellites, Dao clone = a tall light figure,
    sentinel = a glowing pillar) with a ground ring that pulses beneath it, and it marks its target SPIRIT_WU seconds before it strikes (line + red ring on the target).
    Other players see them too: the owner sends ONE small 'sp' effect message when the set of spirits changes (kinds, counts, seconds left); the receivers draw them locally. Purely visual. */
-const SPIRIT_WU=.35,SPV={1:{r:84,w:2.4},2:{r:104,w:1.1},3:{r:66,w:0},4:{r:92,w:.9}};
+const SPIRIT_WU=.35,SPV={1:{r:84,w:1.1},2:{r:104,w:.5},3:{r:66,w:0},4:{r:92,w:.4}}; /* v5_183 orbit speeds roughly halved (were 2.4 / 1.1 / 0 / .9 rad/s) */
 function spiritViz(o,list,dt){
   o.spvT=(o.spvT||0)-dt;if(o.spvT>0||!list.length)return;o.spvT=LOW?.05:.033;
   const cnt={},idx={};for(const q of list)cnt[q.k]=(cnt[q.k]||0)+1;
   for(const q of list){
     const k=q.k,n=cnt[k],i=idx[k]=(idx[k]||0)+1,j=i-1,v=SPV[k]||SPV[1],col=q.col||'#9fe0ff',hot=q.fz?'#ff9a7a':col;
-    let x,y,an=time*v.w*(q.fz?1.8:1)+j*6.2832/n;
+    let x,y,an=time*v.w*(q.fz?1.5:1)+j*6.2832/n;
     if(k===3){const f=(o.face||0)+1.5708;x=o.x+Math.cos(f)*v.r;y=o.y+Math.sin(f)*v.r}
-    else{const rr=v.r+Math.sin(time*5+j*1.7)*9;x=o.x+Math.cos(an)*rr;y=o.y+Math.sin(an)*rr}
+    else{const rr=v.r+Math.sin(time*2.5+j*1.7)*7;x=o.x+Math.cos(an)*rr;y=o.y+Math.sin(an)*rr}
     q.px=x;q.py=y;
     if(k===1){const d=an+1.5708,cx=Math.cos(d),cy=Math.sin(d);
       spark(x+cx*12,y+cy*12,hot,1,6,.32,7.5);spark(x,y,hot,1,6,.34,9);spark(x-cx*14,y-cy*14,hot,1,6,.3,6.5);spark(x-cx*27,y-cy*27,hot,1,8,.28,4.5);
       spark(x+cx*15,y+cy*15,'#ffffff',1,3,.26,3.2); /* eyes / bright core */
       spark(x-cx*40,y-cy*40,hot,1,10,.4,3);}
-    else if(k===2){spark(x,y,hot,1,6,.34,13);spark(x,y,'#ffffff',1,3,.28,5);for(let m=0;m<4;m++){const g=time*3+m*1.5708;spark(x+Math.cos(g)*20,y+Math.sin(g)*20,hot,1,4,.3,4.5)}}
+    else if(k===2){spark(x,y,hot,1,6,.34,13);spark(x,y,'#ffffff',1,3,.28,5);for(let m=0;m<4;m++){const g=time*1.6+m*1.5708;spark(x+Math.cos(g)*20,y+Math.sin(g)*20,hot,1,4,.3,4.5)}}
     else if(k===3){for(let m=0;m<4;m++)spark(x,y-m*9,m?col:'#ffffff',1,5,.3,m?8:6);spark(x,y,'#ffffff',1,4,.3,5)}
     else{spark(x,y,hot,1,5,.34,10);for(let m=0;m<4;m++){const g=m*1.5708+.785;spark(x+Math.cos(g)*11,y+Math.sin(g)*11,col,1,3,.3,5)}spark(x,y,'#ffffff',1,3,.28,3.5)}
     if(!q.rt||time>q.rt){q.rt=time+.5+j*.07;ring(x,y,k===2?36:26,hot)} /* ground ring pulsing under every spirit */
@@ -963,7 +963,7 @@ function drawMini(){
   for(const o of ores)if(o.cd<=0&&near(o.x,o.y)){mctx.fillStyle='#e3b559';mctx.fillRect(wx(o.x)-2,wy(o.y)-2,4,4)}
   for(const m of mons){if(m.dead||!near(m.x,m.y))continue;if(m.boss){mctx.fillStyle='#ff9a9a';mctx.beginPath();mctx.arc(wx(m.x),wy(m.y),4.5,0,6.2832);mctx.fill()}else{mctx.fillStyle='#8fd8ff';mctx.fillRect(wx(m.x)-1.5,wy(m.y)-1.5,3,3)}}
   if(MP)for(const q of NET.peers.values()){if(!near(q.x,q.y))continue;mctx.fillStyle=PARTY.ids.has(q.id)?'#5fa8ff':'#ff3b3b';mctx.beginPath();mctx.arc(wx(q.x),wy(q.y),4.5,0,6.2832);mctx.fill()}
-  mctx.save();mctx.translate(cx,cy);mctx.rotate(P.face);
+  mctx.save();mctx.translate(cx,cy);mctx.rotate(MODE3D&&window.THREE?Math.atan2(-Math.cos(camView.yaw),-Math.sin(camView.yaw)):P.face); /* v5_182 arrow = where the 3D camera looks (the camera orbits at (sin yaw, cos yaw) from you, so it looks along (-sin yaw, -cos yaw)); 2D mode keeps your facing */
   mctx.beginPath();mctx.moveTo(11,0);mctx.lineTo(-7,-7);mctx.lineTo(-3,0);mctx.lineTo(-7,7);mctx.closePath();
   mctx.fillStyle='#ffe9a8';mctx.fill();mctx.lineWidth=2;mctx.strokeStyle='#1a1408';mctx.stroke();mctx.restore();
   mctx.restore();

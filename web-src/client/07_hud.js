@@ -92,7 +92,7 @@ function hud(){
   skBtns.forEach((b,i)=>{const id=EQ[i],k=SKILLS[id],cd=k?Math.max(0,SCD[id]):0;
     sh(b.lastElementChild,k?(cd/k.cd*100)+'%':'0');
     st(b.children[2],cd>0?fmtT(cd):'');
-    b.classList.toggle('nq',!k||P.qi<skCost(k));b.classList.toggle('auto',!!k&&i<AUTO_SLOTS&&AUTOSK[i]);
+    b.classList.toggle('nq',!k||!skCanPay(k));b.classList.toggle('auto',!!k&&i<AUTO_SLOTS&&AUTOSK[i]);
   });
   $('bForge').style.opacity=inTown()?1:.55;$('bWare').style.opacity=inTown()?1:.55;
   {const ha=$('hubArr'),show=started&&P.dead<=0&&!inTown();ha.hidden=!show;

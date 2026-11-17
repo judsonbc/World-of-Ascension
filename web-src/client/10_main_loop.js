@@ -95,6 +95,7 @@ function api(path,body){
   const o={method:body?'POST':'GET',headers:{}};
   if(body){o.headers['Content-Type']='application/json';o.body=JSON.stringify(body)}
   if(AUTH.token)o.headers.Authorization='Bearer '+AUTH.token;
+  o.headers['X-Sid']=SID; /* v5_186 page id: /api/load makes this page the account's live session */
   return fetch(path,o).then(r=>r.text().then(t=>{
     let j=null;try{j=JSON.parse(t)}catch(e){}
     if(!r.ok)throw Object.assign(new Error((j&&j.error)||'Server error'),{status:r.status});
@@ -107,18 +108,21 @@ function setAuthUI(){
   $('whoEmail').textContent=AUTH.email;
 }
 function logout(){
-  cloudFlush();pmSaveNow();
+  saveNow();pmSaveNow(); /* v5_186 save the CURRENT state first (it only pushed an already queued save before, so up to 20 s of play was lost) */
   authForget();
   location.reload();
 }
 async function enterAccount(){
   let server=null,got=false,newerLocal=false;
-  try{server=await api('/api/load');got=true}catch(e){if(e.status===401){authForget();AUTH.token='';setAuthUI();authMsg('Session expired. Please log in again.');return}}
+  try{server=await api('/api/load');got=true}catch(e){if(e.status===401){authForget();AUTH.token='';setAuthUI();authMsg('Session expired. Please log in again.');return}
+    /* v5_186 the account's save could not be loaded (network / server error): do NOT go on with an old browser copy, it could later overwrite newer progress from another device */
+    AUTH.ok=false;setAuthUI();authMsg('Could not load your saved progress from the server. Check the connection and log in again.');return}
+  AUTH.ver=server?(server._ver|0):0;
   try{
     const key=saveKey(),local=localStorage.getItem(key);
     let l=null;try{l=JSON.parse(local||'null')}catch(_){}
-    if(got&&server&&l&&(+l.ts||0)>(+server.ts||0))newerLocal=true;   /* this account's last cloud push never made it: keep its newer browser copy and push it now */
-    if(got&&server&&!newerLocal){localStorage.setItem(key,JSON.stringify(server));if(server.sk!==undefined)localStorage.setItem('al_look_'+AUTH.email,String(server.sk|0))}
+    if(got&&server&&l&&(+l.ts||0)>(+server.ts||0)&&(l.sv===undefined||(l.sv|0)>=(server._ver|0)))newerLocal=true; /* v5_186 only if the browser copy is based on the current account version: a copy from before another device saved is stale even when its clock is ahead */   /* this account's last cloud push never made it: keep its newer browser copy and push it now */
+    if(got&&server&&!newerLocal){server.sv=server._ver;delete server._ver;localStorage.setItem(key,JSON.stringify(server));if(server.sk!==undefined)localStorage.setItem('al_look_'+AUTH.email,String(server.sk|0))}
     localStorage.removeItem('ashenlotus');localStorage.removeItem('al_acct');   /* old shared slot from earlier versions: never trusted again */
   }catch(e){}
   AUTH.ok=true;pmLoad();
