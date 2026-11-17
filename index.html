@@ -1,0 +1,1178 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="World of Ascension"><meta name="theme-color" content="#0d1114"><link rel="manifest" href="manifest.json"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!-- LOADING SCREEN (v5_57): covers the page until all game files, fonts and the 3D engine are ready -->
+<style>#ldr{position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147483000;background:#0d1114;color:#e8e0ca;display:flex;align-items:center;justify-content:center;font-family:'Marcellus SC',Georgia,serif;transition:opacity .3s}
+#ldr .lb{width:min(78vw,340px);text-align:center}#ldr .lt{font-size:26px;letter-spacing:.06em;margin-bottom:22px;color:#e3b559}
+#ldr .lr{height:8px;border-radius:5px;background:rgba(232,224,202,.14);overflow:hidden}#ldr .lr i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#5fd3a5,#e3b559);transition:width .25s}
+#ldr .ls{margin-top:12px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:#8d9aa2;min-height:18px}
+#ldr button{margin:14px 6px 0;padding:8px 16px;border:1px solid rgba(232,224,202,.3);border-radius:8px;background:rgba(232,224,202,.08);color:#e8e0ca;font:13px -apple-system,BlinkMacSystemFont,sans-serif}</style>
+<div id="ldr"><div class="lb"><div class="lt">World of Ascension</div><div class="lr"><i id="ldB"></i></div><div class="ls" id="ldS">Starting...</div><div id="ldX" style="display:none"><button id="ldR">Retry</button><button id="ldC">Continue anyway</button></div><div><button id="ldK" style="display:none">Continue now (sound will follow)</button></div></div></div>
+<script>
+/* Preloader: downloads/caches the game files (service worker keeps them on the device), waits for fonts and the 3D engine, then lifts the screen. */
+(function(){
+  var bar=document.getElementById('ldB'),txt=document.getElementById('ldS'),box=document.getElementById('ldr'),x=document.getElementById('ldX'),pct=0,fin=false;
+  function set(p,t){if(fin)return;if(p>pct)pct=p;bar.style.width=pct+'%';if(t)txt.textContent=t}
+  function done(){if(fin)return;fin=true;bar.style.width='100%';box.style.opacity='0';setTimeout(function(){if(box.parentNode)box.parentNode.removeChild(box)},320)}
+  function trouble(m){txt.textContent=m;x.style.display='block'}
+  document.getElementById('ldR').onclick=function(){location.reload()};
+  document.getElementById('ldC').onclick=done;
+  var sw='serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1');
+  if(sw)navigator.serviceWorker.register('sw.js').catch(function(){});
+  /* 1) game files (cache hit = instant; first visit downloads and the service worker stores them) */
+  var files=['models3d.js','pets3d.js','audio.js','tutorial.js','three-compat.js','fx3d.js','manifest.json'],got=0;
+  set(4,'Downloading game files...');
+  files.forEach(function(f){fetch(f).then(function(r){return r.arrayBuffer()}).catch(function(){}).then(function(){got++;set(4+got/files.length*50,'Downloading game files... '+got+'/'+files.length)})});
+  var wait=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
+  var sndBusy=false,sndSkip=false;
+  var sndWait=function(){return new Promise(function(res){
+    var S=window.SND;if(!S||!S.progress){res();return}
+    var t0=Date.now(),k2=document.getElementById('ldK');sndBusy=true;
+    k2.onclick=function(){sndSkip=true};
+    var out=function(){sndBusy=false;k2.style.display='none';res()};
+    (function k(){
+      var p=S.progress(),el=Date.now()-t0;
+      if(p.ready){set(92);out();return}
+      var f=p.total?p.done/p.total:0;
+      set(74+f*18,(p.cached?'Preparing sounds... ':'Preparing sounds (first start only)... ')+Math.min(99,Math.round(f*100))+'%');
+      if(el>15000)k2.style.display='inline-block';           /* slow phone: let the player go in without waiting */
+      if(sndSkip||el>90000){out();return}                      /* the rest keeps finishing in the background */
+      setTimeout(k,120);
+    })();
+  })};
+  var until=function(fn,ms){return new Promise(function(res){var t0=Date.now();(function k(){if(fn())res(true);else if(Date.now()-t0>ms)res(false);else setTimeout(k,60)})()})};
+  window.addEventListener('load',function(){
+    set(58,'Loading 3D engine...');
+    until(function(){return typeof THREE!=='undefined'&&window.AL3D},15000).then(function(ok){
+      if(!ok){trouble('Could not load the 3D engine. Check your connection and retry.');return}
+      set(72,'Loading fonts...');
+      var ff=document.fonts&&document.fonts.load?Promise.all([document.fonts.load('16px "Marcellus SC"'),document.fonts.load('16px Figtree')]):Promise.resolve();
+      return Promise.race([ff.catch(function(){}),wait(4000)]).then(function(){
+        return sndWait(); /* v5_118: music and effects are prepared here (first start only; later starts load the saved copy) */
+      }).then(function(){
+        set(93,sw?'Saving to this device...':'Almost ready...');
+        return sw?Promise.race([navigator.serviceWorker.ready.catch(function(){}),wait(4000)]):0;
+      }).then(function(){
+        set(96,'Almost ready...');
+        return new Promise(function(r){requestAnimationFrame(function(){requestAnimationFrame(r)})});
+      }).then(done);
+    });
+  });
+  (function slow(n){setTimeout(function(){if(fin)return;if(sndBusy&&n<4){slow(n+1);return}trouble('Taking longer than usual...')},25000)})(0);
+})();
+</script>
+<title>World of Ascension</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Marcellus+SC&family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: full-bleed top-down canvas, glass HUD panels pinned to the corners, skill bar bottom-centre. */
+:root{
+  --ink:#0d1114; --ink2:#161c20; --paper:#e8e0ca; --mist:#8d9aa2;
+  --jade:#5fd3a5; --cinnabar:#d9503f; --gold:#e3b559; --qi:#52b6d8;
+  --glass:rgba(13,17,20,.78); --line:rgba(232,224,202,.16);
+  --display:'Marcellus SC',Georgia,'Times New Roman',serif;
+  --body:'Figtree',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%;height:100dvh}
+body{margin:0;background:var(--ink);color:var(--paper);font:14px/1.4 var(--body);overflow:hidden;-webkit-user-select:none;user-select:none}
+#stage{position:relative;width:100%;height:100%;overflow:hidden;touch-action:none;background:var(--ink)}
+#game{position:absolute;inset:0;display:block}
+#vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(5,8,10,.55) 100%)}
+.panel{background:var(--glass);border:1px solid var(--line);border-radius:10px;backdrop-filter:blur(4px)}
+button{font:inherit;color:var(--paper);cursor:pointer;touch-action:manipulation}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* ===== HUD: Mir4-style layout. Sizes are written in "u" (calc(1*var(--u)) = one unit of a 1000x534 design canvas; the page scales --u on resize). ===== */
+#hud{position:absolute;inset:0;pointer-events:none;--u:1px}
+#hud button,#hud .hit{pointer-events:auto}
+#hud [hidden]{display:none!important}
+.tx{text-shadow:0 0 calc(3*var(--u)) #000,0 calc(1*var(--u)) calc(2*var(--u)) #000,0 0 calc(6*var(--u)) rgba(0,0,0,.8)}
+.ic{position:relative;display:grid;place-items:center;width:calc(36*var(--u));height:calc(36*var(--u));padding:0;border-radius:50%;border:calc(1.5*var(--u)) solid rgba(232,224,202,.4);background:radial-gradient(circle at 35% 28%,#35424c,#0f151a 78%);color:var(--paper);font:600 calc(16*var(--u))/1 var(--body);box-shadow:0 calc(2*var(--u)) calc(6*var(--u)) rgba(0,0,0,.55)}
+.ic.on{border-color:var(--jade);box-shadow:0 0 calc(8*var(--u)) var(--jade)}
+#bPvp.on{border-color:#ff4a3a;box-shadow:0 0 calc(10*var(--u)) #ff4a3a;color:#ffb4a8}#bPvp.on .lb{color:#ff8a7a}
+/* v5_158 PvP mode panel (opened by the PvP button) */
+#pvpPanel{position:fixed;z-index:80;display:none;pointer-events:auto;width:calc(150*var(--u));padding:calc(7*var(--u)) calc(8*var(--u)) calc(9*var(--u));background:linear-gradient(#0c1822f2,#070d14f5);border:1px solid rgba(110,150,175,.45);border-radius:calc(3*var(--u));box-shadow:0 calc(4*var(--u)) calc(18*var(--u)) rgba(0,0,0,.65);font-family:var(--body);color:#cfe0ea;user-select:none}
+#pvpPanel.open{display:block}
+#pvpPanel .ph{display:flex;align-items:center;gap:calc(6*var(--u));margin-bottom:calc(6*var(--u));font:600 calc(13*var(--u)) var(--body);color:#aebfcb}
+#pvpPanel .pic{display:grid;place-items:center;width:calc(18*var(--u));height:calc(18*var(--u));border:1.5px solid #aebfcb;border-radius:50%;font:700 calc(11*var(--u)) var(--body);font-style:italic}
+#pvpPanel .pm{display:flex;align-items:center;gap:calc(10*var(--u));width:100%;height:calc(33*var(--u));margin:0 0 calc(5*var(--u));padding:0 calc(10*var(--u));border:1px solid rgba(110,150,175,.35);background:rgba(8,16,24,.92);color:var(--c);font:600 calc(14*var(--u)) var(--body);cursor:pointer}
+#pvpPanel .pm i{flex:none;width:calc(8*var(--u));height:calc(8*var(--u));border:1.5px solid var(--c);transform:rotate(45deg);box-shadow:0 0 calc(4*var(--u)) var(--c)}
+#pvpPanel .pm span{flex:1;text-align:center;margin-right:calc(14*var(--u))}
+#pvpPanel .pm.sel{border-color:#59b4ff;background:rgba(22,52,84,.92);box-shadow:inset 0 0 calc(10*var(--u)) rgba(70,150,255,.38),0 0 calc(8*var(--u)) rgba(70,150,255,.45)}
+#pvpPanel .pi{min-height:calc(26*var(--u));margin:calc(1*var(--u)) 0 calc(6*var(--u));font:400 calc(9.5*var(--u))/1.3 var(--body);color:#8fa3b1;text-align:center}
+#pvpPanel .atk{display:flex;align-items:center;justify-content:space-between;gap:calc(6*var(--u));width:100%;padding:calc(5*var(--u)) calc(4*var(--u));border:0;border-top:1px solid rgba(110,150,175,.3);background:none;color:#cfe0ea;font:600 calc(11.5*var(--u)) var(--body);cursor:pointer}
+#pvpPanel .sw{position:relative;flex:none;width:calc(30*var(--u));height:calc(16*var(--u));border-radius:calc(9*var(--u));background:#25323d;border:1px solid rgba(110,150,175,.5)}
+#pvpPanel .sw u{position:absolute;left:calc(2*var(--u));top:calc(2*var(--u));width:calc(10.5*var(--u));height:calc(10.5*var(--u));border-radius:50%;background:#8da0ad;transition:left .12s}
+#pvpPanel .atk.on .sw{background:#7a1f18;border-color:#ff6a5a}#pvpPanel .atk.on .sw u{left:calc(15*var(--u));background:#ffb4a8}
+.ic .bd{position:absolute;right:calc(-3*var(--u));top:calc(-3*var(--u));min-width:calc(12*var(--u));height:calc(12*var(--u));border-radius:calc(7*var(--u));background:#ff7a1a;color:#fff;font:700 calc(8.5*var(--u))/calc(12*var(--u)) var(--body);text-align:center;padding:0 calc(2*var(--u));box-sizing:border-box}
+.ic .lb{position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:calc(1*var(--u));font:600 calc(8.5*var(--u)) var(--body);white-space:nowrap;color:var(--paper);text-shadow:0 0 calc(3*var(--u)) #000,0 calc(1*var(--u)) calc(2*var(--u)) #000}
+.ic .cnt{position:absolute;right:calc(-5*var(--u));top:calc(-5*var(--u));min-width:calc(14*var(--u));padding:0 calc(3*var(--u));border-radius:calc(8*var(--u));background:rgba(8,12,16,.85);text-align:center;font:700 calc(10*var(--u)) var(--body);color:#fff;text-shadow:0 0 calc(3*var(--u)) #000,0 calc(1*var(--u)) calc(2*var(--u)) #000;white-space:nowrap}
+.ic .cd{position:absolute;inset:0;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.6);font:700 calc(12*var(--u)) var(--body);color:#fff}
+.ic .cd[hidden]{display:none}
+.ic .au{position:absolute;left:0;right:0;bottom:calc(3*var(--u));text-align:center;font:700 calc(7.5*var(--u)) var(--body);color:var(--paper);letter-spacing:.04em}
+.ic.rd{border-color:#8fd0ff}
+
+/* top-left: level + power, HP / MP, buffs, quick row */
+#pl{position:absolute;left:calc(10*var(--u));top:calc(8*var(--u));width:calc(214*var(--u));display:flex;flex-direction:column;gap:calc(3*var(--u))}
+#plr>*{white-space:nowrap;flex-shrink:0}#plr{display:flex;align-items:center;gap:calc(8*var(--u));font:700 calc(21*var(--u))/1.1 var(--body);height:calc(26*var(--u))}
+#plr .pw{display:flex;gap:calc(4*var(--u));align-items:center;font-size:calc(19*var(--u))}
+#bStats{width:calc(17*var(--u));height:calc(17*var(--u));border-radius:50%;border:calc(1.2*var(--u)) solid rgba(232,224,202,.5);background:rgba(10,14,18,.55);color:var(--paper);font:700 calc(11*var(--u))/1 var(--body);padding:0;display:grid;place-items:center;text-shadow:none}
+#bStats:hover,#bStats.on{border-color:var(--gold);color:var(--gold)}
+#statsWin{position:absolute;left:calc(232*var(--u));top:calc(8*var(--u));width:calc(440*var(--u));padding:calc(8*var(--u)) calc(11*var(--u));display:grid;grid-template-columns:1fr auto 1fr auto;gap:calc(2*var(--u)) calc(14*var(--u));font-size:calc(11.5*var(--u));color:var(--paper);background:rgba(10,14,18,.42);border:1px solid rgba(232,224,202,.22);backdrop-filter:none;-webkit-backdrop-filter:none;z-index:5;pointer-events:auto;font-variant-numeric:tabular-nums;text-shadow:0 0 calc(3*var(--u)) #000,0 calc(1*var(--u)) calc(2*var(--u)) #000}
+#statsWin h4{grid-column:1/-1;margin:0 0 calc(3*var(--u));font:600 calc(9.5*var(--u)) var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--jade)}
+#statsWin span{color:var(--mist)}#statsWin b{text-align:right;font-weight:700;color:#fff}
+#statsWin .swWide{grid-column:1/-1;display:flex;justify-content:space-between;gap:calc(14*var(--u))}#statsWin .swWide b{text-align:left}#statsWin span,#statsWin b{white-space:nowrap}
+#statsWin hr{grid-column:1/-1;width:100%;border:0;border-top:1px solid rgba(232,224,202,.16);margin:calc(2*var(--u)) 0}
+html.phone #statsWin{box-sizing:border-box;left:10px;top:calc(60*var(--u));width:min(470px,calc(100vw - 20px));font-size:11px;gap:1px 12px;padding:6px 9px;background:rgba(10,14,18,.72);max-height:calc(100vh - 70px);max-height:calc(100dvh - 70px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+html.phone #statsWin h4{margin-bottom:1px}html.phone #statsWin hr{margin:1px 0}html.phone #statsWin span{min-width:0}
+/* phone landscape: sit between the player HUD (left) and the minimap / buttons (right), sized in HUD units so it scales with the screen */
+@media (orientation:landscape){html.phone #statsWin{left:calc(232*var(--u));top:calc(52*var(--u));width:calc(600*var(--u));font-size:max(8.5px,calc(16.5*var(--u)));gap:1px calc(14*var(--u));padding:calc(8*var(--u)) calc(12*var(--u));max-height:calc(100vh - 56px);max-height:calc(100dvh - 56px)}}
+#brow{display:flex;flex-wrap:nowrap;align-items:center;gap:6px;min-height:calc(22*var(--u))}#brow .rt{flex:none}#brow .rt{font:600 calc(10.5*var(--u)) var(--body);color:#bfeedd;background:rgba(0,0,0,.5);padding:calc(2*var(--u)) calc(7*var(--u));border-radius:calc(3*var(--u));border:calc(1*var(--u)) solid rgba(95,211,165,.35);white-space:nowrap}
+.bar2{position:relative;height:calc(14*var(--u));background:#210708;border:calc(1*var(--u)) solid rgba(0,0,0,.75);overflow:hidden;box-shadow:0 calc(1*var(--u)) calc(4*var(--u)) rgba(0,0,0,.6)}
+.bar2 i{position:absolute;left:0;top:0;bottom:0;width:50%}
+.bar2 span{position:absolute;inset:0;text-align:center;font:600 calc(11*var(--u))/calc(14*var(--u)) var(--body);font-variant-numeric:tabular-nums;text-shadow:0 calc(1*var(--u)) calc(2*var(--u)) #000;color:#fff}
+#hp i,#tgHp i{background:linear-gradient(#e24a45,#a30f14)}
+#qi{background:#0a1226}#qi i{background:linear-gradient(#3d82ee,#1238a8)}
+#stats{display:flex;gap:calc(9*var(--u));font-size:calc(10*var(--u));color:#cfd6da;font-variant-numeric:tabular-nums}
+#stats b{color:#fff;font-weight:700}
+#buffs{display:flex;gap:calc(3*var(--u));min-height:calc(22*var(--u))}
+.bf{position:relative;width:calc(22*var(--u));height:calc(22*var(--u));display:grid;place-items:center;border:calc(1*var(--u)) solid #c9b27a;background:#15202a;font-size:calc(12*var(--u));border-radius:calc(3*var(--u))}
+.bf{pointer-events:auto;cursor:help}
+.bf{touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+/* v5_200 buffs: ALWAYS one row (PC and phone). The row takes the space beside the realm tag; when there are many buffs the icons shrink (down to a minimum) and, only if still too many, run on to the right - they never wrap onto a second line. */
+#buffs{flex:1 1 0;min-width:0;flex-wrap:nowrap}
+.bf{flex:0 1 calc(22*var(--u));min-width:calc(13*var(--u))}
+html.phone .bf{flex:0 1 calc(26*var(--u));width:auto;height:calc(26*var(--u));min-width:calc(15*var(--u));min-height:24px;font-size:calc(14*var(--u))}
+/* v5_143 buff tooltip: name + description, see-through panel */
+#bftip{position:fixed;z-index:40;pointer-events:none;max-width:calc(230*var(--u));padding:calc(6*var(--u)) calc(9*var(--u));border-radius:calc(7*var(--u));background:rgba(8,14,20,.5);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);border:1px solid rgba(232,224,202,.28);box-shadow:0 2px 10px rgba(0,0,0,.35);color:var(--paper);font:500 calc(11*var(--u))/1.35 var(--body);text-shadow:0 1px 2px #000}
+#bftip b{display:block;font:700 calc(12*var(--u)) var(--body);margin-bottom:calc(2*var(--u))}
+#bftip small{display:block;font-size:inherit;color:rgba(232,224,202,.85)}
+.bf em{position:absolute;right:calc(1*var(--u));bottom:0;font:700 calc(8*var(--u)) var(--body);font-style:normal;color:#fff;text-shadow:0 0 calc(2*var(--u)) #000,0 calc(1*var(--u)) calc(1*var(--u)) #000}
+#bagCur,#fgCur{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px}
+#bagCur .chip,#fgCur .chip{padding:3px 10px;border-radius:99px;border:1px solid var(--line);font:600 12px var(--body);gap:6px}
+#bagCur .chip u,#fgCur .chip u{width:10px;height:10px}
+#bagCur .cl,#fgCur .cl{color:var(--mist);font-weight:500}
+.chip{padding:calc(3*var(--u)) calc(9*var(--u));border-radius:calc(99*var(--u));font:600 calc(11*var(--u)) var(--body);font-variant-numeric:tabular-nums;display:flex;gap:calc(5*var(--u));align-items:center;background:rgba(10,14,18,.7);border:calc(1*var(--u)) solid var(--line)}
+.chip u{display:inline-block;width:calc(9*var(--u));height:calc(9*var(--u));border-radius:50%;background:var(--gold);text-decoration:none}
+.chip.gold u{background:linear-gradient(#ffe27a,#ff9d1c);clip-path:polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%);border-radius:0}
+.chip.ore u{border-radius:calc(2*var(--u));background:#7fe0ee;transform:rotate(45deg)}
+#phase{width:calc(30*var(--u));height:calc(30*var(--u));font-size:calc(9.5*var(--u));font-weight:700;border-color:rgba(232,224,202,.55)}
+
+/* wardrobe (skin / hair / outfit / headwear / aura) */
+.wdcard{width:min(680px,100%);gap:8px}
+.wdtop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.wdbody{display:flex;gap:14px;min-height:0;flex:1 1 auto}
+.wdprev{flex:0 0 190px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.wdprev canvas{width:190px;height:224px;border:1px solid var(--line);border-radius:10px;background:radial-gradient(ellipse at 50% 78%,#2b3a46,#0e1418 75%)}
+#wdName{font-size:12px;color:var(--mist);text-align:center;line-height:1.35;min-height:48px}
+#wdName b{color:var(--gold);font-weight:700}
+.wdprev .btn{padding:4px 12px;font-size:12px;width:100%}
+.wdopts{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:8px}
+.wdtabs{display:flex;gap:4px;flex-wrap:wrap}
+.wdtabs .btn{padding:4px 10px;font-size:12px;border-color:var(--line)}
+.wdtabs .btn.on{background:var(--gold);color:#241a05;border-color:var(--gold)}
+#wdGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;overflow:auto;max-height:290px;padding:2px}
+#wdGrid button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.03);font-size:11px;line-height:1.15;text-align:center;min-height:36px;justify-content:center}
+#wdGrid button.on{border-color:var(--gold);background:rgba(227,181,89,.16);box-shadow:0 0 0 1px var(--gold) inset}
+#wdGrid .sw{display:flex;width:56px;height:26px;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.18);position:relative}
+#wdGrid .sw i{flex:1}
+#wdGrid .sw u{position:absolute;left:50%;top:50%;width:11px;height:11px;margin:-6px 0 0 -6px;border-radius:50%;border:1px solid rgba(0,0,0,.5)}
+.wdnote{font-size:11px!important}
+html.phone .wdcard{zoom:1;max-height:100%}
+@media (max-width:560px){.wdbody{flex-direction:column}.wdprev{flex:0 0 auto;flex-direction:row;flex-wrap:wrap;justify-content:center}.wdprev canvas{width:120px;height:140px}#wdGrid{max-height:200px}}
+/* wardrobe window: same layout as the bag (avatar stage on the left, choices on the right), one tab per class */
+#wardrobe .wdwin{width:min(900px,100%);max-height:100%;overflow:hidden;gap:8px;padding:12px;background:linear-gradient(#0d1c36,#08111f);border:1px solid #2a4a7a;zoom:1}
+html.phone #wardrobe .wdwin,html.phone .modal #wardrobe .wdwin{zoom:1}
+#wardrobe .bwhero{flex:0 0 42%;display:flex;flex-direction:column;gap:6px}
+#wardrobe #wdName{font-size:12px;color:var(--mist);text-align:center;line-height:1.35;min-height:34px}
+#wardrobe #wdName b{color:var(--gold)}
+#wardrobe .bwside{overflow:hidden}
+#wardrobe .bagtop{display:flex;align-items:baseline}#wardrobe .bagtop h2{font-size:20px;margin:0}
+.wdclass{display:flex;gap:4px;flex-wrap:wrap}
+.wdclass .btn{padding:5px 10px;font-size:12px;min-height:0;border-radius:7px;border-color:#2a4a7a;background:rgba(10,24,48,.7);position:relative}
+.wdclass .btn.on{background:var(--gold);color:#241a05;border-color:var(--gold)}
+.wdclass .btn.cur::after{content:"";position:absolute;right:3px;top:3px;width:6px;height:6px;border-radius:50%;background:var(--jade,#5fd3a5);box-shadow:0 0 4px var(--jade,#5fd3a5)}
+#wardrobe .wdtabs .btn{border-color:#2a4a7a;min-height:0}
+#wardrobe .wdtabs .btn.on{background:var(--gold);color:#241a05;border-color:var(--gold)}
+#wardrobe #wdGrid{flex:1 1 auto;min-height:110px;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));align-content:start}
+#wardrobe .wdnote{margin:0;color:var(--mist);font-size:11px!important}
+#wardrobe .bagbtns .btn{flex:1;padding:6px 10px;font-size:13px;min-height:0}
+html.phone #wardrobe .bagbtns .btn{min-height:0;padding:6px 10px;font-size:13px}
+html.phone #wardrobe .wdclass .btn,html.phone #wardrobe .wdtabs .btn{min-height:0;padding:4px 8px;font-size:11px}
+@media (max-width:640px){#wardrobe .bwhero{flex:0 0 auto}#wardrobe #wdGrid{flex:0 0 auto;max-height:none;overflow:visible}}
+@media (orientation:landscape) and (max-height:520px){
+ #wardrobe.modal{padding:4px}html.phone #wardrobe.modal{padding:4px}
+ #wardrobe .wdwin{width:min(820px,100%);height:100%;padding:6px;gap:4px}
+ #wardrobe .bwbody{flex-direction:row;gap:8px}
+ #wardrobe .bwhero{flex:0 0 33%;height:100%}#wardrobe .bwstage{aspect-ratio:auto;flex:1 1 auto;min-height:0;height:auto;max-height:none}
+ #wardrobe .bwside{gap:4px}#wardrobe .bagtop h2{font-size:15px}
+ #wardrobe .wdclass{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}#wardrobe .wdclass .btn{flex:0 0 auto;white-space:nowrap}
+ #wardrobe #wdGrid{grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:4px;min-height:0;flex:1 1 0;overflow-y:auto}
+ #wardrobe #wdGrid button{padding:4px 3px;font-size:10px;min-height:30px}#wardrobe #wdGrid .sw{width:44px;height:20px}
+ #wardrobe .wdnote{display:none}#wardrobe #wdName{font-size:10px;min-height:0}
+}
+
+/* left strip: party / skills / chat / skin / view */
+#ls{position:absolute;left:calc(10*var(--u));top:calc(154*var(--u));display:flex;flex-direction:column;gap:calc(15*var(--u));width:calc(36*var(--u))}
+#ls .ic.on{border-color:var(--jade)}
+#ls .ic{border-radius:calc(6*var(--u));width:calc(34*var(--u));height:calc(34*var(--u));font-size:calc(17*var(--u))}
+#online{position:absolute;right:calc(10*var(--u));top:calc(204*var(--u));padding:calc(8*var(--u)) calc(10*var(--u));font-size:calc(11*var(--u));display:flex;flex-direction:column;gap:calc(2*var(--u));min-width:calc(150*var(--u));max-width:calc(200*var(--u));pointer-events:none}
+#online.off,#online[hidden]{display:none}
+#online h4{margin:0 0 calc(2*var(--u));font:600 calc(9.5*var(--u)) var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--jade)}
+#online .pn{display:flex;justify-content:space-between;gap:calc(8*var(--u));color:var(--paper);pointer-events:auto;cursor:pointer}
+#online .pn span:last-child{color:var(--mist);font-variant-numeric:tabular-nums}
+
+/* top-centre: target frame */
+#tg{position:absolute;left:50%;top:calc(8*var(--u));transform:translateX(-50%);width:calc(300*var(--u));display:flex;flex-direction:column;align-items:center;gap:calc(3*var(--u))}
+#tgName{font:700 calc(18*var(--u))/1.1 var(--body);letter-spacing:.01em;white-space:nowrap}
+#tgName small{font:600 calc(11*var(--u)) var(--body);color:var(--mist);margin-left:calc(6*var(--u))}
+#tgRow{display:flex;align-items:center;gap:calc(6*var(--u));width:100%;justify-content:center}
+#tgRank{font:600 calc(11*var(--u)) var(--body);padding:calc(3*var(--u)) calc(8*var(--u));border-radius:calc(99*var(--u));border:calc(1*var(--u)) solid rgba(232,224,202,.5);background:rgba(10,14,18,.7);color:var(--paper)}
+#tgRank.pvp,#tgRank.mon{pointer-events:auto;cursor:pointer}#tgRank.mon:hover{background:rgba(40,52,60,.9);border-color:var(--gold)}
+#mgear{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);box-sizing:border-box;width:min(300px,calc(100vw - 16px));display:flex;flex-direction:column;padding:8px 10px;font-size:12px;pointer-events:auto;z-index:8;background:rgba(13,17,20,.95);color:var(--paper)}
+#mgear[hidden]{display:none}
+#mgear h4{margin:0 0 4px;display:flex;justify-content:space-between;align-items:center;font:700 14px var(--body);cursor:move;touch-action:none;-webkit-user-select:none;user-select:none}
+#mgear h4 button{cursor:pointer;background:transparent;border:0;color:var(--mist);font-size:18px;line-height:1;min-width:30px;min-height:26px;padding:0 4px}
+#mgear .mr{display:flex;justify-content:space-between;gap:10px;padding:2px 0;border-bottom:1px solid rgba(232,224,202,.1);font-variant-numeric:tabular-nums}
+#mgear .mr span:first-child{color:var(--mist)}#tgRank.pvp:hover{background:rgba(120,20,12,.85);border-color:#ff8a7a}
+#pgear{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);box-sizing:border-box;width:min(580px,calc(100vw - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;padding:10px 12px;font-size:13px;pointer-events:auto;z-index:8;background:rgba(13,17,20,.95);color:var(--paper)}
+#pgear[hidden]{display:none}
+#pgear h4{flex:0 0 auto;margin:0 0 4px;display:flex;justify-content:space-between;align-items:center;font:700 17px var(--body);cursor:move;touch-action:none;-webkit-user-select:none;user-select:none}
+#pgear h4 button{cursor:pointer;background:transparent;border:0;color:var(--mist);font-size:20px;line-height:1;min-width:36px;min-height:32px;padding:0 4px}
+#pgear .pgp{flex:0 0 auto;color:#e3b559;font:700 15px var(--body);margin:0 0 2px}
+#pgear .pgs{flex:0 0 auto;color:var(--mist);font-size:12.5px;margin-bottom:8px}
+#pgear .pgb{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px;align-content:start}
+#pgear .pgi{display:flex;gap:9px;align-items:flex-start;min-width:0;border:1px solid var(--line);border-left:3px solid var(--rc,var(--line));border-radius:7px;padding:6px 8px;background:rgba(0,0,0,.28)}
+#pgear .pgi.em{opacity:.5}
+#pgear .pgi .bslot{flex:0 0 auto;width:44px;height:44px;aspect-ratio:auto;border-radius:7px;cursor:default}
+#pgear .pgi .bslot .sl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 16px var(--body);color:#6f8fbd}
+#pgear .pgi .bslot.empty{opacity:1;background:rgba(14,28,52,.65);border:1px dashed #3a5a8a}
+#pgear .pgt{flex:1 1 auto;min-width:0}
+#pgear .pgn{display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-weight:700;font-size:13px;line-height:1.25}
+#pgear .pgn span{min-width:0;overflow-wrap:anywhere}
+#pgear .pgn .pgl{flex:0 0 auto;color:var(--gold);font-variant-numeric:tabular-nums}
+#pgear .pgr{color:var(--mist);font-size:11px;margin:1px 0 3px}
+#pgear .pgst{margin:0;padding:0;list-style:none;font-size:12px;line-height:1.35;color:#d5dde2;font-variant-numeric:tabular-nums}
+#pgear .pge{color:var(--mist);font-size:12px}
+@media (orientation:landscape) and (max-height:520px){
+ #pgear{width:min(780px,calc(100vw - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));max-height:calc(100vh - 8px);max-height:calc(100dvh - 8px);padding:6px 10px;font-size:11px}
+ #pgear h4{font-size:14px;margin-bottom:2px}#pgear h4 button{min-height:26px;font-size:18px}
+ #pgear .pgs{font-size:11px;margin-bottom:4px}
+ #pgear .pgb{grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:4px}
+ #pgear .pgi{padding:4px 6px;gap:6px}
+ #pgear .pgi .bslot{width:36px;height:36px}
+ #pgear .pgn{font-size:11.5px}#pgear .pgr{font-size:10px;margin:0 0 2px}#pgear .pgst{font-size:10.5px;line-height:1.3}
+}
+@media (orientation:portrait) and (max-width:480px){#pgear{padding:8px 10px}#pgear .pgb{grid-template-columns:1fr}#pgear .pgi .bslot{width:42px;height:42px}}
+#tgRank.boss{border-color:var(--gold);color:var(--gold)}
+#tgRank.pvp{border-color:var(--cinnabar);color:#ffb4a8;background:rgba(80,10,6,.7)}
+#tgAct{display:none;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:4px;max-width:calc(420*var(--u));min-width:230px}
+#tgAct.on{display:flex}
+#tgAct button{font:600 13px var(--body);min-height:34px;padding:4px 11px;border-radius:8px;border:1px solid rgba(232,224,202,.5);background:rgba(10,14,18,.86);color:var(--paper);text-shadow:none;white-space:nowrap}
+#tgAct button.atk{border-color:var(--cinnabar);color:#ffb4a8;background:rgba(80,10,6,.88)}
+#tgAct button.x{min-width:38px;padding:4px 8px;color:var(--mist)}
+html.phone #tgAct{gap:3px;margin-top:2px;min-width:0;max-width:calc(100vw - 16px)}
+html.phone #tgAct button{min-height:28px;padding:2px 7px;font-size:11px;border-radius:6px}
+html.phone #tgAct button.x{min-width:28px;padding:2px 5px}
+/* v5_89 compact Inspect window on phones */
+html.phone #pgear{width:min(340px,calc(100vw - 16px));max-height:min(60dvh,330px);padding:5px 7px;font-size:10px}
+html.phone #pgear h4{font-size:12px;margin-bottom:1px}html.phone #pgear h4 button{min-height:22px;min-width:26px;font-size:15px}
+html.phone #pgear .pgp{font-size:11.5px;margin:0}html.phone #pgear .pgs{font-size:9.5px;margin-bottom:3px}
+html.phone #pgear .pgb{grid-template-columns:1fr 1fr;gap:3px}
+html.phone #pgear .pgi{padding:3px 4px;gap:4px;border-radius:5px}
+html.phone #pgear .pgi .bslot{width:26px;height:26px}html.phone #pgear .pgi .bslot .sl{font-size:11px}
+html.phone #pgear .pgn{font-size:9.5px;line-height:1.15}html.phone #pgear .pgr{font-size:8.5px;margin:0 0 1px}html.phone #pgear .pgst{font-size:9px;line-height:1.2}
+@media (orientation:portrait) and (max-width:480px){html.phone #pgear .pgb{grid-template-columns:1fr}html.phone #pgear .pgi .bslot{width:26px;height:26px}html.phone #pgear{padding:5px 7px}}
+#tgHp{width:calc(212*var(--u));height:calc(17*var(--u))}#tgHp span{line-height:calc(17*var(--u));font-size:calc(12*var(--u))}
+
+/* zone banner (appears when you enter a new area) */
+#banner{position:absolute;left:50%;top:calc(118*var(--u));transform:translateX(-50%);text-align:center;opacity:0;font:400 calc(20*var(--u))/1.2 var(--display);letter-spacing:.06em;white-space:nowrap;padding:calc(8*var(--u)) calc(40*var(--u));background:linear-gradient(90deg,transparent,rgba(8,12,15,.6) 25%,rgba(8,12,15,.6) 75%,transparent);border-top:calc(1*var(--u)) solid rgba(232,224,202,.3);border-bottom:calc(1*var(--u)) solid rgba(232,224,202,.3);animation:bn 5s ease-out}
+#banner small{display:block;font:600 calc(10*var(--u)) var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+/* v5_98 level-up popup: same look as the forge SUCCESS / FAILED popup */
+#lvUp{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:30;pointer-events:none;text-align:center;padding:14px 34px;border-radius:12px;background:rgba(10,14,18,.95);border:2px solid var(--gold);box-shadow:0 0 34px rgba(227,181,89,.5);animation:lvPop .35s cubic-bezier(.2,1.4,.4,1);max-width:calc(100vw - 24px)}
+#lvUp[hidden]{display:none}
+#lvUp b{display:block;font:400 30px var(--display);letter-spacing:.14em;color:var(--gold)}
+#lvUp small{display:block;color:var(--mist);margin-top:3px;font-size:13px}
+#lvUp.fade{opacity:0;transition:opacity .5s}
+@keyframes lvPop{from{transform:translate(-50%,-50%) scale(.5);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+html.phone #lvUp{padding:10px 24px}html.phone #lvUp b{font-size:24px}html.phone #lvUp small{font-size:12px}
+/* v5_109 screen saver */
+#saver{position:fixed;inset:0;z-index:9999;background:#000;display:none;touch-action:none;-webkit-user-select:none;user-select:none;overflow:hidden}
+#saver.on{display:block}
+#saver .svbox{position:absolute;left:50%;top:40%;width:max-content;max-width:90vw;margin-left:-110px;color:#8d9aa2;text-align:center;transition:transform 1s linear}
+#saver .svt{font:400 22px var(--display);letter-spacing:.12em;color:#7a6a3c}
+#saver .svm{margin-top:6px;font:600 14px var(--body);color:#5fd3a5}
+#saver .svs{margin-top:4px;font:12px var(--body);color:#7d8a92;white-space:nowrap}
+#saver .svh{margin:8px auto 0;width:160px;height:5px;border-radius:3px;background:#1a1f22;overflow:hidden}#saver .svh i{display:block;height:100%;width:100%;background:#a33}
+#saver .svsl{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);width:min(300px,80vw);height:48px;border-radius:24px;background:#12171a;border:1px solid #2c3a40;display:flex;align-items:center;justify-content:center;color:#5d6b72;font:600 13px var(--body)}
+#saver .svk{position:absolute;left:4px;top:4px;width:56px;height:38px;border-radius:19px;background:#2a3a40;color:#cfe6dd;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:grab;touch-action:none}
+@keyframes bn{0%{opacity:0}12%,70%{opacity:1}100%{opacity:0}}
+
+/* top-right: menu icons, zone strip, quest tracker, minimap */
+#tr{position:absolute;right:calc(10*var(--u));top:calc(8*var(--u));display:flex;gap:calc(10*var(--u))}
+#tr .ic{width:calc(34*var(--u));height:calc(34*var(--u));border-radius:calc(6*var(--u));font-size:calc(17*var(--u))}
+#menu .mrow{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:calc(8*var(--u));margin-top:calc(2*var(--u))}#menu .mrow.ck{justify-content:flex-start;font-size:inherit}#menu .mrow select{flex:1 1 auto;min-width:0;max-width:62%;font-size:inherit;background:#10161a;color:var(--paper);border:1px solid #2c3a40;border-radius:calc(4*var(--u));padding:calc(1*var(--u)) calc(3*var(--u))}#menu button.mrow{justify-content:center}
+#menu{position:absolute;right:calc(10*var(--u));top:calc(50*var(--u));width:calc(230*var(--u));padding:calc(10*var(--u)) calc(12*var(--u));display:grid;grid-template-columns:auto 1fr;gap:calc(3*var(--u)) calc(10*var(--u));font-size:calc(11*var(--u));color:var(--mist);z-index:4}
+#menu b{color:var(--paper)}
+/* v5_122: all menu buttons live in one compact wrapper (2 per row on PC) and the menu scrolls if the window is very short, so Log out is always reachable */
+#menu{max-height:calc(100vh - 58*var(--u));max-height:calc(100dvh - 58*var(--u));overflow-y:auto;overscroll-behavior:contain}
+#menu .mbtns{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:calc(4*var(--u));margin-top:calc(4*var(--u));position:sticky;bottom:0;z-index:1;padding:calc(4*var(--u)) 0 0;background:#0f1519;border-top:1px solid var(--line)}
+#menu .mbtns .btn{flex:1 1 calc(50% - 4px);margin:0!important;padding:5px 8px;min-height:0;font-size:12px;line-height:1.2;border-radius:6px;letter-spacing:0;white-space:nowrap;justify-content:center}
+#menu[hidden]{display:none}
+/* v5_141 the HUD layer has pointer-events:none and only buttons / .hit opt back in, so on PC the Resolution pulldown and the Fight back / Auto-use potions check boxes (and their labels) never received clicks; the menu panel now takes pointer events itself (the phone layout already did) */
+#menu{pointer-events:auto}
+#menu .vol{grid-column:1/-1;display:grid;grid-template-columns:calc(62*var(--u)) 1fr calc(30*var(--u));align-items:center;gap:calc(8*var(--u))}
+#menu .vol input{width:100%;margin:0;height:calc(20*var(--u));accent-color:var(--gold);cursor:pointer;background:transparent;pointer-events:auto}
+#menu .vol span{text-align:right;font-variant-numeric:tabular-nums}
+#menu .vsep{grid-column:1/-1;height:1px;background:var(--line);margin:calc(3*var(--u)) 0}
+#zn{position:absolute;right:calc(10*var(--u));top:calc(62*var(--u));display:flex;align-items:center;gap:calc(8*var(--u));max-width:calc(360*var(--u))}
+#zn em{font:700 calc(11*var(--u)) var(--body);font-style:normal;padding:calc(3*var(--u)) calc(9*var(--u));border-radius:calc(99*var(--u));border:calc(1*var(--u)) solid var(--cinnabar);color:#ffd9d3;background:rgba(80,10,6,.55);white-space:nowrap}
+#zn em.pvp{background:rgba(150,20,10,.85);color:#fff;border-color:#ff6a5a;animation:pvpPulse 1s ease-in-out infinite}
+@keyframes pvpPulse{50%{box-shadow:0 0 calc(10*var(--u)) #ff4a3a}}
+#online .pn.pvp span:first-child{color:#ff8a7a}
+#online .pn .inv{flex:0 0 auto;padding:0 calc(5*var(--u));border-radius:calc(4*var(--u));border:calc(1*var(--u)) solid rgba(95,211,165,.6);color:var(--jade);font-weight:700;line-height:1.3}
+#online .pn.pty span:first-child{color:#8ff0b0}
+/* party frame + invite prompt */
+#party{position:absolute;left:calc(52*var(--u));top:calc(154*var(--u));width:calc(176*var(--u));padding:calc(6*var(--u)) calc(8*var(--u));font-size:calc(11*var(--u));display:flex;flex-direction:column;gap:calc(4*var(--u));pointer-events:auto;cursor:move;touch-action:none;background:rgba(13,17,20,.34);border-color:rgba(232,224,202,.1);backdrop-filter:none;-webkit-backdrop-filter:none;text-shadow:0 0 calc(3*var(--u)) #000,0 calc(1*var(--u)) calc(2*var(--u)) #000}
+#party.drag{outline:1px dashed rgba(95,211,165,.6)}
+#party .phd{flex:1;min-width:0;padding:calc(2*var(--u)) 0}
+#party .pbt{display:flex;gap:calc(4*var(--u));flex:0 0 auto}
+#party h4{margin:0;display:flex;justify-content:space-between;align-items:center;font:600 calc(9.5*var(--u)) var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--jade)}
+#party h4 button{cursor:pointer;background:rgba(0,0,0,.25);font:600 calc(9.5*var(--u)) var(--body);letter-spacing:.04em;padding:calc(1*var(--u)) calc(6*var(--u));border-radius:calc(4*var(--u));border:calc(1*var(--u)) solid rgba(217,80,63,.7);background:transparent;color:#ff9a8a}
+#party .pmr{display:flex;flex-direction:column;gap:calc(2*var(--u))}
+#party .pmr div:first-child{display:flex;justify-content:space-between;gap:calc(6*var(--u));color:var(--paper);white-space:nowrap}
+#party .pmr div:first-child span:first-child{overflow:hidden;text-overflow:ellipsis}
+#party .pmr div:first-child span:last-child{color:var(--mist);font-variant-numeric:tabular-nums;flex:0 0 auto}
+#party .pmr.me div:first-child span:first-child{color:var(--gold)}
+#party .pmr.dead{opacity:.55}
+#party .pact{display:flex;gap:calc(3*var(--u));margin-left:auto;flex:0 0 auto}
+#party .pact button{pointer-events:auto;padding:0 calc(4*var(--u));font-size:calc(9*var(--u));line-height:1.4;border-radius:calc(3*var(--u));border:calc(1*var(--u)) solid var(--line);background:rgba(0,0,0,.4);color:var(--mist)}
+#party .pact button:last-child{color:#ff9a8a;border-color:rgba(217,80,63,.6)}
+html.phone #party .pact button{min-width:26px;min-height:22px}
+#party .pb{height:calc(6*var(--u));background:rgba(33,7,8,.6);border-radius:calc(2*var(--u));overflow:hidden}
+#party .pb i{display:block;height:100%;background:linear-gradient(#e24a45,#a30f14)}
+#pinv{position:absolute;left:50%;top:calc(66*var(--u));transform:translateX(-50%);padding:calc(8*var(--u)) calc(12*var(--u));display:flex;align-items:center;gap:calc(10*var(--u));font-size:calc(12*var(--u));white-space:nowrap;pointer-events:auto;z-index:6}
+#pinv b{color:var(--gold)}
+#pinv button{font:700 calc(11*var(--u)) var(--body);padding:calc(4*var(--u)) calc(10*var(--u));border-radius:calc(6*var(--u));background:transparent}
+#pinv .yes{border:1px solid var(--jade);color:var(--jade)}
+#pinv .no{border:1px solid rgba(217,80,63,.7);color:#ff9a8a}
+html.phone #party{background:rgba(13,17,20,.34);left:calc(48*var(--u) + env(safe-area-inset-left,0px));top:calc(152*var(--u))}
+html.phone #pinv{top:calc(62*var(--u));font-size:max(12px,calc(12*var(--u)))}
+html.phone #pinv button{min-height:36px;padding:6px 12px;font-size:13px}
+/* friends: window (Friends button in the left strip), request pop-up, heart button in the Online list. Server: friends.go */
+#frwin{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:calc(270*var(--u));max-width:92%;max-height:72%;display:flex;flex-direction:column;padding:calc(8*var(--u)) calc(10*var(--u));font-size:calc(12*var(--u));pointer-events:auto;z-index:7;background:rgba(13,17,20,.22);border-color:rgba(255,255,255,.14);backdrop-filter:none;-webkit-backdrop-filter:none;text-shadow:0 1px 2px #000,0 0 4px rgba(0,0,0,.8)}
+#frwin h4{cursor:move;touch-action:none;-webkit-user-select:none;user-select:none}
+#frwin[hidden],#finv[hidden]{display:none}
+#frwin h4{margin:0 0 calc(6*var(--u));display:flex;justify-content:space-between;align-items:center;font:600 calc(10*var(--u)) var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--jade)}
+#frwin h4 button{cursor:pointer;background:transparent;border:0;color:var(--mist);font-size:calc(14*var(--u));padding:0 calc(4*var(--u))}
+#frwin .fadd{display:flex;gap:calc(6*var(--u));margin-bottom:calc(6*var(--u))}
+#frwin .fadd input{flex:1;min-width:0;font:calc(12*var(--u)) var(--body);padding:calc(4*var(--u)) calc(6*var(--u));border-radius:calc(5*var(--u));border:1px solid var(--line);background:rgba(0,0,0,.25);color:var(--paper)}
+#frwin button.fb{cursor:pointer;font:700 calc(10.5*var(--u)) var(--body);padding:calc(3*var(--u)) calc(8*var(--u));border-radius:calc(5*var(--u));border:1px solid var(--jade);background:transparent;color:var(--jade)}
+#frwin button.fb.no{border-color:rgba(217,80,63,.7);color:#ff9a8a}
+#frwin button.fb.sm{padding:0 calc(5*var(--u));font-size:calc(10*var(--u));line-height:1.5;border-color:var(--line);color:var(--mist)}
+#frwin .fbody{overflow-y:auto;display:flex;flex-direction:column;gap:calc(2*var(--u));min-height:calc(40*var(--u))}
+#frwin h5{margin:calc(6*var(--u)) 0 calc(2*var(--u));font:600 calc(9*var(--u)) var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
+#frwin .fr{display:flex;align-items:center;gap:calc(6*var(--u));color:var(--paper);padding:calc(2*var(--u)) 0}
+#frwin .fr .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#frwin .fr .sub{color:var(--mist);font-size:calc(10*var(--u));font-variant-numeric:tabular-nums;white-space:nowrap}
+#frwin .fr i{flex:0 0 auto;width:calc(7*var(--u));height:calc(7*var(--u));border-radius:50%;background:#5b656c}
+#frwin .fr.on i{background:#5fd3a5;box-shadow:0 0 calc(5*var(--u)) #5fd3a5}
+#frwin .fr.off .nm{color:var(--mist)}
+#frwin .fe{color:var(--mist);font-size:calc(11*var(--u));padding:calc(4*var(--u)) 0}
+html.phone #frwin button.fb{min-height:32px}
+html.phone #frwin button.fb.sm{min-width:30px;min-height:28px}
+html.phone #frwin .fadd input{font-size:16px;min-height:32px}
+#finv{position:absolute;left:50%;top:calc(104*var(--u));transform:translateX(-50%);padding:calc(8*var(--u)) calc(12*var(--u));display:flex;align-items:center;gap:calc(10*var(--u));font-size:calc(12*var(--u));white-space:nowrap;pointer-events:auto;z-index:6}
+#finv b{color:var(--gold)}
+#finv button{font:700 calc(11*var(--u)) var(--body);padding:calc(4*var(--u)) calc(10*var(--u));border-radius:calc(6*var(--u));background:transparent}
+#finv .yes{border:1px solid var(--jade);color:var(--jade)}
+#finv .no{border:1px solid rgba(217,80,63,.7);color:#ff9a8a}
+html.phone #finv{top:calc(98*var(--u));font-size:max(12px,calc(12*var(--u)))}
+html.phone #finv button{min-height:36px;padding:6px 12px;font-size:13px}
+#online .pn .fadd2{flex:0 0 auto;padding:0 calc(5*var(--u));border-radius:calc(4*var(--u));border:calc(1*var(--u)) solid rgba(255,140,170,.6);color:#ff8fb0;font-weight:700;line-height:1.3}
+#online .pn.fr span:first-child{color:#ff8fb0}
+#zn em.safe{border-color:var(--jade);color:#c9f7e3;background:rgba(6,60,40,.55)}
+#zn span{font:600 calc(12*var(--u)) var(--body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(190*var(--u))}
+#zn .ch{border-color:rgba(232,224,202,.4);color:var(--paper);background:rgba(10,14,18,.6)}
+#mmw{position:absolute;right:calc(10*var(--u));top:calc(90*var(--u));width:calc(108*var(--u));height:calc(108*var(--u))}
+#mm{width:100%;height:100%;border-radius:50%;border:calc(1.5*var(--u)) solid var(--line);background:var(--glass);display:block}
+#mmw.off{display:none}
+
+/* bottom-left: system feed, chat box, status line */
+#log{position:absolute;left:34%;bottom:calc(72*var(--u));display:flex;flex-direction:column;gap:calc(2*var(--u));pointer-events:none;max-width:min(calc(330*var(--u)),60vw)}
+#log div{font:600 calc(13*var(--u))/1.3 var(--body);padding:0;background:none;text-shadow:0 0 calc(3*var(--u)) #000,0 calc(1*var(--u)) calc(2*var(--u)) #000,0 0 calc(6*var(--u)) #000;animation:fade 6s forwards}
+@keyframes fade{0%,80%{opacity:1}100%{opacity:0}}
+#sb{position:absolute;left:calc(8*var(--u));bottom:calc(5*var(--u));display:flex;gap:calc(14*var(--u));align-items:center;font:600 calc(13*var(--u)) var(--body);font-variant-numeric:tabular-nums}
+#sb .clk{color:#d8dde0}#sb .xpt{color:#4fe3e8}
+#sb .net{display:flex;align-items:center;gap:calc(5*var(--u));color:#b7e04a}
+#sb .net.mid{color:#ffd54a}#sb .net.bad{color:#ff6a5a}#sb .net.off{color:#8d9aa2}
+#sb .net s{display:inline-flex;align-items:flex-end;gap:calc(1.5*var(--u));height:calc(11*var(--u));text-decoration:none}
+#sb .net s i{display:block;width:calc(3*var(--u));background:currentColor;border-radius:calc(1*var(--u))}
+#xp{position:absolute;left:0;right:0;bottom:0;height:calc(3*var(--u));background:rgba(255,255,255,.12)}
+#xp i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#1aa7c8,#5df0f4)}
+
+/* bottom-centre: auto buttons, potions, ore, settings */
+#tpBar{position:absolute;left:50%;bottom:calc(74*var(--u));transform:translateX(-50%);width:calc(180*var(--u));text-align:center;pointer-events:none;font:600 calc(11*var(--u)) var(--body);letter-spacing:.08em;color:#e6d6ff;text-shadow:0 0 calc(6*var(--u)) #7a4fd0}
+#tpBar b{display:block;height:calc(7*var(--u));margin-top:calc(4*var(--u));border-radius:calc(4*var(--u));border:calc(1*var(--u)) solid #b794f4;background:rgba(10,14,18,.75);overflow:hidden;box-shadow:0 0 calc(10*var(--u)) rgba(150,100,255,.6)}
+#tpBar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7a4fd0,#e6d6ff)}
+#qb{position:absolute;left:calc(54*var(--u));top:calc(154*var(--u));display:flex;flex-direction:column;gap:calc(15*var(--u));align-items:center}
+#qb .ic{width:calc(34*var(--u));height:calc(34*var(--u));border-radius:calc(6*var(--u))}
+/* auto-hunt / auto-mine sit left of skill slot 6 (same coordinate system as the skill cluster) */
+#ab{position:absolute;right:0;bottom:0;width:0;height:0}
+#ab .ic{position:absolute;width:calc(40*var(--u));height:calc(40*var(--u));bottom:calc(22*var(--u))}
+#ab #bAuto{right:calc(375*var(--u))}#ab #bMine{right:calc(425*var(--u))}
+#bMine,#bAuto{border-color:#9ab3c4}
+#bMine{font-size:calc(19*var(--u))}#bAuto{font-size:calc(19*var(--u))}
+#bPot{font-size:calc(20*var(--u))}#bPotQ{font-size:calc(20*var(--u))}
+#bOre{display:none!important}
+#bBell[hidden]{display:none!important}
+
+/* bottom-right: skill cluster */
+#skills{position:absolute;right:0;bottom:0;width:calc(400*var(--u));height:calc(200*var(--u));pointer-events:none}
+.sk{position:absolute;width:calc(40*var(--u));height:calc(40*var(--u));border-radius:50%;border:calc(2*var(--u)) solid var(--gold);background:radial-gradient(circle at 35% 28%,#37444e,#0d1317 78%);overflow:hidden;padding:0;display:grid;place-items:center;color:var(--paper);pointer-events:auto;box-shadow:0 calc(2*var(--u)) calc(6*var(--u)) rgba(0,0,0,.55)}
+.sk b{font:700 calc(17*var(--u))/1 var(--body);text-shadow:0 0 calc(6*var(--u)) currentColor}
+.sk .kn{position:absolute;left:0;right:0;bottom:calc(3*var(--u));text-align:center;font:700 calc(8*var(--u)) var(--body);color:#fff;opacity:.75;text-shadow:0 calc(1*var(--u)) calc(2*var(--u)) #000}
+.sk .cdn{position:absolute;inset:0;display:grid;place-items:center;font:700 calc(15*var(--u)) var(--body);font-style:normal;color:#fff;text-shadow:0 calc(1*var(--u)) calc(3*var(--u)) #000}
+.sk .cdv{position:absolute;left:0;right:0;bottom:0;height:0;background:rgba(0,0,0,.62)}
+.sk.auto{box-shadow:0 0 calc(7*var(--u)) var(--jade)}
+.sk.auto::after{content:'AUTO';position:absolute;top:calc(3*var(--u));left:0;right:0;text-align:center;font:700 calc(6*var(--u)) var(--body);letter-spacing:.04em;color:var(--jade);text-shadow:0 calc(1*var(--u)) calc(2*var(--u)) #000;pointer-events:none}
+.sk.nq{border-color:#555;filter:saturate(.35)}
+.rsv{position:absolute;right:calc(262*var(--u));bottom:calc(136*var(--u));width:calc(48*var(--u));height:calc(48*var(--u));border-radius:50%;border:calc(2*var(--u)) solid var(--gold);background:radial-gradient(circle at 35% 28%,#37444e,#0d1317 78%);display:grid;place-items:center;pointer-events:none;box-shadow:0 0 calc(8*var(--u)) rgba(255,210,122,.45)}
+.rsv.man{box-shadow:0 0 calc(10*var(--u)) rgba(255,210,122,.9)}
+.rsv[hidden]{display:none}
+.rsv b{font:700 calc(21*var(--u))/1 var(--body);text-shadow:0 0 calc(6*var(--u)) currentColor}
+.rsv u{position:absolute;top:100%;left:50%;transform:translate(-50%,calc(-4*var(--u)));text-decoration:none;white-space:nowrap;font:700 calc(8*var(--u))/1 var(--body);padding:calc(2*var(--u)) calc(6*var(--u));border-radius:calc(7*var(--u));background:#3a2f12;border:calc(1*var(--u)) solid var(--gold);color:#ffd27a}
+.sk.big{width:calc(56*var(--u));height:calc(56*var(--u));border-width:calc(3*var(--u))}
+.sk.big b{font-size:calc(24*var(--u))}
+.sk.sm{width:calc(38*var(--u));height:calc(38*var(--u))}
+/* R / T slots: sit in a row to the LEFT of the dodge pad, vertically centred on it (skill-cluster coordinates) */
+.sk.big{bottom:calc(142*var(--u))}
+.sk.big:nth-last-child(2){right:calc(102*var(--u))}
+.sk.big:last-child{right:calc(166*var(--u))}
+html.phone .sk.big:nth-last-child(2){right:calc(117*var(--u))}
+html.phone .sk.big:last-child{right:calc(181*var(--u))}
+.sk.atk{width:calc(64*var(--u));height:calc(64*var(--u));border:calc(3*var(--u)) solid var(--cinnabar);background:radial-gradient(circle at 35% 28%,#5a3a40,#1a0f12 78%)}
+.sk.atk b{font-size:calc(28*var(--u));color:#ffd0c8}
+
+#joy{position:absolute;left:24px;bottom:calc(24px + env(safe-area-inset-bottom,0px));width:116px;height:116px;border-radius:50%;border:2px solid var(--line);background:rgba(13,17,20,.35);display:none;touch-action:none}
+#joy i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:rgba(232,224,202,.35);border:1px solid var(--line)}
+@media (pointer:coarse){#joy{display:block}}
+#hubArr{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;z-index:3}
+#hubArr[hidden]{display:none}
+#hubArr i{position:absolute;left:0;top:0;width:28px;height:28px;margin:-14px 0 0 -14px;display:block;font-style:normal;font-size:26px;line-height:28px;text-align:center;color:#7fe0c0;text-shadow:0 0 6px #000,0 0 10px rgba(127,224,192,.7)}
+#hubArr span{position:absolute;left:0;top:0;font:700 12px var(--body);letter-spacing:.06em;color:#c9f7e3;white-space:nowrap;text-shadow:0 0 3px #000,0 1px 3px #000,0 0 6px #000}
+#loot{position:absolute;left:calc(10*var(--u));bottom:calc(56*var(--u));display:flex;gap:calc(6*var(--u));flex-wrap:wrap;max-width:calc(300*var(--u));pointer-events:none}
+.lc{display:flex;align-items:center;gap:6px;padding:2px 9px 2px 6px;border-radius:99px;background:rgba(10,14,18,.75);border:1.5px solid;font:700 max(12px,calc(12*var(--u))) var(--body);color:#fff;animation:lootIn .18s ease-out}
+.lc b{font-size:max(16px,calc(17*var(--u)));line-height:1}
+@keyframes lootIn{from{transform:translateY(8px);opacity:0}}
+#dodge{position:absolute;right:calc(20*var(--u));bottom:calc(132*var(--u));width:calc(74*var(--u));height:calc(74*var(--u));border-radius:50%;border:calc(2*var(--u)) solid #8fd0ff;background:radial-gradient(circle at 35% 28%,#2a4256,#0d1317 78%);touch-action:none;pointer-events:auto;user-select:none}
+#dodge i{position:absolute;left:50%;top:50%;width:42%;height:42%;margin:-21% 0 0 -21%;border-radius:50%;background:rgba(143,208,255,.55);border:1px solid rgba(191,233,255,.8);pointer-events:none}
+#dodge span{position:absolute;left:0;right:0;bottom:calc(-12*var(--u));text-align:center;font:700 max(9px,calc(8*var(--u))) var(--body);letter-spacing:.06em;color:#bfe3ff;text-shadow:0 1px 3px #000;pointer-events:none}
+#dodge.cd{filter:saturate(.25) brightness(.7)}
+/* v5_169 JUMP: small round button directly above the dodge pad, skill-slot look */
+#jump{position:absolute;right:calc(34*var(--u));bottom:calc(218*var(--u));width:calc(46*var(--u));height:calc(46*var(--u));border-radius:50%;border:calc(2*var(--u)) solid var(--gold);background:radial-gradient(circle at 35% 28%,#37444e,#0d1317 78%);box-shadow:0 calc(2*var(--u)) calc(6*var(--u)) rgba(0,0,0,.55);display:grid;place-items:center;color:var(--paper);touch-action:none;pointer-events:auto;user-select:none;-webkit-user-select:none;cursor:pointer}
+#jump b{font:700 calc(22*var(--u))/1 var(--body);text-shadow:0 0 calc(6*var(--u)) currentColor;pointer-events:none}
+#jump span{position:absolute;left:0;right:0;bottom:calc(-12*var(--u));text-align:center;font:700 max(9px,calc(8*var(--u))) var(--body);letter-spacing:.06em;color:#e8e0ca;text-shadow:0 1px 3px #000;pointer-events:none}
+#jump:active{transform:scale(.94)}
+#jump.cd{filter:saturate(.25) brightness(.7)}
+/* ---- PHONE LANDSCAPE: Party..Land row at the TOP LEFT; potion / scroll / PvP buttons in a row at the bottom, same size and spacing as the skill slots; chat + loot just above ---- */
+#bbar,#msgs{display:contents}
+@media (orientation:landscape){
+ html.phone #bbar .ic{transform:none;border-radius:50%;pointer-events:auto}
+ html.phone #bbar .lb{display:block;font-size:calc(8*var(--u))}
+ html.phone #bbar{position:absolute;left:calc(8px + env(safe-area-inset-left,0px));width:calc(100vw - 8px - 590*var(--u) - 16px);bottom:calc(24*var(--u) + env(safe-area-inset-bottom,0px));display:flex;flex-direction:row;align-items:center;justify-content:center;gap:calc(9.4*var(--u));pointer-events:none}
+ html.phone #bbar #ls,html.phone #bbar #qb{display:contents}
+ html.phone #bbar #bParty{order:1}
+ html.phone #bbar #bPty{order:1}
+ html.phone #bbar #bPvp{order:2}
+ html.phone #bbar #ls .ic,html.phone #bbar #qb .ic{width:calc(44*var(--u));height:auto;aspect-ratio:1;min-width:0;flex:0 1 auto;font-size:calc(20*var(--u))}
+ html.phone #msgs{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:absolute;left:calc((152px + 100vw - 590*var(--u))/2);transform:translateX(-50%);bottom:calc(24*var(--u) + 44*var(--u) + 8px + env(safe-area-inset-bottom,0px));width:min(calc(100vw - 152px - 590*var(--u) - 16px),420px);pointer-events:none}
+ html.phone #msgs #log,html.phone #msgs #loot{position:static;left:auto;bottom:auto;max-width:100%;align-items:center;justify-content:center;text-align:center}
+ html.phone #msgs #loot{margin-top:calc(4*var(--u))}
+ html.phone #hud #online{top:calc(172*var(--u) + 48*var(--u))}
+}
+/* ---- PHONE LAYOUT (touch devices): bigger buttons and menus, joystick raised ---- */
+@media (pointer:coarse){#joy{bottom:calc(64px + env(safe-area-inset-bottom,0px))}}
+html.phone #joy{bottom:calc(64px + env(safe-area-inset-bottom,0px));width:128px;height:128px}
+html.phone #joy i{width:52px;height:52px;margin:-26px 0 0 -26px}
+html.phone .ic{transform:scale(1.32)}
+html.phone #phase{transform:none}
+html.phone #tr{gap:calc(18*var(--u))}
+html.phone #qb{left:calc(58.5*var(--u) + env(safe-area-inset-left,0px));top:calc(152*var(--u));gap:calc(18*var(--u))}
+html.phone #ab{transform:scale(1.1);transform-origin:100% 100%;right:env(safe-area-inset-right,0px);bottom:env(safe-area-inset-bottom,0px)}
+html.phone #dodge{right:calc(28*var(--u) + env(safe-area-inset-right,0px));bottom:calc(142*var(--u) + env(safe-area-inset-bottom,0px));width:calc(92*var(--u));height:calc(92*var(--u))}
+html.phone #jump{right:calc(53*var(--u) + env(safe-area-inset-right,0px));bottom:calc(246*var(--u) + env(safe-area-inset-bottom,0px));width:calc(42*var(--u));height:calc(42*var(--u))}
+html.phone #loot{left:14px;bottom:calc(64px + 128px + 8px + env(safe-area-inset-bottom,0px));max-width:min(70vw,360px)}
+html.phone #ab .ic{transform:none}
+html.phone #ls{width:calc(36*var(--u));left:calc(5.5*var(--u) + env(safe-area-inset-left,0px));top:calc(152*var(--u));gap:calc(8*var(--u))}
+html.phone #mmw{width:calc(180*var(--u));height:calc(180*var(--u))}
+html.phone #online{top:calc(276*var(--u))}
+html.phone #log{left:14px;bottom:calc(64px + 128px + 56px + env(safe-area-inset-bottom,0px));max-width:min(calc(330*var(--u)),68vw)}
+html.phone #log div{font-size:max(12px,calc(13*var(--u)))}
+html.phone #skills{transform:scale(1.1);transform-origin:100% 100%;right:env(safe-area-inset-right,0px);bottom:env(safe-area-inset-bottom,0px);z-index:4}
+html.phone #joy{left:calc(24px + env(safe-area-inset-left,0px))}
+#menu #bLand{display:none}html.phone #menu #bLand{display:block}
+/* PERF: a blurred backdrop over a canvas that redraws every frame forces the GPU to re-blur each frame; on phones use a slightly more opaque panel instead */
+html.phone .panel{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(13,17,20,.86)}
+#menu #bLand.on{border-color:var(--jade);color:var(--jade)}
+/* v5_121: phone menu = compact settings panel (no 1.3x zoom, no keyboard-hint rows, 3 small buttons on one row), same in portrait and landscape.
+   It scrolls with a finger if a very short screen still cannot fit it, and "Log out" is never pushed below the screen. */
+html.phone #menu{transform:none;top:calc(64*var(--u));right:calc(8px + env(safe-area-inset-right,0px));width:min(310px,calc(100vw - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));box-sizing:border-box;
+  max-height:calc(100vh - 64*var(--u) - 8px - env(safe-area-inset-bottom,0px));max-height:calc(100dvh - 64*var(--u) - 8px - env(safe-area-inset-bottom,0px));
+  overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;pointer-events:auto;
+  grid-template-columns:repeat(6,minmax(0,1fr));gap:2px 5px;font-size:11px;line-height:1.25;padding:6px 8px;z-index:9}
+html.phone #menu>b,html.phone #menu>b+span{display:none}
+html.phone #menu .vsep{margin:1px 0}
+html.phone #menu .vol{grid-template-columns:62px 1fr 34px;gap:6px}
+html.phone #menu .vol input{height:22px}
+html.phone #menu .mrow{margin-top:1px;gap:6px}
+html.phone #menu .mrow select{font-size:11px;padding:1px 3px;min-height:22px}
+html.phone #menu .mrow.ck{line-height:1.2}
+html:not(.phone) #menu #tapMoveRow{display:none}
+html.phone #menu .mrow.ck input{margin:0 4px 0 0;width:15px;height:15px;flex:0 0 auto}
+html.phone #menu .mbtns{gap:4px;margin-top:3px}
+html.phone #menu .mbtns .btn{flex:1 1 30%;min-height:26px;padding:3px 4px;font-size:11px;line-height:1.15;border-radius:6px;white-space:normal}
+html.phone #menu #bTut,html.phone #menu #bLogoutGame{flex-basis:45%}
+html.phone .modal .card{zoom:1.3}
+html.phone .btn{padding:12px 20px;font-size:16px;min-height:44px}
+html.phone #bagGrid{gap:3px}
+html.phone .bagbtns .btn{min-height:36px;padding:6px 10px;font-size:13px}
+
+@media (prefers-reduced-motion:reduce){#log div{animation-duration:.01s}#banner{animation-duration:.01s}}
+
+.modal{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(5,8,10,.62);padding:16px}
+.modal[hidden]{display:none}
+.card{width:min(420px,100%);padding:20px;display:flex;flex-direction:column;gap:12px;max-height:100%;overflow:auto}
+.card h2{margin:0;font-family:var(--display);font-weight:400;font-size:24px;letter-spacing:.05em}
+.card p{margin:0;color:var(--mist)}
+.row{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px}
+.row b{font-weight:600}.row small{color:var(--mist);grid-column:1}
+.btn{padding:8px 16px;border-radius:8px;border:1px solid var(--gold);background:transparent;font-weight:700;letter-spacing:.04em}
+.btn.pri{background:var(--gold);color:#241a05}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+/* World Gate + Lotus Forge: compact buttons (desktop and phone) */
+#worlds .row,#forge .row{padding:7px 10px;gap:2px 10px}
+#worlds .row b,#forge .row b{font-size:14px}
+#worlds .row small,#forge .row small{font-size:11px;line-height:1.3}
+#worlds .row .btn,#forge .row .btn,html.phone #worlds .row .btn,html.phone #forge .row .btn{padding:3px 10px;font-size:12px;min-height:0;border-radius:6px;letter-spacing:.02em;white-space:nowrap}
+#worldClose,html.phone #worldClose{align-self:center;padding:4px 18px;font-size:13px;min-height:0;border-radius:6px}
+html.phone #worlds .card{zoom:1;width:min(420px,100%);padding:12px 14px;gap:8px}
+html.phone #worlds .card h2{font-size:19px}
+html.phone #worlds .card p{font-size:12px;line-height:1.35}
+/* World Gate / Forge: the card never scrolls itself; only the list does, so the Close button is always visible at the bottom */
+#worlds .card{overflow:hidden;max-height:100%}
+#worldRows{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1 1 auto;min-height:0}
+#worldClose{flex:0 0 auto}
+/* forge result popup */
+#forgeRes{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;pointer-events:none;text-align:center;padding:14px 34px;border-radius:12px;background:rgba(10,14,18,.95);border:2px solid var(--gold);box-shadow:0 0 34px rgba(227,181,89,.5);animation:frPop .35s cubic-bezier(.2,1.4,.4,1)}
+#forgeRes[hidden]{display:none}
+#forgeRes b{display:block;font:400 30px var(--display);letter-spacing:.14em;color:var(--gold)}
+#forgeRes small{display:block;color:var(--mist);margin-top:3px;font-size:13px}
+#forgeRes.bad{border-color:var(--cinnabar);box-shadow:0 0 34px rgba(217,80,63,.5)}
+#forgeRes.bad b{color:#ff6a55}
+@keyframes frPop{from{transform:translate(-50%,-50%) scale(.5);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+html.phone #forgeRes{padding:10px 24px}html.phone #forgeRes b{font-size:24px}html.phone #forgeRes small{font-size:12px}
+#title{background:radial-gradient(ellipse at 50% 30%,#1d2a2b,#0a0d10 70%)}
+#title h1{font-family:var(--display);font-weight:400;font-size:clamp(30px,7.5vw,54px);letter-spacing:.08em;margin:0;line-height:1}
+#title h1 em{font-style:normal;color:var(--cinnabar)}
+#title .tag{font:italic 16px var(--display);letter-spacing:.06em;color:var(--gold);margin:-6px 0 0}
+#title .keys{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;color:var(--mist)}
+#title .keys b{color:var(--paper)}
+@media (prefers-reduced-motion:reduce){#log div{animation-duration:.01s}}
+.card h3{margin:4px 0 0;font:600 11px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
+.ck{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--mist)}
+#bag .bagcard,#shop .bagcard{width:min(500px,100%);background:linear-gradient(#0d1c36,#08111f);border:1px solid #2a4a7a}
+.bagtop{display:flex;justify-content:space-between;align-items:baseline}
+#bagCnt{font-size:12px;color:var(--mist);font-variant-numeric:tabular-nums}
+#bagGrid{display:none}
+/* warehouse */
+#wh .whwin{width:min(760px,100%);max-height:100%;overflow:hidden;gap:8px;padding:12px;background:linear-gradient(#0d1c36,#08111f);border:1px solid #2a4a7a;zoom:1}
+.whhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}.whnote{font-size:11px;color:var(--mist)}
+.whcols{display:flex;gap:10px;min-height:0;flex:1 1 auto;overflow:hidden}.whcol{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:6px;min-height:0}
+.whgrid{display:grid;grid-template-columns:repeat(auto-fill,46px);grid-auto-rows:46px;gap:4px;justify-content:space-between;align-content:start;overflow-y:auto;max-height:42vh;padding:2px}
+.whgrid .bslot{width:46px;height:46px;aspect-ratio:auto;border-radius:6px}
+#whInfo{min-height:48px;padding:8px 10px;border:1px solid #2a4a7a;border-radius:8px;background:rgba(10,24,48,.7);display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}#whInfo small{display:block;color:var(--mist);margin-top:2px}
+#wh .bagbtns .btn{flex:1}
+@media (max-width:640px){.whcols{flex-direction:column;overflow-y:auto}.whgrid{max-height:150px}}
+@media (orientation:landscape) and (max-height:520px){#wh .whwin{padding:8px;gap:5px}.whgrid{max-height:calc(100vh - 170px)}.whgrid .bslot{width:38px;height:38px}.whgrid{grid-template-columns:repeat(auto-fill,38px);grid-auto-rows:38px}.whnote{display:none}.whcols{flex-direction:row;overflow:hidden}}
+html.phone #wh.modal{padding:6px}
+/* bag window: avatar in the middle with equipped gear at both sides, spare items in a grid on the right */
+#bag .bagwin{width:min(900px,100%);max-height:100%;overflow:hidden;gap:8px;padding:12px;background:linear-gradient(#0d1c36,#08111f);border:1px solid #2a4a7a}
+.bwbody{display:flex;gap:12px;min-height:0;flex:1 1 auto;overflow:hidden}
+.bwhero{flex:0 0 46%;min-width:0}
+.bwstage{position:relative;width:100%;aspect-ratio:380/448;max-height:64vh;margin:0 auto;border:1px solid #1f3a64;border-radius:10px;overflow:hidden;background:radial-gradient(ellipse at 50% 85%,#2a4a86 0%,#14264a 45%,#0a1426 100%)}
+.bwstage canvas{position:absolute;left:50%;top:0;height:100%;width:auto;transform:translateX(-50%);pointer-events:none}
+.bwcol{position:absolute;top:6px;bottom:30px;display:flex;flex-direction:column;justify-content:space-around;width:clamp(40px,17%,62px)}
+.bwl{left:6px}.bwr{right:6px}
+.bwcol .bslot{width:100%;aspect-ratio:1;border-radius:50%;box-shadow:0 0 10px rgba(0,0,0,.5)}
+.bwcol .bslot.empty{opacity:.55;background:rgba(14,28,52,.65);border:1px dashed #3a5a8a;box-shadow:none}
+.bwcol .bslot .sl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 14px var(--body);color:#6f8fbd;pointer-events:none}
+.bwcol .bslot .q{right:auto;left:50%;transform:translateX(-50%);bottom:-1px;font-size:10px;font-weight:700;color:#fff;background:rgba(0,0,0,.55);border-radius:6px;padding:0 4px}
+.bwstage.rot3{cursor:grab;touch-action:pan-y;user-select:none;-webkit-user-select:none}.bwstage.rot3.drag{cursor:grabbing}
+.bwhint{position:absolute;right:8px;bottom:5px;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--mist);opacity:.75;pointer-events:none;text-shadow:0 1px 3px #000}
+.bwlv{position:absolute;left:8px;bottom:5px;display:flex;flex-direction:column;line-height:1.1;pointer-events:none;text-shadow:0 1px 3px #000}
+.bwlv b{font-size:16px;color:#f3dfa0}.bwlv span{font-size:9px;color:var(--mist);letter-spacing:.06em;text-transform:uppercase}
+.bwside{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:8px}
+#bagItems{display:grid;grid-template-columns:repeat(auto-fill,60px);grid-auto-rows:60px;justify-content:space-between;gap:6px 4px;align-content:start;overflow-y:auto;flex:1 1 auto;min-height:120px;max-height:46vh;padding:2px}
+#bagItems .bslot{border-radius:6px;width:60px;height:60px;aspect-ratio:auto}
+#bag .bwopts{font-size:12px}#bag .bwopts summary{cursor:pointer;color:var(--mist)}#bag .bwopts .ck{margin-top:4px}
+#bag .bagbtns .btn{flex:1}
+@media (max-width:640px){.bwbody{flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch}.bwhero{flex:0 0 auto}.bwstage{aspect-ratio:auto;height:250px;max-height:none;flex:0 0 auto}.bwcol{width:40px}.bwcol .bslot{width:36px;height:36px;aspect-ratio:auto;margin:0 auto}.bwside{flex:0 0 auto;min-height:auto}#bagItems{overflow:visible;flex:0 0 auto;grid-template-columns:repeat(auto-fill,40px);grid-auto-rows:40px;justify-content:center;max-height:none;min-height:96px}#bagItems .bslot{width:40px;height:40px}}
+@media (orientation:landscape) and (max-height:520px){html.phone #bag.modal,#bag.modal{padding:4px}#bag .bagwin{width:min(760px,100%);height:100%;padding:6px;gap:4px}.bwbody{flex-direction:row;gap:8px}.bwhero{flex:0 0 38%;height:100%}.bwstage{aspect-ratio:auto;height:100%;max-height:none}.bwcol .bslot{width:100%;max-width:34px;height:auto;margin:0 auto}.bwcol{width:36px}.bwside{gap:4px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}.bagtop h2{font-size:16px;margin:0}#bagItems{grid-template-columns:repeat(auto-fill,34px);grid-auto-rows:34px;max-height:none;min-height:100px;flex:1 1 100px;gap:4px}#bagItems .bslot{width:34px;height:34px}#bag #bagInfo{min-height:0;max-height:34%;overflow-y:auto;padding:4px 6px}#bag .bagbtns .btn{min-height:30px;padding:2px 8px;font-size:12px}#bag .bwopts{flex:0 0 auto;font-size:11px}#bag .bwopts .ck{font-size:11px;margin-top:3px}#bag .bwopts select{font-size:11px;padding:1px 3px;max-width:60%}}
+/* ---------- Lotus Forge window: same look as the bag (avatar + gear slots on the left, selected gear on the right) ---------- */
+#forge .bagwin{width:min(900px,100%);max-height:100%;overflow:hidden;gap:8px;padding:12px;background:linear-gradient(#0d1c36,#08111f);border:1px solid #2a4a7a}
+#forge .bagbtns .btn{flex:1}
+#fgInfo{display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 10px;border:1px solid #1f3a64;border-radius:8px;background:rgba(10,20,38,.6)}
+#fgInfo .fgn{font-size:16px;font-weight:700}#fgInfo .fgl{font:400 22px var(--display);color:#f3dfa0;letter-spacing:.04em}
+#fgInfo .fgg{color:#7fe0a0;font-weight:700}
+#fgInfo .fgs{font-size:12px;line-height:1.4;color:var(--mist)}#fgInfo .fgs b{color:#e8e0ca;font-weight:600}
+#fgInfo .fgbr{display:flex;align-items:center;gap:8px;font:600 12px var(--body);color:#f3dfa0}#fgInfo .fgbar{flex:1;height:12px;border-radius:99px;background:#07101f;border:1px solid #2a4a7a;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.6)}#fgInfo .fgbar i{display:block;width:0;height:100%;border-radius:99px;background:linear-gradient(90deg,#c98a2b,#ffe9a8);box-shadow:0 0 10px rgba(255,214,120,.7)}#fgInfo .fgbar.go i{animation:fgfill 1s linear forwards}@keyframes fgfill{from{width:0}to{width:100%}}
+#fgInfo .fgc{display:flex;gap:6px;flex-wrap:wrap;font-size:12px}#fgInfo .fgc span{padding:2px 9px;border-radius:99px;border:1px solid var(--line)}#fgInfo .fgc span.no{border-color:#d9503f;color:#ff8a7a}
+#fgInfo .fgb{width:100%;padding:9px 12px;font-size:15px;margin-top:2px}
+@media (orientation:landscape) and (max-height:520px){html.phone #forge.modal,#forge.modal{padding:4px}#forge .bagwin{width:min(760px,100%);height:100%;padding:6px;gap:4px}#forge .bagbtns .btn{min-height:30px;padding:2px 8px;font-size:12px}#fgInfo{padding:5px 7px;gap:4px}#fgInfo .fgl{font-size:17px}#fgInfo .fgb{padding:6px 10px;font-size:13px}}
+html.phone .modal #forge .bagwin,html.phone #forge .bagwin{zoom:1}
+html.phone .modal #bag .bagwin,html.phone #bag .bagwin{zoom:1}
+
+.bagbtns{display:flex;gap:8px}.bagbtns .btn{flex:1}.bagact{display:flex;gap:6px}
+.bslot{position:relative;aspect-ratio:1;border-radius:6px;border:1px solid #2f6fa8;background:radial-gradient(circle at 50% 40%,#2c639b 0%,#173a66 70%,#102848 100%);padding:0;cursor:pointer;overflow:hidden;color:#fff}
+.bslot.epic{border-color:#b3302c;background:radial-gradient(circle at 50% 35%,#ff7a2a 0%,#b0261c 40%,#4a1218 100%)}
+.bslot.leg{border-color:#d9b020;background:radial-gradient(circle at 50% 40%,#fff3a0 0%,#f0c400 50%,#8a6a00 100%)}
+.bslot.pa{border-color:#4de3b0;background:radial-gradient(circle at 50% 40%,#b8ffe8 0%,#2fbf8f 50%,#0b4a38 100%)}
+.bslot.ps{border-color:#ff7ae0;background:conic-gradient(from 0deg at 50% 50%,#ff7ae0,#ffd23a,#4de3b0,#5aa9ff,#c07bff,#ff7ae0);box-shadow:0 0 8px #ff7ae0}
+.bslot.cm{border-color:#8a949a;background:radial-gradient(circle at 50% 40%,#9aa5ab 0%,#566269 70%,#323b40 100%)}
+.bslot.pu{border-color:#9a55e0;background:radial-gradient(circle at 50% 38%,#c79bff 0%,#7a35c0 50%,#2c1250 100%)}
+.bslot.empty{opacity:.45;cursor:default}
+.bslot.sel{outline:2px solid #fff;outline-offset:1px}.bslot.msel{outline:2px solid #e3b559;outline-offset:1px}.bslot.msel::after{content:'\2713';position:absolute;left:1px;top:0;font-size:11px;font-weight:700;color:#0d1114;background:#e3b559;border-radius:3px;padding:0 3px;line-height:14px}#bagMulti.on{background:#e3b559;color:#0d1114}.bagact.wrap{flex-wrap:wrap}
+.bslot svg{position:absolute;left:10%;top:6%;width:80%;height:80%;filter:drop-shadow(0 2px 3px rgba(0,0,0,.55));pointer-events:none}
+.bslot .q{position:absolute;right:2px;bottom:0;font:600 8px var(--body);text-shadow:0 1px 3px #000,0 0 2px #000;pointer-events:none}
+.bslot .eqr{position:absolute;left:0;top:0;background:#2e9e6a;color:#fff;font:700 5px var(--body);letter-spacing:0;padding:0 6px 0 2px;clip-path:polygon(0 0,100% 0,88% 100%,0 100%);pointer-events:none;z-index:1}
+.bslot .ad{position:absolute;left:0;top:0;background:#e8872a;color:#fff;font:700 5px var(--body);letter-spacing:0;padding:0 6px 0 2px;clip-path:polygon(0 0,100% 0,82% 100%,0 100%);pointer-events:none}
+#bagInfo{min-height:48px;padding:8px 10px;flex-wrap:wrap;border:1px solid #2a4a7a;border-radius:8px;background:rgba(10,24,48,.7);display:flex;gap:12px;align-items:center;justify-content:space-between}
+.buycard{width:min(380px,100%);gap:14px;text-align:left}.buyhead{display:flex;gap:14px;align-items:center}.buyico{position:relative;width:64px;height:64px;flex:0 0 64px;border:1px solid #2f6fa8;border-radius:4px;background:radial-gradient(circle at 50% 40%,#2c639b 0%,#173a66 70%,#102848 100%)}.buyico svg{position:absolute;left:8%;top:6%;width:84%;height:84%}.buyname{font-size:18px;font-weight:700;color:#f3dfa0}.buyown{font-size:14px;color:var(--mist);margin-top:2px;font-variant-numeric:tabular-nums}.buyqty{display:flex;gap:6px;align-items:center;padding:6px;background:rgba(10,16,25,.8);border:1px solid #1f2d42;border-radius:6px}.qbtn{height:38px;min-width:38px;padding:0 8px;border:1px solid #2d4262;border-radius:4px;background:#121c2c;color:#e8edf4;font-size:18px;cursor:pointer}.qbtn:hover{background:#1a2a42}.qbtn:disabled{opacity:.4;cursor:not-allowed}.qbtn.qmax{min-width:64px;font-size:15px;font-variant-numeric:tabular-nums}.buyn{flex:1;text-align:center;font-size:18px;font-variant-numeric:tabular-nums}.buypad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.buypad .qbtn{height:36px}.buyact{display:flex;gap:10px}.buyact button{flex:1;height:44px;border-radius:4px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}.buycancel{border:1px solid #7a3a34;background:#4a2622;color:#f0c8c0}.buygo{border:1px solid #3f5f94;background:#1d2f52;color:#e8edf4}.buygo:disabled{opacity:.45;cursor:not-allowed}#buyCoin svg{width:26px;height:26px;vertical-align:middle}#buyTotal{font-weight:600}html.phone .buycard{zoom:1}
+#shopGrid{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}#shopCoins{font-size:12px;color:var(--mist);font-variant-numeric:tabular-nums}#shopSel{min-height:48px;padding:8px 10px;flex-wrap:wrap;border:1px solid #2a4a7a;border-radius:8px;background:rgba(10,24,48,.7);display:flex;gap:12px;align-items:center;justify-content:space-between}#shopSel small{display:block;color:var(--mist);margin-top:2px}html.phone #shop.modal{padding:6px}html.phone #shopGrid{grid-template-columns:repeat(auto-fill,36px);grid-auto-rows:36px;justify-content:center}html.phone #shopGrid .bslot{aspect-ratio:auto;width:36px;height:36px}
+#bagInfo small{display:block;color:var(--mist);margin-top:2px}
+#bag details summary{cursor:pointer;font-size:12px;color:var(--mist)}
+#bagRecent{display:flex;flex-direction:column;gap:2px;font-size:12px;max-height:72px;overflow:auto}
+
+/* skill book: compact skill boxes, list always visible & scrollable */
+.bookcard{overflow:hidden;gap:6px;padding:12px;max-height:100%}
+.bookcard p{font-size:11px;line-height:1.3}
+#bookCls{display:flex;flex-wrap:wrap;gap:4px}#bookCls .btn{padding:3px 8px;font-size:11px;min-height:0}#book .row .btn.on{background:var(--gold);color:#241a05;border-color:var(--gold);min-width:2.4em}#bookCls .btn.on{background:var(--gold);color:#241a05;border-color:var(--gold);box-shadow:0 0 8px rgba(240,200,90,.55)}#bookClsD{margin:0;font-size:11px}
+#bookSlots{flex:0 0 auto;display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+#bookSlots .bk,html.phone #bookSlots .bk{padding:2px 1px;font-size:8px;min-height:0;line-height:1.1;letter-spacing:0;border-radius:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bookbtns{display:flex;gap:8px;flex:0 0 auto}.bookbtns .btn{flex:1}
+#bookRows{flex:1 1 auto;min-height:90px;max-height:38vh;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start;-webkit-overflow-scrolling:touch}
+#bookRows .row{padding:3px 6px;gap:1px 6px;border-radius:6px;font-size:11px;min-width:0}
+#bookRows .row b{font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bookRows .row b{display:flex;align-items:center;gap:5px}
+#bookRows .sic{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1px solid;border-radius:50%;background:rgba(0,0,0,.4);font-size:12px;line-height:1;font-style:normal}
+#bookRows .row.sig{position:relative;border:1px solid #f0c85a;background:linear-gradient(135deg,rgba(240,200,90,.22),rgba(120,70,200,.18));box-shadow:0 0 9px rgba(240,200,90,.5),inset 0 0 6px rgba(255,226,122,.18);padding:5px 6px}
+#bookRows .row.sig .sic{width:26px;height:26px;font-size:16px;border-width:2px;box-shadow:0 0 8px currentColor;background:radial-gradient(circle,rgba(255,226,122,.3),rgba(0,0,0,.5))}
+#bookRows .row.sig b{font-size:12px;font-weight:700;text-shadow:0 0 6px rgba(255,226,122,.55)}
+#bookRows .row .uq{flex:0 0 auto;margin-left:auto;padding:0 4px;border-radius:3px;background:#f0c85a;color:#2a1c04;font:700 7px var(--body);letter-spacing:.06em;font-style:normal}
+#bookRows .row.sig.lock{opacity:.6}
+#bookRows .row small{font-size:9px;line-height:1.2;grid-column:1/-1}
+#bookRows .row .btn,html.phone #bookRows .row .btn{padding:2px 8px;font-size:10px;min-height:0;border-radius:6px}
+html.phone .modal .bookcard{zoom:1;max-height:100%}
+/* bag on phones: no zoom, fixed-height rows never squash, only the slot grid scrolls */
+html.phone .modal .bagcard{zoom:1;max-height:100%;overflow:hidden;gap:6px;padding:10px 12px}
+html.phone .bagcard>*{flex:0 0 auto}
+html.phone .bagcard>#bagGrid{flex:1 1 auto;min-height:72px;max-height:none}
+html.phone #bag.modal{padding:6px}
+html.phone #bagInfo{min-height:40px;padding:6px 8px}
+html.phone .bagcard h2{font-size:18px}
+html.phone .bagcard .ck{font-size:11px}
+/* fixed-size slots (rows no longer depend on aspect-ratio, which squashed and overlapped them on phones) */
+html.phone #bagGrid{grid-template-columns:repeat(auto-fill,36px);grid-auto-rows:36px;justify-content:center;gap:3px}
+html.phone #bagGrid .bslot{aspect-ratio:auto;width:36px;height:36px;min-width:0;min-height:0}
+@media (orientation:landscape){html.phone #bagGrid{grid-template-columns:repeat(auto-fill,30px);grid-auto-rows:30px;gap:3px}html.phone #bagGrid .bslot{width:30px;height:30px}html.phone #bagGrid .bslot .q{font-size:7px;right:1px}html.phone #bagGrid .bslot .eqr,html.phone #bagGrid .bslot .ad{font-size:4.5px}}
+@media (orientation:landscape){html.phone #bag details:not(.bwopts){display:none}html.phone .modal .bagcard{width:min(680px,100%)}}
+html.phone .bookcard .btn{min-height:34px;padding:4px 12px;font-size:13px}
+html.phone .bookcard h2{font-size:18px}
+html.phone #bookRows .row .btn{min-height:0}
+.bk{padding:6px 4px;font-size:10px}.bk.on{border-color:var(--jade);color:var(--jade)}.lock{opacity:.4}
+#chatIn,#nameIn,#emailIn,#passIn,#codeIn,#newPassIn{width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;border:1px solid var(--gold);background:var(--glass);color:var(--paper);font:14px var(--body);-webkit-user-select:text;user-select:text}
+#chatIn:focus,#nameIn:focus,#emailIn:focus,#passIn:focus,#codeIn:focus,#newPassIn:focus{outline:2px solid var(--gold);outline-offset:2px}
+#authMsg{min-height:16px;font-size:12px;letter-spacing:.03em}
+#whoBox:not([hidden]),#playBox:not([hidden]){display:flex}
+#resetBox{display:flex;flex-direction:column;gap:8px}
+#whoBox[hidden],#playBox[hidden],#authBox[hidden],#resetBox[hidden]{display:none}
+#netStat{font-size:12px;letter-spacing:.04em;color:var(--mist)}
+.nmrow{display:flex;flex-direction:column;gap:6px}
+.nmrow label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
+/* ---- CHAT PANEL: window with channel tabs on the left, avatar + bubble messages, input bar (replaces the old chat line + whisper box) ---- */
+#cp{position:absolute;left:calc(64*var(--u));top:calc(14*var(--u));width:min(max(calc(390*var(--u)),310px),calc(100% - 72*var(--u)));height:min(max(calc(420*var(--u)),250px),calc(100% - 28*var(--u)));z-index:6;pointer-events:auto;display:flex;flex-direction:column;background:linear-gradient(#162235,#0f1826);border:1px solid #33496a;box-shadow:0 0 0 1px #070c14,0 calc(6*var(--u)) calc(24*var(--u)) rgba(0,0,0,.65);font:max(11px,calc(12*var(--u)))/1.35 var(--body);color:var(--paper)}
+#cp[hidden]{display:none}
+#cpHead{flex:0 0 auto;display:flex;align-items:center;gap:calc(2*var(--u));height:max(36px,calc(42*var(--u)));padding:0 calc(4*var(--u));background:linear-gradient(#1c2c45,#131e30);border-bottom:1px solid #2d4262;cursor:move;touch-action:none;-webkit-user-select:none;user-select:none}
+#cpHead button{position:relative;flex:0 0 auto;width:max(30px,calc(34*var(--u)));height:max(30px,calc(34*var(--u)));padding:0;border:0;background:none;color:#c9d3e0;font-size:max(18px,calc(21*var(--u)));line-height:1;cursor:pointer;display:grid;place-items:center}
+#cpHead button:hover{color:#fff}
+#cpHead button sup{font-size:.55em;position:absolute;right:2px;top:3px;font-weight:700}
+#cpDoor{margin-right:calc(3*var(--u));border-right:1px solid #2d4262!important;padding-right:calc(4*var(--u))!important;width:max(36px,calc(42*var(--u)))!important}
+.cpBd{position:absolute;right:calc(1*var(--u));top:calc(-1*var(--u));min-width:max(15px,calc(17*var(--u)));height:max(15px,calc(17*var(--u)));border-radius:99px;background:#f07a1a;color:#fff;font:700 max(10px,calc(11*var(--u)))/max(15px,calc(17*var(--u))) var(--body);text-align:center;padding:0 3px;box-sizing:border-box}
+#cpHead .ttl{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:calc(7*var(--u));font:600 max(16px,calc(22*var(--u))) var(--body);color:#dfe6ef;pointer-events:none}
+#cpHead #cpHelp{pointer-events:auto;width:max(20px,calc(26*var(--u)));height:max(20px,calc(26*var(--u)));border:2px solid #5b7392;border-radius:50%;font:700 max(12px,calc(15*var(--u))) var(--body);color:#aebdd0}
+#cpHead #cpX{font-size:max(26px,calc(30*var(--u)))}
+#cpBody{flex:1 1 auto;min-height:0;display:flex}
+#cpTabs{flex:0 0 max(66px,calc(78*var(--u)));overflow-y:auto;overflow-x:hidden;padding:max(4px,calc(5*var(--u)));display:flex;flex-direction:column;gap:max(4px,calc(5*var(--u)));border-right:1px solid #223249;background:rgba(0,0,0,.2);-webkit-overflow-scrolling:touch}
+.ct{position:relative;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:max(46px,calc(54*var(--u)));padding:4px 2px;border:1px solid #2a3b55;background:rgba(10,16,26,.85);color:#cfd8e3;font:600 max(10px,calc(11.5*var(--u))) var(--body);cursor:pointer;box-sizing:border-box;width:100%}
+.ct .ic2{font-size:max(17px,calc(21*var(--u)));line-height:1}
+.ct .lb2{max-width:100%;padding:0 2px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ct.on{border-color:#4aa9ff;background:linear-gradient(#1c3350,#12213a);box-shadow:0 0 calc(7*var(--u)) rgba(74,169,255,.8),inset 0 0 calc(8*var(--u)) rgba(74,169,255,.25);color:#fff}
+.ct .bdg{position:absolute;right:-3px;top:-5px;min-width:max(15px,calc(17*var(--u)));height:max(15px,calc(17*var(--u)));border-radius:99px;background:#2f7bff;color:#fff;font:700 max(10px,calc(11*var(--u)))/max(15px,calc(17*var(--u))) var(--body);text-align:center;padding:0 3px;box-sizing:border-box;z-index:1}
+.ct .cx{position:absolute;left:0;top:0;padding:1px 5px 3px 3px;font-size:max(13px,calc(15*var(--u)));line-height:1;color:#7f93ad}
+.ct .cx:hover{color:#ff8a7a}
+#cpMain{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+#cpLog{flex:1 1 auto;min-height:0;overflow-y:auto;padding:max(6px,calc(7*var(--u))) max(7px,calc(9*var(--u)));display:flex;flex-direction:column;gap:max(7px,calc(9*var(--u)));-webkit-overflow-scrolling:touch;word-break:break-word;-webkit-user-select:text;user-select:text}
+.cm{display:flex;gap:max(6px,calc(8*var(--u)));align-items:flex-start}
+.cm .cb{min-width:0;flex:1 1 auto}
+.av{position:relative;flex:0 0 auto;width:max(32px,calc(38*var(--u)));height:max(32px,calc(38*var(--u)));overflow:hidden;border:1px solid #3b4d6a;background:#1c2536}
+.av .bd2{position:absolute;left:12%;right:12%;bottom:-18%;height:52%;border-radius:50% 50% 0 0;border-top:3px solid}
+.av .hd2{position:absolute;left:29%;top:13%;width:42%;height:42%;border-radius:50%}
+.cm .ch{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 max(4px,calc(5*var(--u)));font-weight:600}
+.cm .tg{color:#9fb0c6;font-weight:400}.cm .wt{color:#7d8ba0;font-weight:400}
+.cm .nm{color:#b9a0f0}.cm.me .nm{color:#8fd0ff}
+.cm .wh{color:#ff9ee8;font-weight:400}
+.cm .tm,.cs .tm{color:#7d8ba0;font-weight:400}
+.cm .bb{display:inline-block;margin-top:2px;padding:max(5px,calc(6*var(--u))) max(8px,calc(10*var(--u)));background:#2a3346;border-radius:6px;color:#f0f3f8;max-width:100%;box-sizing:border-box}
+.cm.pm .bb{background:#3b2c4d}
+.cm .bb.loc{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.cm .bb.loc:hover{filter:brightness(1.25)}
+.cs{padding:0 2px;color:#aab6c6}
+#cpLog .hint{margin:auto 0;padding:10px;text-align:center;color:#8d9aa2}
+#cpForm{flex:0 0 auto;display:flex;align-items:center;gap:max(6px,calc(7*var(--u)));padding:max(5px,calc(6*var(--u))) max(7px,calc(9*var(--u))) max(7px,calc(9*var(--u)))}
+#cpIn{flex:1 1 auto;min-width:0;box-sizing:border-box;height:max(36px,calc(42*var(--u)));padding:0 calc(10*var(--u));background:#0a1019;border:1px solid #2d4262;border-radius:0;color:#e8edf4;font:inherit;font-size:max(13px,calc(14*var(--u)));-webkit-user-select:text;user-select:text}
+#cpIn::placeholder{color:#6c7b90}
+/* ONLY the message area (#cpLog) is see-through; the header, tab column and input bar stay solid like the original window.
+   --cpA is the message-area tint: raise it for a more solid message area, lower it for a clearer one (0 = fully clear). */
+#cp{--cpA:.42;background:transparent;border-color:#33496a;box-shadow:0 0 0 1px #070c14,0 calc(6*var(--u)) calc(24*var(--u)) rgba(0,0,0,.65)}
+#cpHead{background:linear-gradient(#1c2c45,#131e30);border-bottom-color:#2d4262}
+#cpTabs{background:#121b2b;border-right-color:#223249}
+.ct{background:rgba(10,16,26,.85);border-color:#2a3b55}
+.ct.on{background:linear-gradient(#1c3350,#12213a)}
+#cpForm{background:#0f1826}
+#cpIn{background:#0a1019;border-color:#2d4262}
+#cpLog{background:rgba(10,16,26,var(--cpA));-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)} /* soft blur keeps text readable over the game */
+.cm .bb{background:rgba(60,72,98,.6)}
+.cm.pm .bb{background:rgba(88,64,112,.6)}
+.cm,.cs,#cpLog .hint{text-shadow:0 1px 2px rgba(0,0,0,.9)}
+#cpIn:focus{outline:none;border-color:#4aa9ff}
+#cpIn:disabled{opacity:.5}
+#cpList{flex:0 0 auto;width:max(36px,calc(42*var(--u)));height:max(36px,calc(42*var(--u)));padding:0;border-radius:50%;border:1px solid #3b4d6a;background:#17202f;color:#c9d3e0;font-size:max(18px,calc(21*var(--u)));line-height:1;display:grid;place-items:center;cursor:pointer}
+#cpPop{position:absolute;left:max(66px,calc(78*var(--u)));right:6px;bottom:max(50px,calc(58*var(--u)));max-height:64%;overflow-y:auto;z-index:2;padding:8px;display:flex;flex-direction:column;gap:4px;background:#0f1a2b;border:1px solid #4aa9ff;box-shadow:0 0 14px rgba(0,0,0,.75)}
+#cpPop.top{left:6px;top:max(40px,calc(46*var(--u)));bottom:auto}
+#cpPop[hidden]{display:none}
+#cpPop h5{margin:0 0 2px;font:600 max(11px,calc(11*var(--u))) var(--body);letter-spacing:.1em;text-transform:uppercase;color:#7fb8ff}
+#cpPop p{margin:0;color:#aab6c6}
+#cpPop button.it{display:flex;justify-content:space-between;gap:10px;width:100%;padding:max(6px,calc(7*var(--u))) 9px;background:#17233a;border:1px solid #2d4262;color:#e8edf4;font:inherit;text-align:left;cursor:pointer}
+#cpPop button.it:hover{border-color:#4aa9ff}
+#cpPop button.it span:last-child{color:#8d9aa2}
+#cpPop label{display:flex;gap:8px;align-items:center;padding:4px 2px;cursor:pointer}
+#cpPop input[type=text]{flex:1;min-width:0;box-sizing:border-box;height:max(32px,calc(36*var(--u)));padding:0 8px;background:#0a1019;border:1px solid #2d4262;color:#e8edf4;font:inherit;-webkit-user-select:text;user-select:text}
+#cpPop .rw{display:flex;gap:6px}
+#hud.cpOpen #log,#hud.nofeed #log{display:none}
+html.phone #cpIn,html.phone #cpPop input[type=text]{font-size:16px}
+@media (orientation:portrait){#cp{left:max(8px,env(safe-area-inset-left,0px));top:calc(8px + env(safe-area-inset-top,0px));width:calc(100% - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px));height:min(62%,500px)}}
+
+/* ===== PHONE FIXES: compact wardrobe + landscape menu that no longer collides with the skill buttons ===== */
+/* wardrobe: override the generic 1.3x modal zoom (it out-specified the old html.phone .wdcard rule) and shrink everything */
+html.phone .modal .wdcard{zoom:.85;width:min(560px,100%);max-height:100%;padding:10px 12px;gap:6px;overflow:hidden}
+html.phone .wdcard h2{font-size:18px}
+html.phone .wdcard .btn{min-height:30px;padding:4px 10px;font-size:12px}
+html.phone .wdcard .wdtabs .btn{min-height:28px;padding:3px 8px;font-size:11px}
+html.phone .wdcard .wdprev{flex:0 0 120px;gap:4px}
+html.phone .wdcard .wdprev canvas{width:120px;height:140px}
+html.phone .wdcard #wdName{font-size:11px;min-height:30px}
+html.phone .wdcard #wdGrid{grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:4px;max-height:min(210px,calc(100vh / .85 - 150px))}
+html.phone .wdcard #wdGrid button{padding:4px 3px;font-size:10px;min-height:30px}
+html.phone .wdcard #wdGrid .sw{width:44px;height:20px}
+html.phone .wdcard .wdnote{display:none}
+@media (orientation:landscape){
+ html.phone .modal:has(.wdcard){padding:6px}
+ html.phone .modal .wdcard{zoom:.8;width:min(600px,100%)}
+ html.phone .wdcard #wdGrid{max-height:calc(100vh / .8 - 120px)}
+ html.phone .wdcard .wdbody{gap:8px}
+ html.phone #menu{width:min(340px,calc(100vw - 24px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)))}
+}
+</style>
+
+<div id="stage">
+  <canvas id="g3" style="position:absolute;inset:0"></canvas>
+  <canvas id="game"></canvas>
+  <div id="vig"></div>
+
+  <div id="hud">
+    <div id="xp"><i></i></div>
+
+    <!-- top-left: level + combat power, realm tag, HP / MP, buffs, currency + day phase -->
+    <div id="pl">
+      <div id="plr" class="tx"><span id="lv">Lv. 1</span><span class="pw">&#9876; <span id="pw">0</span><button id="bStats" type="button" title="Show all stats" aria-label="Show all stats" aria-expanded="false">i</button></span></div>
+      <div class="bar2" id="hp"><i></i><span></span></div>
+      <div class="bar2" id="qi"><i></i><span></span></div>
+      <div id="stats" class="tx"><span>ATK <b id="sAtk">0</b></span><span>DEF <b id="sDef">0</b></span><span>CRIT <b id="sCrit">15%</b></span></div>
+      <div id="brow"><span class="rt" id="realm">Mortal Body</span><div id="buffs"></div></div>
+    </div>
+
+    <div id="statsWin" class="panel" hidden>
+      <h4>Character stats</h4>
+      <div class="swWide"><span>Class</span><b id="swCls"></b><span>Realm</span><b id="swRealm"></b></div>
+      <span>Level</span><b id="swLv"></b>
+      <span>Power</span><b id="swPw"></b>
+      <hr>
+      <span>Max HP</span><b id="swHp"></b>
+      <span>Max Qi</span><b id="swQi"></b>
+      <span title="Qi regenerated per second from Ring and Necklace (grade, rarity and forge level), as % of max Qi. On top of the base regen.">Qi regen (gear)</span><b id="swQrg"></b>
+      <span>ATK</span><b id="swAtk"></b>
+      <span>DEF</span><b id="swDef"></b>
+      <span>Damage reduction</span><b id="swRed"></b>
+      <span>Move speed</span><b id="swMs"></b>
+      <hr>
+      <span>Crit chance</span><b id="swCrit"></b>
+      <span>Crit damage</span><b id="swCd"></b>
+      <span title="Extra damage added to your crit multiplier (180% base).">Crit ATK DMG boost</span><b id="swCdb"></b>
+      <span title="Lowers the chance that a hit you take from a monster is a crit.">Crit EVA</span><b id="swCev"></b>
+      <span title="Cuts the extra damage of crits you take.">Crit DMG reduction</span><b id="swCdr"></b>
+      <span>Attack speed</span><b id="swAs"></b>
+      <span title="Your hit chance on a monster = Accuracy minus its evasion (about 4% for normal monsters, 8% for bosses, +1.5% for every level it is above you).">Accuracy</span><b id="swAcc"></b>
+      <span title="Chance to dodge a monster or player hit completely. Attackers above your level dodge-pierce you: -0.4% per level above you.">Evasion</span><b id="swEva"></b>
+      <hr>
+      <span title="Extra damage on your basic attacks (the auto-attack swing, not skills).">Bash ATK DMG boost</span><b id="swBab"></b>
+      <span title="Less damage from monster hits (monsters attack with basic strikes).">Bash DMG reduction</span><b id="swBdr"></b>
+      <span title="Extra damage you deal to other players.">PvP ATK DMG boost</span><b id="swPab"></b>
+      <span title="Less damage you take from other players.">PvP DMG reduction</span><b id="swPdr"></b>
+      <hr>
+      <span title="Extra damage you deal to normal monsters.">Monster ATK DMG boost</span><b id="swMab"></b>
+      <span title="Less damage from normal monsters.">Monster DMG reduction</span><b id="swMdr"></b>
+      <span title="Extra damage you deal to bosses.">Boss ATK DMG boost</span><b id="swBsa"></b>
+      <span title="Less damage from bosses.">Boss DMG reduction</span><b id="swBsd"></b>
+      <hr>
+      <span>Weapon level</span><b id="swWl"></b>
+      <span>Armor level</span><b id="swAl"></b>
+      <span>PvP kills</span><b id="swPk"></b>
+    </div>
+
+    <!-- left strip + potions: on a phone in landscape these form one row at the bottom centre; chat feed and loot chips stack above it -->
+    <div id="bbar">
+    <div id="ls">
+      <button class="ic" id="bParty" type="button" title="Players online / here (tap + to invite to a party)"><span>&#128101;</span><span class="bd" id="partyN">1</span><span class="lb">Online</span></button>
+      <button class="ic" id="bPty" type="button" title="Show / hide the party window"><span>&#9873;</span><span class="bd" id="ptyN" style="display:none">0</span><span class="lb">Party</span></button>
+      <button class="ic" id="bFr" type="button" title="Friends: send and answer friend requests (or type /friend name)"><span>&#10084;</span><span class="bd" id="frN" style="display:none">0</span><span class="lb">Friends</span></button>
+      <button class="ic" id="bChat" type="button" title="Chat (Enter)"><span>&#128172;</span><span class="bd" id="chN" style="display:none">0</span><span class="lb">Chat</span></button>
+    </div>
+    <div id="qb">
+      <button class="ic" id="bPot" type="button" title="Health Potion (Q): heals 5% HP (5 s cooldown)"><span>&#9879;</span><span class="cnt" id="potN">0</span><span class="cd" id="potCd" hidden></span><span class="lb">HP</span></button>
+      <button class="ic" id="bPotQ" type="button" title="Mana Potion (Z): restores 10% mana"><span style="color:#6fb2ff">&#9879;</span><span class="cnt" id="potQN">0</span><span class="cd" id="potQCd" hidden></span><span class="lb">MP</span></button>
+      <button class="ic" id="bTp" type="button" title="Home Scroll (X): teleport to your hub"><span style="color:#d2b4ff">&#10162;</span><span class="cnt" id="tpN">0</span><span class="cd" id="tpCd" hidden></span><span class="lb">Home</span></button>
+      <button class="ic" id="bOre" type="button" title="Darksteel ore: open the forge"><span>&#9670;</span><span class="cnt" id="oreN">0</span><span class="lb">Ore</span></button>
+      <button class="ic" id="bPvp" type="button" title="PvP mode: Peaceful / Lawful / Hostile / Carnal (P toggles ATK Players Only)"><span>&#9760;</span><span class="lb" id="pvpLb">PvP</span></button>
+    </div>
+    </div>
+    <div id="msgs">
+    <div id="log"></div>
+    <div id="loot"></div>
+    </div>
+    <div id="online" class="panel off" hidden></div>
+    <div id="party" class="panel" hidden></div>
+    <div id="frwin" class="panel" hidden></div>
+    <div id="lvUp" hidden></div>
+    <div id="pgear" class="panel" hidden></div>
+    <div id="mgear" class="panel" hidden></div>
+    <div id="finv" class="panel" hidden><span id="finvT"></span><button class="yes" id="finvY" type="button">Accept</button><button class="no" id="finvN" type="button">Decline</button></div>
+    <div id="pinv" class="panel" hidden><span id="pinvT"></span><button class="yes" id="pinvY" type="button">Accept</button><button class="no" id="pinvN" type="button">Decline</button></div>
+
+    <!-- top-centre: target frame + zone banner -->
+    <div id="tg" class="tx" hidden>
+      <div id="tgName"><span id="tgLv">Lv. 1</span> <span id="tgNm"></span><small id="tgDef"></small></div>
+      <div id="tgRow"><span id="tgRank">Common</span><div class="bar2" id="tgHp"><i></i><span></span></div></div>
+      <div id="tgAct"></div>
+    </div>
+    <div id="banner" class="tx"></div>
+
+    <!-- top-right: menu icons, zone strip, quests, minimap -->
+    <div id="tr">
+      <button class="ic" id="bForge" type="button" title="Lotus Forge (O)">&#9874;<span class="lb">Forge</span></button>
+      <button class="ic" id="bWorld" type="button" title="World Gate (G)">&#127760;<span class="lb">World</span></button>
+      <button class="ic" id="bBook" type="button" title="Skill book (K)">&#128214;<span class="lb">Skills</span></button>
+      <button class="ic" id="bWare" type="button" title="Warehouse (H, in a hub)">&#128230;<span class="lb">Store</span></button>
+      <button class="ic" id="bBag" type="button" title="Bag (B)">&#127890;<span class="lb">Bag</span></button>
+      <button class="ic" id="bMap" type="button" title="Minimap (M)">&#9906;<span class="lb">Map</span></button>
+      <button class="ic" id="bSkin" type="button" title="Wardrobe: skin, hair, outfit, headwear, aura (C)"><span>&#9786;</span><span class="lb">Look</span></button>
+      <button class="ic" id="bBell" type="button" hidden>&#128276;</button>
+      <button class="ic" id="bGear" type="button" title="Menu"><span>&#9881;</span><span class="lb">Menu</span></button>
+    </div>
+    <div id="menu" class="panel" hidden>
+      <b>Move</b><span>WASD / arrows / click</span>
+      <b>Attack</b><span>Click · F = nearest</span>
+      <b>Jump</b><span>Space · JUMP button</span>
+      <b>Skills</b><span>1-0 - = · R T</span>
+      <b>Potions</b><span>Q hp · Z qi</span>
+      <b>Auto / Mine</b><span>A · E</span>
+      <b>Forge / World</b><span>F · G</span>
+      <b>Skill book</b><span>K</span>
+      <b>Private chat</b><span>I · /w name</span>
+      <b>Wardrobe / View</b><span>C · V</span>
+      <b>Bag / Shop</b><span>B · N (at the merchant)</span>
+      <b>Minimap</b><span>M</span>
+      <b>Chat</b><span>Enter</span>
+      <div class="vsep"></div>
+      <div class="vol"><b>Music</b><input type="range" id="volMusic" min="0" max="100" step="1" aria-label="Music volume"><span id="volMusicV">50%</span></div>
+      <div class="vol"><b>Sound FX</b><input type="range" id="volSfx" min="0" max="100" step="1" aria-label="Sound effects volume"><span id="volSfxV">70%</span></div>
+      <div class="mrow"><span>Resolution</span><select id="perfSel"><option value="auto">Auto (by device)</option><option value="vlow">Very low (fastest, very blurry)</option><option value="low">Low</option><option value="med">Medium</option><option value="high">High (best looking)</option></select></div>
+      <label class="mrow ck" id="tapMoveRow"><input type="checkbox" id="tapMove"> Tap to move: tap the ground to walk there (off = joystick only)</label>
+      <label class="mrow ck"><input type="checkbox" id="fightBack"> Fight back: attack the monster that hits you</label>
+      <label class="mrow ck"><input type="checkbox" id="autoPot"> Auto-use potions when low</label>
+      <div class="vol"><b>HP potion at</b><input type="range" id="apHp" min="5" max="95" step="5" aria-label="Use HP potion when HP is below this percent"><span id="apHpV">35%</span></div>
+      <div class="vol"><b>Qi potion at</b><input type="range" id="apQi" min="5" max="95" step="5" aria-label="Use Qi potion when Qi is below this percent"><span id="apQiV">20%</span></div>
+      <div class="mbtns">
+      <button class="btn" id="bView" type="button" title="Switch 3D / 2D (V)">View: <span id="viewLb">3D</span></button>
+      <button class="btn" id="bLand" type="button" title="Landscape mode (phones): full screen + rotation lock">Landscape</button>
+      <button class="btn mrow" id="bSaver" type="button">Screen saver</button>
+      <button class="btn" id="bLogoutGame" type="button">Log out</button>
+      </div>
+    </div>
+    <div id="zn" class="tx"><em id="znTag">Danger</em><span id="znTxt"></span><em class="ch" id="znCh">World 1</em></div>
+    <div id="mmw"><canvas id="mm" width="264" height="264"></canvas></div>
+
+    <!-- bottom-left: feed, chat input, status line -->
+    <div id="cp" hidden>
+      <div id="cpHead">
+        <button type="button" id="cpSet" title="Chat settings">&#9881;</button>
+        <button type="button" id="cpNew" title="New private chat">&#128172;<sup>+</sup></button>
+        <button type="button" id="cpPin" title="Share my location in chat">&#128205;</button>
+        <button type="button" id="cpDoor" title="Jump to unread messages">&#10162;<span class="cpBd" id="cpDoorN" style="display:none">0</span></button>
+        <div class="ttl"><span>Chat</span><button type="button" id="cpHelp" title="Help">?</button></div>
+        <button type="button" id="cpX" title="Close">&#215;</button>
+      </div>
+      <div id="cpBody">
+        <div id="cpTabs"></div>
+        <div id="cpMain">
+          <div id="cpLog"></div>
+          <div id="cpForm"><input id="cpIn" maxlength="120" placeholder="Enter text." autocomplete="off" spellcheck="false"><button type="button" id="cpList" title="Quick phrases">&#9776;</button></div>
+        </div>
+      </div>
+      <div id="cpPop" hidden></div>
+    </div>
+    <div id="sb" class="tx"><span class="clk" id="clk">00:00</span><span class="xpt" id="xpt">EXP 0%</span><span class="net off" id="net"><s><i style="height:calc(4*var(--u))"></i><i style="height:calc(7*var(--u))"></i><i style="height:calc(11*var(--u))"></i></s><span id="ping">solo</span></span></div>
+
+    <!-- bottom-centre -->
+    <div id="tpBar" hidden><span>TELEPORTING</span><b><i id="tpFill"></i></b></div>
+
+    <!-- bottom-right: skill cluster -->
+    <div id="skills"></div>
+    <div id="hubArr" hidden><i>&#10148;</i><span>Hub</span></div>
+    <div id="dodge" title="Dodge: drag in a direction, release to dash (Shift on keyboard)"><i></i><span>DODGE</span></div>
+    <div id="jump" title="Jump (Space). Clears low rocks and blocks."><b>&#8679;</b><span>JUMP</span></div>
+    <div id="ab">
+      <button class="ic" id="bAuto" type="button" title="Auto-hunt"><span>&#9876;</span><span class="au">HUNT</span></button>
+      <button class="ic" id="bMine" type="button" title="Auto-mine ore (E, press again to stop)"><span>&#9935;</span><span class="au">MINE</span></button>
+    </div>
+  </div>
+
+  <div id="joy"><i></i></div>
+
+  <div class="modal" id="forge" hidden>
+    <div class="card panel bagwin fgwin">
+      <div class="bwbody">
+        <div class="bwhero">
+          <div class="bwstage" id="fgStage">
+            <canvas id="fgCv" width="380" height="448"></canvas>
+            <canvas id="fgCv3" width="380" height="448" hidden></canvas>
+            <div class="bwcol bwl" id="fgEqL"></div>
+            <div class="bwcol bwr" id="fgEqR"></div>
+            <div class="bwlv"><b id="fgLv"></b><span>Equipped gear</span></div>
+            <div class="bwhint" id="fgHint" hidden>Drag to rotate</div>
+          </div>
+        </div>
+        <div class="bwside">
+          <div class="bagtop"><h2>Lotus Forge</h2></div>
+          <div id="fgCur">
+            <div class="chip"><u></u><span class="cl">Coins</span><span id="fgCoins">0</span></div>
+            <div class="chip ore"><u></u><span class="cl">Ore</span><span id="fgOre">0</span></div>
+          </div>
+          <div id="fgInfo"></div>
+        </div>
+      </div>
+      <div class="bagbtns"><button class="btn" id="forgeClose" type="button">Close</button></div>
+    </div>
+    <div id="forgeRes" hidden><b></b><small></small></div>
+  </div>
+
+  <div class="modal" id="worlds" hidden>
+    <div class="card panel">
+      <h2>World Gate</h2>
+      <p>Each world holds tougher monsters and richer drops. You can travel between them from any hub.</p>
+      <div id="worldRows" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="btn" id="worldClose" type="button">Close</button>
+    </div>
+  </div>
+
+  <div class="modal" id="wardrobe" hidden>
+    <div class="card panel wdwin">
+      <div class="bwbody">
+        <div class="bwhero">
+          <div class="bwstage" id="wdStage">
+            <canvas id="wdCv" width="380" height="448"></canvas>
+            <canvas id="wdCv3" width="380" height="448" hidden></canvas>
+            <div class="bwlv"><b id="wdClsName"></b><span>Preview</span></div>
+            <div class="bwhint" id="wdHint" hidden>Drag to rotate</div>
+          </div>
+          <div id="wdName"></div>
+        </div>
+        <div class="bwside">
+          <div class="bagtop"><h2 id="wdTitle">Wardrobe</h2></div>
+          <div class="wdclass" id="wdClassTabs"></div>
+          <div class="wdtabs" id="wdTabs"></div>
+          <div id="wdGrid"></div>
+          <p class="wdnote">Every class has the same wardrobe options, and each class keeps its own look. It is saved to your account and other players see it too.</p>
+        </div>
+      </div>
+      <div class="bagbtns"><button class="btn pri" id="wdRand" type="button">Randomize</button><button class="btn" id="wdReset" type="button">Default look</button><button class="btn" id="wdClose" type="button">Close</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="book" hidden>
+    <div class="card panel bookcard" style="width:min(460px,100%)">
+      <h2>Skill Book</h2>
+      <p>A new skill is learned every 5 levels. Pick a slot, then press Equip on a skill. Tap a skill slot to cast it; drag it upward to switch its auto-cast on or off (auto-hunt only casts skills with AUTO lit, one at a time, slot 1 first, then 2, 3 ... Slots R and T have no auto-cast).</p>
+      <div id="bookCls"></div><p id="bookClsD"></p>
+      <div id="bookSlots"></div>
+      <div id="bookRows"></div>
+      <div class="bookbtns"><button class="btn pri" id="bookAuto" type="button">Auto-equip best</button><button class="btn" id="bookClose" type="button">Close</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="bag" hidden>
+    <div class="card panel bagwin">
+      <div class="bwbody">
+        <div class="bwhero">
+          <div class="bwstage" id="bagStage">
+            <canvas id="bagCv" width="380" height="448"></canvas>
+            <canvas id="bagCv3" width="380" height="448" hidden></canvas>
+            <div class="bwcol bwl" id="bagEqL"></div>
+            <div class="bwcol bwr" id="bagEqR"></div>
+            <div class="bwlv"><b id="bagLv"></b><span>Equipped gear</span></div>
+            <div class="bwhint" id="bagHint" hidden>Drag to rotate</div>
+          </div>
+        </div>
+        <div class="bwside">
+          <div class="bagtop"><h2>Bag</h2><span id="bagCnt"></span></div>
+          <div id="bagCur">
+            <div class="chip"><u></u><span class="cl">Coins</span><span id="coins">0</span></div>
+            <div class="chip gold" title="Gold: premium currency. Exchange it for coins and ore at the Potion Merchant."><u></u><span class="cl">Gold</span><span id="gold">0</span></div>
+            <div class="chip ore"><u></u><span class="cl">Ore</span><span id="ore">0</span></div>
+          </div>
+          <div id="bagItems"></div>
+          <div id="bagInfo"></div>
+        </div>
+      </div>
+      <div class="bagbtns"><button class="btn pri" id="bagAuto" type="button" title="Wear the best piece in every slot (highest stats, then grade)">Auto-equip best</button><button class="btn" id="bagMulti" type="button" title="Select several spare gear pieces and sell them together">Sell multiple</button><button class="btn" id="bagClose" type="button">Close</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="wh" hidden>
+    <div class="card panel whwin">
+      <div class="whhead"><h2>Warehouse</h2><span class="whnote">Private storage in your hub &middot; spare gear only</span></div>
+      <div class="whcols">
+        <div class="whcol"><div class="bagtop"><h3>Warehouse</h3><span id="whCnt"></span></div><div class="whgrid" id="whGrid"></div></div>
+        <div class="whcol"><div class="bagtop"><h3>Bag (spare gear)</h3><span id="whBagCnt"></span></div><div class="whgrid" id="whBag"></div></div>
+      </div>
+      <div id="whInfo"></div>
+      <div class="bagbtns"><button class="btn pri" id="whAll" type="button" title="Move every spare gear piece from the bag to the warehouse">Store all spare gear</button><button class="btn" id="whClose" type="button">Close</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="shop" hidden>
+    <div class="card panel bagcard">
+      <div class="bagtop"><h2>Potion Merchant</h2><span id="shopCoins"></span></div>
+      <div id="shopGrid"></div>
+      <div id="shopSel"></div>
+      <p id="shopInfo" style="margin:0;font-size:12px;color:var(--mist)"></p>
+      <div id="goldBox"></div>
+      <div class="bagbtns"><button class="btn" id="shopClose" type="button">Close</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="buyDlg" hidden style="z-index:12">
+    <div class="card panel buycard">
+      <div class="buyhead"><div class="buyico" id="buyIco"></div><div><div id="buyName" class="buyname"></div><div id="buyOwned" class="buyown"></div></div></div>
+      <div class="buyqty">
+        <button type="button" class="qbtn" id="buyReset" title="Reset to 1">&#8634;</button>
+        <button type="button" class="qbtn" id="buyMinus">&minus;</button>
+        <div id="buyQty" class="buyn">1</div>
+        <button type="button" class="qbtn" id="buyPlus">+</button>
+        <button type="button" class="qbtn qmax" id="buyMax" title="Buy the most you can afford">100</button>
+        <button type="button" class="qbtn" id="buyPad" title="Type a quantity">&#9638;</button>
+      </div>
+      <div id="buyPadBox" class="buypad" hidden></div>
+      <div class="buyact"><button type="button" class="buycancel" id="buyCancel">Cancel</button><button type="button" class="buygo" id="buyGo"><span id="buyCoin"></span><b id="buyTotal">0</b> Purchase</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="xcDlg" hidden style="z-index:12">
+    <div class="card panel buycard">
+      <div class="buyname" id="xcTitle">Confirm exchange</div>
+      <div id="xcText" style="font-size:15px;line-height:1.5"></div>
+      <div class="buyact"><button type="button" class="buycancel" id="xcCancel">Cancel</button><button type="button" class="buygo" id="xcGo">Confirm</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="title">
+    <div class="card panel" style="background:transparent;border:0;backdrop-filter:none;text-align:left;gap:16px;width:min(460px,100%)">
+      <h1>World of <em>Ascension</em></h1>
+      <p class="tag">Rise from mortal flesh to heavenly sovereign.</p>
+      <p>Every cultivator begins the same way: a mortal body, a worn blade and a gate that leads nowhere yet. Hunt the beasts beyond the hub, mine darksteel and temper your gear at the Lotus Forge, and learn a new skill every five levels as you break through realm after realm, from Mortal Body to Sovereign Tier 80 at level 1000.</p>
+      <p>Sixteen worlds wait behind the World Gate, each deadlier than the last. Bosses rise at random, so keep an eye on the minimap for red dots. Hunt alongside friends in shared worlds, or step into the Arena (World 0) where only the strongest survive. Loot is yours to keep, sell or equip, and the climb is yours alone to finish.</p>
+      <div class="keys">
+        <b>Move</b><span>WASD / arrows, or click and tap the ground</span>
+        <b>Attack</b><span>Click a monster, or F for the nearest</span>
+        <b>Jump</b><span>Space or the JUMP button above Dodge: hop over low rocks and blocks</span>
+        <b>Skills</b><span>1–6 cast · K skill book · new skill every 5 levels · drag slots 1-12 up = auto-cast on/off (slot 1 casts first; R and T never auto-cast)</span>
+        <b>Auto</b><span>Tap the AUTO button to hunt for you · E walks to ore and mines it</span>
+        <b>Forge</b><span>O in a hub</span>
+        <b>Wardrobe</b><span>C opens skins, hair, outfits, headwear and auras (saved) · V switches 3D / 2D</span>
+        <b>Worlds</b><span>G at the World Gate in a hub</span>
+        <b>Chat</b><span>Enter · talk to everyone online</span>
+      </div>
+      <div class="nmrow" id="authBox">
+        <label for="emailIn">Account &middot; register or log in</label>
+        <input id="emailIn" type="email" maxlength="254" placeholder="Email" autocomplete="username" spellcheck="false">
+        <input id="passIn" type="password" maxlength="128" placeholder="Password (at least 8 characters)" autocomplete="current-password">
+        <input id="pass2In" type="password" maxlength="128" placeholder="Confirm password (needed to register)" autocomplete="new-password">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn pri" id="bLogin" type="button">Log in</button>
+          <button class="btn" id="bRegister" type="button">Register</button>
+        </div>
+        <a href="#" id="bForgot" style="font-size:12px;color:var(--mist);text-decoration:underline;align-self:flex-start">Forgot password?</a>
+        <div id="resetBox" hidden>
+          <input id="codeIn" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code from the email" autocomplete="one-time-code" spellcheck="false">
+          <input id="newPassIn" type="password" maxlength="128" placeholder="New password (at least 8 characters)" autocomplete="new-password">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn pri" id="bReset" type="button">Set new password</button>
+            <button class="btn" id="bResend" type="button">Send code again</button>
+          </div>
+        </div>
+        <div id="authMsg" role="status"></div>
+      </div>
+      <div id="whoBox" hidden style="align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--mist)">
+        <span>Signed in as <b id="whoEmail" style="color:var(--paper)"></b></span>
+        <button class="btn" id="bLogout" type="button" style="padding:4px 10px;font-size:12px">Log out</button>
+      </div>
+      <div id="playBox" hidden style="flex-direction:column;gap:16px">
+        <div class="nmrow"><label for="nameIn">Your name</label><input id="nameIn" maxlength="16" placeholder="Choose your name" autocomplete="off" spellcheck="false"><div id="ignMsg" style="font-size:12px;min-height:15px;line-height:1.3"></div><div id="netStat">Connecting to server…</div></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn pri" id="bStart" type="button">Begin ascension</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="var q=document.createElement('script');q.src='three.min.js';document.head.appendChild(q)"></script>
+<script src="three-compat.js"></script>
+<script src="models3d.js"></script>
+<script src="pets3d.js"></script>
+<script src="fx3d.js"></script>
+<script src="audio.js"></script>
+<script src="game.js"></script>
+<script src="tutorial.js"></script>
+
+</body></html>

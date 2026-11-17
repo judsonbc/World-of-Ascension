@@ -1,4 +1,4 @@
-WORLD OF ASCENSION - current state (v5_177)
+WORLD OF ASCENSION - current state (v5_200)
 Full version history: CHANGELOG.txt
 
 RUN / BUILD
@@ -13,11 +13,12 @@ FILES
   game.go                    world, monsters, PvP rules + damage, chat commands, message handling
   party.go friends.go        parties and friends     accounts.go mail.go offline.go coupons.go   accounts / mail / whispers / coupons
   web/index.html             markup + CSS only
-  web-src/client/*.js        SOURCE of the client game, 10 parts: 01_core (constants, classes, skills, player, world) 02_combat 03_items_forge_bag 04_input_wardrobe 05_render2d 06_render3d 07_hud 08_network_social 09_chat_ui 10_main_loop
+  web-src/client/*.js        SOURCE of the client game, 10 parts: 01_core (constants, classes, skills, player, world) 02_combat 03_items_forge_bag 04_input_wardrobe 05_render2d 06_render3d 07_hud 08_network_social 09_chat_ui 10_main_loop  (+ 03_pets: pet eggs, hatching, combining)
                              (one closure on purpose: they share state, so they are stitched, not separate modules)
   web/game.js                GENERATED from the parts above (the whole client game)
   web/fx3d.js                3D sky (clouds, auroras, stars, per-world celestial bodies), fog + ground mist, glow sprites, level-up light pillars (off switch: ?fx3=0)
   web/three-compat.js        keeps a newer Three.js looking like r128 (see THREE_UPGRADE.txt)
+  web/pets3d.js              3D pet models (PET3D.make(species, class)): chicken, dragon, fairy, phoenix, tiger, wolf + class effects
   web/models3d.js audio.js tutorial.js sw.js manifest.json
 
 CLASSES (passives; skills are in web/game.js: CLB, CLS_GEN, NB_T, SKILLS)

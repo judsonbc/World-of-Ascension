@@ -1,3 +1,57 @@
+PHOENIX: FIRE IN THE MIDDLE, EDGES GLOW (v5_200h, web/pets3d.js): removed the flames at the edges of the feathers. The fire now starts in the middle and is concentrated there: two flame masses in the middle of each wing, one concentrated mass on the back, flames only on the CENTRE tail plumes (outer plumes have none). Feather edges (barbs, forked tips, long tail tip) are unlit orange / yellow (eg1 / eg2 = the flame colours) and every wing feather and tail segment has a soft feather-shaped glow shell (halo) in the same orange, so the whole bird reads as one flame. Low quality skips the glow shells. Tune: mass(...) calls (wings: the two calls after the secondary feathers), eg1 / eg2 / halo colours and opacity at the top of mkPhoenix. Not seen on screen.
+
+PHOENIX: ONE MERGED FLAME + FEATHER EDGE DETAIL (v5_200g, web/pets3d.js): the flames on the back, crest and wings were one neat tongue per spot (visible rows). Now they are many wide flames of random size / offset that overlap heavily over a soft base glow, so each area burns as ONE ragged flame (mass() in mkPhoenix); the wings get a continuous burning fringe between and around the feather tips. The tail flames are unchanged. Edge detail: every wing feather has barbs along both edges and a forked tip (barbs() helper), the short wing feathers have barbs, every tail segment has edge barbs and the last segment ends in a long pointed, forked tip. Low-quality mode uses fewer barbs / flames. Not seen on screen: flame density / brightness = fo2 / fm2 / fc2 opacity and the mass(...) calls; barb size = the barbs(...) calls.
+
+PHOENIX FIRE LOOKS LIKE FIRE (v5_200f, web/pets3d.js): the flames were additive spheres (round, hard edge = bubbles). Now every flame is a camera-facing sprite with a feathered texture: 'flame' (soft teardrop, wide base, thin tip, fades to nothing at all edges; texFlame) in 3 tinted layers (red-orange outer, orange middle, yellow core), anchored at the bottom so it rises from the feather / back / crest / wing tip; sparks and the big halo around the bird are soft glow sprites ('soft', texSoft) with no visible edge. Flames still flicker and sway. Tune opacity in the fireO / fireM / fireC lines of mkPhoenix (fsp(colour, opacity)); flame size in the SP(...) calls. Not seen on screen.
+
+WOLF LEGS A LITTLE THICKER (v5_200e, web/pets3d.js): upper leg 4.2/3.9 -> 4.9/4.6 (back/front), lower leg and paw scaled to match.
+
+LEG THICKNESS BACK TO ORIGINAL, THIGHS DEFLATED (v5_200d, web/pets3d.js): v5_200c legs were too thin. Leg thickness is back to the v5_199 values (Dragon 6.2, Tiger 5.4 front / 4.8 back, Wolf 3.9 front / 4.2 back) with a gentler per-segment taper ('leg2') so two segments taper like the old single leg; knee ball = leg width (no bulge). The big thigh / shoulder masses (the red-circled part) are smaller: Dragon 5.4 x 6.6 x 7.2 (was 8 x 9.6 x 10.4 in v5_200b), Tiger and Wolf about 20% smaller than v5_199. Paws between the v5_199 and v5_200c sizes.
+
+SLIMMER JOINTS (v5_200c, web/pets3d.js): knee balls are now no wider than the leg they join (were fatter than the leg = swollen look), legs taper smoothly from thigh to paw, thigh masses and paws are smaller on Dragon, Tiger and Wolf. Knee shape is still there, just not bulging.
+
+FIX: DRAGON LEGS, LONG FIERY PHOENIX TAIL, KNEES ON TIGER / WOLF (v5_200b, web/pets3d.js only)
+  - Dragon: the hips used to sit outside the body ellipsoid so the legs floated beside it. Hips now sit inside the flank with a big thigh / shoulder mass buried in the body.
+  - New kneeLeg() + walk() helpers: hip > upper leg > KNEE ball > lower leg > flat paw, lower leg length solved so the paw touches the ground. Used by Dragon, Tiger and Wolf. Front legs bend slightly, back legs have a clear forward knee and a hock; the knee folds while a leg swings forward.
+  - Phoenix: tail is about 4x longer (9 plumes, 7 on low quality, each 6 tapering segments that droop and wave along their length) and the whole bird burns: layered additive flames along every plume, flames on the wing feather tips, flame tongues on the crest and back, sparks drifting off the tail. Hotter feather colours.
+  - Checked with a mock Three (all 6 pets x 7 classes build and animate with no NaN; paws on the ground). NOT looked at on screen: tune in pets3d.js (kneeLeg calls: a1 / a2 = knee bend, l1 = upper leg; phoenix: NT / NS / L0 = plume count / segments / length).
+
+ADMIN PET / RESET COMMANDS + BUFFS IN ONE ROW (v5_200, web-src/client/09_chat_ui.js, web/index.html; client only, no Go changes - admin check is still the server's -admin list)
+  - /pet [species] [class] [count]: gives pets straight into the bag. species = chicken dragon fairy phoenix tiger wolf (or 'random'; no species = random special), class = F E D C B A S (default F; chicken has no class), count 1-999. Arguments can be in any order: '/pet dragon S 3', '/pet wolf', '/pet random E 2'. Stops with a message when the bag (50 slots) is full.
+  - /egg [count] adds Pet Eggs. /petreset removes every pet and egg and dismisses the summoned pet.
+  - /coinsreset sets coins to 0, /orereset sets ore to 0, /walletreset both. Also accepted: '/coins reset', '/ore reset' (reset / zero / clear / none) and /resetcoins /resetore /resetwallet. '/coins N' and '/ore N' still ADD N (negative N subtracts).
+  - /help lists the new commands.
+  - Buffs: the buff icons are always ONE row (PC and phone), beside the realm tag. They no longer wrap onto a second line: with many buffs the icons shrink (min about 13 units, 15 on phone) and only if there are still too many they run on to the right.
+    CSS: #brow / #buffs / .bf in web/index.html. Not checked on a real screen (no browser here): please look at it with 8+ buffs on a phone.
+
+PET SYSTEM, PART 3: 3D PETS (v5_199, web/pets3d.js (new), 03_pets.js, 04_input_wardrobe.js, web/index.html, web/sw.js). Still NO pet stats.
+  - Every pet is now a real 3D model (Three.js, procedural, no assets): Chicken, Dragon, Fairy, Phoenix, Tiger, Wolf. Painted fur / scale / feather textures, glossy eyes, animated head, tail, wings and legs (walk cycle while you move, idle sway, chicken pecks, fairy and phoenix hover and flap, dragon breathes a mouth glow).
+  - Class effects on special pets: F none, E glowing ground ring, D orbiting sparks, C rune ticks, B halo, A rising motes, S rainbow cycling. Higher class = slightly bigger (+4.5% per class). Chicken has none.
+  - In the world the pet walks beside you, turns toward where it moves (toward your facing when idle) and stands on the terrain. In the Bag and Forge previews the summoned pet stands next to your avatar (the avatar shifts left a little); drag still spins only the avatar.
+  - pets3d.js is loaded after models3d.js, cached by the service worker, and has a fallback: if it fails to load or build, the old billboard icon is used. ?lq=1 / phone low-quality mode uses fewer polygons.
+  - NOTE: made without Three.js available, so the look could not be checked on screen (the code was tested with a mock Three: all 6 pets x 7 classes build, animate with no NaN, and dispose). Tune proportions in web/pets3d.js (mkChicken ... mkWolf), PET_WORLD_K (03_pets.js) and the preview spot in petPreview.
+
+PET SYSTEM, PART 2: SUMMON (v5_198, 03_pets.js, 01_core.js save/load, 05_render2d.js drawPlayer, 06_render3d.js, 03_items_forge_bag.js). Still NO pet stats.
+  - Select any pet in the bag (Chicken or a special) > Summon. It follows beside your avatar (to the right of you on screen; hops while you move, bobs when you stand). Summoning another pet replaces it (Dismiss puts it away). Summoning does not use the pet up; the summoned stack shows an OUT tag in the bag.
+  - Drawn in 3D as a billboard sprite of the pet's icon and in 2D mode as the same icon, with a class-coloured glow behind special pets. Snaps to you after a teleport. If the summoned pet is used up by a combine, it is dismissed automatically.
+  - Saved with the character (sp = key of the summoned pet). Other players do not see your pet yet.
+
+PET SYSTEM, PART 1 (v5_197, web-src/client/03_pets.js (new), 01_core.js save/load, 02_combat.js, 03_items_forge_bag.js, web/index.html .pa/.ps). NO PET STATS YET.
+  - Boss drop: every boss kill (last hit) drops 1 Pet Egg (EGG_DROP_CHANCE / EGG_DROP_N in 03_pets.js). Eggs stack in ONE bag slot. Bag full and no egg stack yet: the egg is sold for EGG_ORE (10) ore, like gear.
+  - Hatch: select the Pet Egg in the bag > Hatch (or Hatch all). 5% special pet (Dragon, Fairy, Phoenix, Tiger, Wolf) as Class F, 95% Chicken (common, no class, cannot be combined). EGG_SPECIAL_CHANCE.
+  - Pets sit in the bag as stacks (species + class = one slot, shows e.g. 'F x3'). Slot colour by class: F grey, E blue, D purple, C red, B gold, A green, S rainbow.
+  - Combine: select a special pet > Combine > tap a second pet of the SAME class (any species; tap the same stack again if it has 2+) > Combine. Success chance F>E 5%, E>D 4%, D>C 3%, C>B 2%, B>A 1%, A>S 0.5% (PET_UP). Success: both are used up and you get one pet of the next class (species = one of the two, 50/50). Failure: 1 of the two (random) is destroyed, the other stays.
+  - Saved in the account save as eg (egg count) and pt ({'species:class': count}). The server stores the save as-is, so no Go changes. Pets count toward the 50 bag slots.
+  - Not done yet (next): pet stats, summoning / showing a pet in the world, releasing / selling pets, Warehouse storage for pets.
+
+REALISTIC CHARACTER (v5_194, web/models3d.js makePlayer / setSkin / animPlayer; 3D only, every class, also the Bag / Forge / Wardrobe previews and other players)
+  - Head: drawn at 84% size (HEAD_K) with a neck and trapezius; hats, hoods, helmets and hair scale with it. Real face: eye white + iris + pupil + glint + lid line, brows, nose (bridge, tip, nostrils), upper / lower lips with a mouth line, chin, ears with an inner shade. Skin tone drives ear and nostril shade.
+  - Hair: glossy (Phong), the hair cap now sits higher on the forehead (forehead visible) with 5 bangs and two side locks (most styles); the headband follows the new hairline, its ties moved down to the back of the head.
+  - Hands: wrist, palm, four fingers and a thumb instead of a ball. Legs: shin tapers to the ankle, trim cuff, shaped foot with toe cap, heel and sole.
+  - Skin is lit with a soft specular and a faint warm emissive (SKIN_EMI) instead of flat Lambert; the hurt flash returns to it.
+  - Rig, pivots, animation, gear, class kits, outfits and headwear are unchanged. Not changed: 2D avatars / 2D mode, monsters.
+  - NOTE: made without Three.js available, so the look could not be checked on screen (only a no-errors test of all 5 classes). Tune HEAD_K and the face positions in makePlayer if something looks off.
+
 DELAY BETWEEN CASTS BACK TO 1 s (v5_193, 02_combat.js SKILL_GCD 2 -> 1).
 
 DELAY BETWEEN CASTS 2 s (v5_192, 02_combat.js SKILL_GCD 1 -> 2). R / T priority slots still ignore it.
