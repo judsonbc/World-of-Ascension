@@ -411,6 +411,7 @@ function updateMisc(dt){
       if(sp.cd<=0&&!pvpOnly()){let b=(P.target&&!P.target.isPl&&!P.target.dead&&!P.target.pend&&dist(P.target.x,P.target.y,P.x,P.y)<sp.r)?P.target:null,bd=sp.r;if(!b)for(const m of mons){if(m.dead||m.pend)continue;const d=dist(m.x,m.y,P.x,P.y);if(d<bd){bd=d;b=m}}
         if(b){sp.cd=sp.iv;sp.tg=b;sp.wu=Math.min(SPIRIT_WU,sp.iv*.6);sp.wr=0}}}
   }
+  petFight(dt);
   spiritViz(P,P.spirits,dt);spiritSync();
   if(MP)for(const q of NET.peers.values())if(q.spx){if(performance.now()/1000>q.spx.e){q.spx=null;continue}if(Math.hypot(q.x-P.x,q.y-P.y)<1100)spiritViz(q,q.spx.list,dt)}
   for(let i=projs.length-1;i>=0;i--){

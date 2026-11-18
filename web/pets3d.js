@@ -186,8 +186,19 @@ function classFX(root,c,fr,hh){
   A(root,'disc',gm(.12),[0,.35,0],fr+2);
   if(c>=2){const n=Math.min(5,c);for(let i=0;i<n;i++){const o=A(root,'sph',gm(.9),[0,6,0],2.4-c*.12);fx.orbs.push(o)}}
   if(c>=3){fx.ticks=G(root,[0,.55,0]);const n=14;for(let i=0;i<n;i++){const a=i/n*PI*2;A(fx.ticks,'box',gm(.8),[Math.cos(a)*(fr+6),0,Math.sin(a)*(fr+6)],[.9,.25,3.2],[0,PI/2-a,0])}}
-  if(c>=4){fx.halo=A(root,'tor',gm(.85),[0,hh+7,0],13,[PI/2,0,0])}
+  fx.flames=[];
+  /* v5_224 FIRE: flame sprites (white teardrop texture tinted with the class colour, plus a lighter hot core) instead of hard-edged shapes */
+  const hot=new T.Color(col).lerp(new T.Color(0xffffff),.6),LT=typeof LITE!=='undefined'&&LITE;
+  const flame=(core,op,x,z,sx,sy,o)=>{const m=fsp(core?hot:col,op);if(!core)fx.mats.push(m);const q=SP(root,m,[x,0,z],sx,sy,true);fx.flames.push(Object.assign({s:q,sx:sx,sy:sy,ph:Math.random()*20,bx:x,sw:0},o||{}));return q};
+  if(c>=4){   /* the halo at the top: a plain glowing ring again (v5_226: the fire on it is removed); its size follows the pet size */
+    const hr=Math.max(6,fr*.42);fx.halo=A(root,'tor',gm(.85),[0,hh+7,0],hr*2,[PI/2,0,0]);
+  }
   if(c>=5){for(let i=0;i<10;i++)fx.motes.push(A(root,'sphL',gm(.9),[0,0,0],1.3))}
+  if(c>=5){   /* class A / S: a column of fire: tongues around the base, taller hot cores in the middle, all flickering and swaying */
+    const R=fr*.7,H=hh*1.15+8,n=LT?9:16;
+    for(let i=0;i<n;i++){const a=i/n*PI*2+(i%2)*.2,h=H*(.7+.3*((i*37)%10)/10);flame(false,.34,Math.cos(a)*R,Math.sin(a)*R,fr*.62,h,{sw:2.2})}
+    for(let i=0;i<(LT?3:6);i++){const a=i*2.4,r=i?fr*.25:0,h=H*(.8+.2*((i*53)%10)/10);flame(true,.4,Math.cos(a)*r,Math.sin(a)*r,fr*.5,h,{sw:1.6})}
+  }
   fx.fr=fr;fx.hh=hh;return fx;
 }
 function updFX(fx,t){
@@ -198,6 +209,8 @@ function updFX(fx,t){
   fx.orbs.forEach((o,i)=>{const n=fx.orbs.length,a=t*(1+.12*i)+i/n*PI*2;o.position.set(Math.cos(a)*R,5+(i%3)*4.5+Math.sin(t*2+i)*2,Math.sin(a)*R)});
   if(fx.ticks)fx.ticks.rotation.y=-t*.35;
   if(fx.halo){fx.halo.rotation.z=t*.8;fx.halo.position.y=fx.hh+7+Math.sin(t*2)*1}
+  for(const f of fx.flames){const q=1+Math.sin(t*9+f.ph)*.17+Math.sin(t*17+f.ph*3)*.09;f.s.scale.set(f.sx*(1+(q-1)*.5),f.sy*q,1);
+    if(f.ang!==undefined){const a=f.ang+t*.8;f.s.position.set(Math.cos(a)*f.R,fx.hh+7,Math.sin(a)*f.R)}else f.s.position.x=f.bx+Math.sin(t*2.3+f.ph)*f.sw}
   fx.motes.forEach((m,i)=>{const k=((t*.22+i/fx.motes.length)%1),a=i*2.4+t*.6,rr=fx.fr*.7*(1-k*.4);m.position.set(Math.cos(a)*rr,2+k*(fx.hh+8),Math.sin(a)*rr);m.scale.setScalar(1.6*(1-k)+.2)});
 }
 
@@ -224,12 +237,15 @@ function mkChicken(B){
   for(const sx of [-3.1,3.1]){const lg=G(body,[sx,6.6,.8]);A(lg,'cyl',orange,[0,-3.1,0],[1.5,6.4,1.5]);
     for(const tx of [-1.5,0,1.5])A(lg,'cone',orange,[tx,-6.2,1.6+(tx===0?.6:0)],[1.3,3.4,1],[PI/2,0,tx*.18]);
     A(lg,'cone',orange,[0,-6,-1.6],[1.1,2,.9],[-PI/2,0,0]);legs.push(lg)}
-  return{fr:11,hh:25,anim(t,mv){
+  return{fr:11,hh:25,anim(t,mv,fight,fa){
     const peck=Math.pow(Math.max(0,Math.sin(t*1.7)),10)*(1-mv),bob=Math.abs(Math.sin(t*9))*mv;
     head.rotation.x=peck*.9+Math.sin(t*3.1)*.04;head.position.set(0,19.5-peck*2.2,6.8+peck*2.8+Math.sin(t*9)*.7*mv);
     body.position.y=bob*1.1+Math.sin(t*2.4)*.15;body.rotation.x=peck*.12;
     legs[0].rotation.x=Math.sin(t*9)*.7*mv;legs[1].rotation.x=-Math.sin(t*9)*.7*mv;
     wl.rotation.z=-Math.pow(Math.max(0,Math.sin(t*.9+1)),14)*.7;wr.rotation.z=-wl.rotation.z;tail.rotation.x=Math.sin(t*2)*.05+bob*.1;
+    /* v5_222 FIGHT: fast hard peck at each attack, wings flared and tail up while fighting, a kick with the foot on the attack side */
+    {const a=fa.a,f=fa.f;head.rotation.x+=a*1.0;head.position.z+=a*3.2;head.position.y-=a*1.6;wl.rotation.z-=f*.35+a*.6;wr.rotation.z+=f*.35+a*.6;tail.rotation.x+=f*.25;
+     legs[fa.n&1].rotation.x-=a*.6}
   }};
 }
 
@@ -267,6 +283,32 @@ function hornChain(par,mat,pts,w){   /* v5_205: connected tapered horn; pts are 
     g.rotation.order='YXZ';g.rotation.set(-Math.atan2(dy,Math.hypot(dx,dz)),Math.atan2(dx,dz),0);
     A(g,'leg',mat,[0,0,L/2],[w,L*1.04,w],[-PI/2,0,0]);w*=.72}
   const e=pts[pts.length-1];A(par,'sphL',mat,e,w*.9)}
+function hornTubeGeo(key,pts,r0,c0,c1,f0,f1){   /* v5_215: ONE smooth tapered tube along a Catmull-Rom path (head-local pts, first point INSIDE the skull so the root is buried).
+   Vertex colours fade from the skin colour c0 at the root into the horn colour c1 between path fractions f0..f1, and the underside is shaded darker, so skull -> horn is one continuous surface. */
+  if(GC[key])return GC[key];
+  const N=LITE?8:12,SUB=LITE?4:7,P=[],sm=(a,b,v)=>{const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t)};
+  for(let i=0;i<pts.length-1;i++){const p0=pts[Math.max(i-1,0)],p1=pts[i],p2=pts[i+1],p3=pts[Math.min(i+2,pts.length-1)];
+    for(let j=0;j<SUB;j++){const u=j/SUB,u2=u*u,u3=u2*u,q=[0,0,0];
+      for(let k=0;k<3;k++)q[k]=.5*((2*p1[k])+(-p0[k]+p2[k])*u+(2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*u2+(-p0[k]+3*p1[k]-3*p2[k]+p3[k])*u3);
+      P.push(q)}}
+  P.push(pts[pts.length-1].slice());
+  const e=P[P.length-1],pe=P[P.length-2],tl=Math.hypot(e[0]-pe[0],e[1]-pe[1],e[2]-pe[2])||1;
+  P.push([e[0]+(e[0]-pe[0])/tl*r0*.5,e[1]+(e[1]-pe[1])/tl*r0*.5,e[2]+(e[2]-pe[2])/tl*r0*.5]);   /* pointed tip */
+  const R=P.length,pos=new Float32Array(R*(N+1)*3),nor=new Float32Array(R*(N+1)*3),col=new Float32Array(R*(N+1)*3),idx=[];
+  let nx=0,ny=1,nz=0;
+  for(let i=0;i<R;i++){
+    const a=P[Math.max(i-1,0)],b=P[Math.min(i+1,R-1)];let tx=b[0]-a[0],ty=b[1]-a[1],tz=b[2]-a[2];const tl2=Math.hypot(tx,ty,tz)||1;tx/=tl2;ty/=tl2;tz/=tl2;
+    if(i===0&&Math.abs(ty)>.95){nx=1;ny=0;nz=0}
+    const d=nx*tx+ny*ty+nz*tz;nx-=d*tx;ny-=d*ty;nz-=d*tz;const nl=Math.hypot(nx,ny,nz)||1;nx/=nl;ny/=nl;nz/=nl;   /* parallel-transported frame */
+    const bx=ty*nz-tz*ny,by=tz*nx-tx*nz,bz=tx*ny-ty*nx,t=i/(R-1),r=i===R-1?0:r0*(1-.9*Math.pow(t,.85)),f=sm(f0,f1,t),sh=.86+.16;
+    for(let j=0;j<=N;j++){
+      const ph=j/N*PI*2,cx=Math.cos(ph),cy=Math.sin(ph),ox=cx*nx+cy*bx,oy=cx*ny+cy*by,oz=cx*nz+cy*bz,o=(i*(N+1)+j)*3;
+      pos[o]=P[i][0]+ox*r;pos[o+1]=P[i][1]+oy*r;pos[o+2]=P[i][2]+oz*r;nor[o]=ox;nor[o+1]=oy;nor[o+2]=oz;
+      const shade=.8+.2*oy+.05*f;   /* darker underneath, lit on top */
+      for(let k=0;k<3;k++)col[o+k]=Math.min(1,(c0[k]+(c1[k]-c0[k])*f)*shade)}
+    if(i<R-1)for(let j=0;j<N;j++){const q=i*(N+1)+j,w=q+N+1;idx.push(q,q+1,w,w,q+1,w+1)}}
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(pos,3));g.setAttribute('normal',new T.BufferAttribute(nor,3));g.setAttribute('color',new T.BufferAttribute(col,3));g.setIndex(idx);
+  return GC[key]=g}
 function dragonWingGeo(){   /* v5_206: wing membrane colour per vertex: deep red-orange at the arm -> orange -> peach at the far / trailing edge (as in the reference art) */
   if(GC.drg_wing)return GC.drg_wing;
   const g=geo('wingDragon').clone(),pos=g.attributes.position,col=new Float32Array(pos.count*3),
@@ -304,7 +346,7 @@ function mkDragon(B){
   const skin=lam(0xffffff,{map:texDragon()}),vc=lam(0xffffff,{vertexColors:true}),
     plate=phg(0xe8bd62,{shininess:55,specular:0x665533,emissive:0x3a2606}),plateL=phg(0xf4d684,{shininess:55,specular:0x665533,emissive:0x3a2a08}),
     red=lam(0xe2501f,{emissive:0x3a0c00}),redD=lam(0xc43a14,{emissive:0x2a0600}),leg=lam(0xffffff,{map:texDrgLegUp(),emissive:0x1c0600}),legLo=lam(0xffffff,{map:texDrgLegLow(),emissive:0x1c0600}),kneeM=lam(0xdc6a2c,{emissive:0x1c0600}),pawM=lam(0xb8401a,{emissive:0x1c0600}),vcLeg=lam(0xffffff,{vertexColors:true,emissive:0x1c0600}),brown=lam(0x6a4634),
-    horn=phg(0xf0cfa4,{shininess:40}),horn2=phg(0xd8d878,{shininess:40}),ivory=phg(0xf6ebc0,{shininess:60}),claw=phg(0xe6d9a2,{shininess:60}),
+    horn=phg(0xf0cfa4,{shininess:40}),horn2=phg(0xd8d878,{shininess:40}),hornV=phg(0xffffff,{vertexColors:true,shininess:28,specular:0x332a1a}),ivory=phg(0xf6ebc0,{shininess:60}),claw=phg(0xe6d9a2,{shininess:60}),
     fbone=lam(0xd98a3c,{emissive:0x2a1000}),beard=lam(0xf2d2b0,{side:T.DoubleSide}),
     mem=lam(0xffffff,{vertexColors:true,side:T.DoubleSide,emissive:0x2a0a00}),mem2=lam(0xf8dcc0,{side:T.DoubleSide,transparent:true,opacity:.92}),
     tailM=lam(0xffffff,{vertexColors:true});
@@ -337,30 +379,45 @@ function mkDragon(B){
     A(f,'sph',i%2?plate:plateL,[0,-r*.86,0],[r*1.45,r*.62,r*.95]);                    /* throat plate (front) */
     if(i%2===0)A(f,'cone',red,[0,r*.95,-.4],[1.5-k*.5,4.2-k*1.2,1.5-k*.5],[-.6,0,0]);  /* back spine */
   });
-  /* ---- head (olive green) at the top of the neck, looking forward */
-  const head=G(body,[0,38.2,10.2]);head.rotation.x=.12;head.scale.setScalar(1.22);
-  A(head,'sph',skin,[0,0,0],[9.6,8.6,10.6]);
-  A(head,'sph',skin,[0,-1.2,6.6],[6.2,5,8.4]);                                         /* snout */
-  A(head,'sph',skin,[0,-1.6,10.2],[4.6,3.6,3.4]);                                     /* nose */
-  A(head,'sph',plateL,[0,-3.6,5],[4.6,1.8,8.2],[.1,0,0]);                              /* lower jaw (cream) */
-  A(head,'sph',phg(0x7a1810),[0,-2.4,5.4],[3.8,1.1,6.6]);                              /* red mouth */
-  const mouth=A(head,'sph',glow(0xff7a22,.45),[0,-2.6,8],[2.2,2.2,2.2]);
-  A(head,'sph',phg(0x2a1a08),[-1.5,-.4,11.6],[.9,.7,.7]);A(head,'sph',phg(0x2a1a08),[1.5,-.4,11.6],[.9,.7,.7]);   /* nostrils */
-  hornChain(head,horn2,[[0,-.6,10.6],[0,.8,12.6],[0,3.2,13.4],[0,5.2,12.6]],1.9);        /* snout tusk: starts inside the nose, curls up */
+  /* ---- head (olive green) at the top of the neck, looking forward.
+     v5_214 HEAD REFINED to the reference art + sized to the neck: the old head was ~2x as wide as the neck top and short and round; now a slim wedge (skull only a little wider than the neck,
+     long tapering snout, hooded brow, small side-set eye, open mouth with a cream lower jaw, curled nose tusk, horns that sweep back and up, crest + cheek frills behind the skull).
+     Head-local units: skull 6.8 wide x 8 long, snout out to z~13, then x1.12 (head.scale); the neck top is ~6 wide. Tune the lines marked SIZE if needed. */
+  const head=G(body,[0,37.8,9.6]);head.rotation.x=.04;head.scale.setScalar(1.12);   /* SIZE overall head scale: 1.12 = skull about 1.25x the neck width */
+  A(head,'sph',skin,[0,0,0],[6.8,6.2,8]);                                              /* SIZE skull */
+  A(head,'sph',skin,[0,-.6,5.6],[4.6,3.8,7]);                                          /* SIZE snout, tapering */
+  A(head,'sph',skin,[0,-.9,9.6],[3.4,2.8,4.6]);
+  A(head,'sph',skin,[0,-.8,11.8],[3,2.6,2.6]);                                         /* nose */
+  /* v5_216 hinged lower jaw: jawG pivots at the back of the skull (anim rotates it), so the jaw, its teeth, red mouth floor and chin whiskers open and close together.
+     Pose here = CLOSED (jaw top just under the snout); anim opens it with jawG.rotation.x. */
+  const jawG=G(head,[0,-2.4,0]);
+  A(jawG,'sph',plateL,[0,-.9,5],[3.6,1.4,9]);                                          /* lower jaw (cream) */
+  A(jawG,'sph',phg(0x7a1810),[0,-.35,5],[2.7,.7,7.4]);                                  /* red mouth floor, shows when open */
+  A(head,'sph',phg(0x7a1810),[0,-2.55,5.8],[2.5,.5,6.4]);                              /* red mouth roof, shows when open */
+  const mouth=A(head,'sph',glow(0xff7a22,.5),[0,-3.1,6.6],[.01,.01,.01]);               /* throat glow, grows when breathing fire */
+  for(const s of [-1,1]){A(head,'sph',phg(0x2a1a08),[s*.9,.1,12.5],[.7,.55,.6])}        /* nostrils */
+  A(head,hornTubeGeo('drg_tusk',[[0,-.5,10.8],[0,.4,12.8],[0,2.4,14.2],[0,4.6,13.8]],.8,[.6,.68,.3],[.88,.86,.5],.05,.5),hornV,[0,0,0]);   /* nose tusk: one tube, root inside the nose, green -> yellow, curls up */
   for(const s of [-1,1]){
-    for(let i=0;i<4;i++)A(head,'cone',ivory,[s*(1.6+i*1.05),-2.1,4.6+i*1.8],[.7,1.5,.7],[PI,0,0]);   /* teeth */
-    A(head,'cone',ivory,[s*2.1,-3.1,9.2],[.9,2.2,.9],[PI,0,0]);                          /* front fangs */
-    hornChain(head,s>0?horn2:horn,[[s*3,2.6,-1],[s*3.8,5.6,-5],[s*4.6,8,-10.5],[s*5,10.4,-16],[s*5,13.2,-19.5]],3.6);   /* long swept-back horns, one connected piece, rooted in the skull */
-    A(head,'sph',skin,[s*3.9,2.5,3.4],[3.6,1.7,3.2],[0,0,s*-.3]);                       /* brow ridge */
-    const iz=4.2;A(head,'sph',phg(0xe46a1c,{shininess:120,emissive:0x5a1e00}),[s*4.4,.9,iz],3.3);
-    A(head,'sph',phg(0x1a0806,{shininess:120}),[s*4.7,.9,iz+1.15],[1.5,2,1.2]);A(head,'sphL',bas(0xffffff),[s*4.9,1.8,iz+1.6],.8);
-    feather(head,red,6.6,3,.6,[s*5.2,-.2,-1.6],Math.atan2(s*.9,-.5),-.1);              /* cheek frills */
-    feather(head,redD,5,2.4,.5,[s*5,-1.8,-.4],Math.atan2(s*.9,-.2),.15);
-    A(head,'cone',beard,[s*1.6,-4.6,6.8],[.9,4,.5],[.2,0,s*.1]);A(head,'cone',beard,[s*.7,-5,4.6],[.8,3.6,.5],[.2,0,s*.05]);   /* whisker tendrils */
+    for(let i=0;i<4;i++)A(head,'cone',ivory,[s*(2.1-i*.2),-2.9,3.6+i*1.8],[.55,1.7,.55],[PI,0,0]);   /* upper teeth */
+    for(let i=0;i<3;i++)A(jawG,'cone',ivory,[s*(1.7-i*.25),-.1,4+i*2],[.5,1.2,.5]);        /* lower teeth (ride on the jaw) */
+    A(head,'cone',ivory,[s*1.2,-3.1,10.3],[.7,2.2,.7],[PI,0,0]);                          /* front fangs */
+    A(head,hornTubeGeo('drg_horn'+s,[[s*1.3,.5,.2],[s*2.3,3,-3.4],[s*3,4.9,-7.6],[s*3.5,7.2,-12.2],[s*3.7,10,-15.6]],1.5,[.52,.63,.27],s>0?[.85,.85,.47]:[.94,.81,.64],.05,.6),hornV,[0,0,0]);   /* horns: ONE tube each, root buried inside the skull, skull green fades into the horn colour, shaded darker underneath */
+    A(head,'sph',skin,[s*2.7,2,1.8],[2.4,1.3,3.8],[0,0,s*-.3]);                            /* brow ridge (hoods the eye) */
+    const iz=2;A(head,'sph',phg(0xe46a1c,{shininess:120,emissive:0x5a1e00}),[s*2.6,.8,iz],2.3);   /* eye, set on the side of the skull */
+    A(head,'sph',phg(0x1a0806,{shininess:120}),[s*3.55,.8,iz+.3],[.7,1.7,.9]);A(head,'sphL',bas(0xffffff),[s*3.6,1.5,iz+.9],.55);
+    feather(head,red,5,2.2,.5,[s*3.2,-.4,-1.2],Math.atan2(s*.9,-.5),-.1);                 /* cheek frills */
+    feather(head,redD,3.8,1.8,.4,[s*3,-1.8,-.4],Math.atan2(s*.9,-.2),.15);
+    A(jawG,'cone',beard,[s*1.5,-2.6,3.2],[.7,3.6,.4],[PI+.3,0,s*.1]);A(jawG,'cone',beard,[s*.7,-2.4,1.6],[.6,3.2,.4],[PI+.3,0,s*.05]);   /* whiskers hang from the chin, move with the jaw */
   }
-  A(head,'cone',beard,[0,-5.2,8.2],[1,4.4,.5],[.15,0,0]);A(head,'cone',beard,[0,-5,2.8],[1,3.6,.5],[.15,0,0]);
-  const crest=G(head,[0,4.6,-3.4]);   /* red-orange crest of flame-like spikes on top of the head */
-  [[0,5.2,.3,-.2],[-1.9,4.6,.1,-.35],[1.9,4.6,.1,-.35],[0,4,.2,-.7],[-3.2,3.2,.2,-.7],[3.2,3.2,.2,-.7],[0,3.2,.35,-1.05],[-1.2,3.4,.1,-.5],[1.2,3.4,.1,-.5]].forEach((c,i)=>A(crest,'cone',i%2?redD:red,[c[0]*.5,0,i*-.5+1.4],[1.5,c[1]*1.5,1.3],[c[3]-.15,0,c[0]*-.12]));
+  A(jawG,'cone',beard,[0,-2.6,5.6],[.8,3.8,.4],[PI+.25,0,0]);
+  const crest=G(head,[0,2.8,-2.4]);   /* red-orange crest of flame-like spikes behind the skull */
+  [[0,5.2,.3,-.2],[-1.9,4.6,.1,-.35],[1.9,4.6,.1,-.35],[0,4,.2,-.7],[-3.2,3.2,.2,-.7],[3.2,3.2,.2,-.7],[0,3.2,.35,-1.05],[-1.2,3.4,.1,-.5],[1.2,3.4,.1,-.5]].forEach((c,i)=>A(crest,'cone',i%2?redD:red,[c[0]*.4,0,i*-.4+1],[1.2,c[1]*1.25,1.1],[c[3]-.15,0,c[0]*-.12]));
+  /* v5_216 FIRE BREATH: a stream of soft additive flame sprites from the mouth, in head space (so it follows the head). Stateless: each sprite's age comes from the clock, so no per-frame state.
+     Colour by age: pale yellow at the mouth -> orange -> red at the far end; it widens, rises and fades. Tune FIRE_LEN / FIRE_SPREAD, and BR_PERIOD (seconds between breaths). */
+  const fireG=G(head,[0,-3.3,9.6]),FN=LITE?14:26,FIRE_LEN=30,FIRE_SPREAD=5.5,BR_PERIOD=10,BR_OFF=Math.random()*BR_PERIOD,
+    fY=fsp(0xffe58a,.95,'soft'),fO=fsp(0xff8a1c,.8,'soft'),fR=fsp(0xff3a08,.6,'soft'),fR2=rng(97),fire=[];
+  for(let i=0;i<FN;i++){const q=SP(fireG,fY,[0,0,0],1,1);q.visible=false;fire.push({q:q,a:fR2(),b:fR2(),ph:i/FN,sp:fR2()*6.28})}
+  const fireCore=SP(fireG,fY,[0,0,.5],1,1);fireCore.visible=false;                       /* bright blob right at the mouth */
   /* ---- tail: a thick curve, brown root -> peach tip, red spikes along the top, curling up behind */
   const tail=G(body,[0,9.5,-12.5]);
   const tc=(k)=>[.42+k*.5,.28+k*.38,.2+k*.28];
@@ -392,15 +449,54 @@ function mkDragon(B){
       th:hind?[6.4,7.6,8.2]:[5.4,6.4,6.8],thPos:[0,.2,0],thMat:vcLeg,thGeo:drgBlobGeo([p[0],10.6,p[1]],hind?[6.4,7.6,8.2]:[5.4,6.4,6.8],drgThighCol),pawS:[5.6,3.2,7.4],pawMat:pawM,pawZ:1.2});
     for(const tx of [-1.9,0,1.9])A(L.foot,'cone',claw,[tx,-.2,5.2],[1.1,2.8,1.1],[PI/2,0,0]);
     legs.push(L)});
-  return{fr:17,hh:48,k:.78,anim(t,mv){
-    const flap=Math.sin(t*(2+mv*5))*(.13+mv*.22);
+  /* v5_218 FLYING: the dragon hovers FLY_H model units above the ground (its shadow stays on the ground) with big wing beats, a body bob timed to the beats,
+     legs tucked up and back, tail trailing, and a forward lean when it travels. FLY_H=0 gives the old walking dragon back. The wing beat uses a CONSTANT rate (only the amplitude changes with speed)
+     so the phase never jumps. Tune FLY_H, the .75 wing amplitude, 9.5 (beat rate, rad/s) and the 2.2 body bob in anim. */
+  /* v5_221 LAND <-> FLY: the dragon stands / walks on the ground (the v5_217 walking dragon) while it is NOT fighting and takes off to hover FLY_H units up while it IS fighting.
+     anim(t,mv,fight): fight is 1 while the owner is in combat, else 0. The dragon keeps its own progress p (0 = landed, 1 = flying) and moves it linearly at 1/TAKEOFF or 1/LANDING per second,
+     so a fight that starts or stops half way simply reverses the motion. Every part is blended with its own smoothstep window of p so it looks like one motion:
+       takeoff: small crouch -> wings start to beat (p 0..0.4) -> body rises (p .15..1) -> legs tuck up and back (p .3..0.75) -> tail lifts
+       landing: the reverse: legs reach down for the ground while still up (p .75..0.3), the body sinks, the wings keep beating until almost down, then fold.
+     Tune FLY_H, TAKEOFF / LANDING (seconds), the windows in the sm3(...) calls, CROUCH. FLY_H=0 = always walking. */
+  const FLY_H=20,TAKEOFF=1.1,LANDING=1.3,CROUCH=1.1;
+  let fp=-1,lastT=null,fdir=0;
+  const sm3=(a,b,v)=>{const u=Math.min(1,Math.max(0,(v-a)/(b-a)));return u*u*(3-2*u)},lerp=(a,b,u)=>a+(b-a)*u;
+  return{fr:17,hh:48+FLY_H,hhNow:()=>48+FLY_H*sm3(.15,1,fp<0?0:fp),k:.78,anim(t,mv,fight,fa){
+    const th=t*9.5,flap=Math.sin(t*(2+mv*5))*(.13+mv*.22),want=FLY_H>0&&fight?1:0;
+    /* progress p: starts at the right state (a dragon that appears mid-fight is already flying), then moves toward the wanted state */
+    if(fp<0)fp=want;else{const dt=lastT===null?0:Math.min(.1,Math.max(0,t-lastT));if(want>fp)fp=Math.min(1,fp+dt/TAKEOFF);else if(want<fp)fp=Math.max(0,fp-dt/LANDING);fdir=want>fp?1:want<fp?-1:fdir}
+    lastT=t;const p=fp;
     wfl.forEach(f=>{const q=1+Math.sin(t*10+f.ph)*.2+Math.sin(t*19+f.ph*2)*.1;f.m.scale.set(f.sx*(1-(q-1)*.3),f.sy*q,1)});
-    wings[0].rotation.z=-.12-flap;wings[1].rotation.z=.12+flap;
-    head.rotation.y=Math.sin(t*.8)*.2;head.rotation.x=.12+Math.sin(t*1.3)*.05;
-    tail.rotation.y=Math.sin(t*1.7)*.26;tail.rotation.x=Math.sin(t*1.1)*.04;
+    const ww=sm3(0,.4,p),hw=sm3(.15,1,p),lw=sm3(.3,.75,p);      /* wing / height / leg-tuck weights */
+    {
+      const fl=.05+mv*.08+(.75+mv*.1)*Math.sin(th),sw=.3+.12*Math.sin(th-.6),lz=.12+flap;   /* flying: beat up/down + a little forward/back sweep; landed: wings folded, small flap */
+      const z=lerp(-lz,-fl,ww);wings[0].rotation.z=z;wings[1].rotation.z=-z;wings[0].rotation.y=-sw*ww;wings[1].rotation.y=sw*ww;
+    }
+    const ph=(t+BR_OFF)%BR_PERIOD;
+    /* breath cycle: closed -> a couple of chomps -> jaw opens (4.2-4.9s) -> fire (4.9-7.3s) -> jaw closes (7.2-8.0s) -> closed */
+    let open=sm3(4.2,4.9,ph)*(1-sm3(7.2,8,ph));let fi=sm3(4.9,5.3,ph)*(1-sm3(6.8,7.3,ph));
+    if(ph>1.5&&ph<2.9)open+=Math.pow(Math.sin((ph-1.5)/1.4*PI*2),2)*.45;
+    open=Math.max(open,fa.a*.9);fi=Math.max(fi,Math.min(1,fa.a*1.4));   /* v5_222 FIGHT: every pet attack = a quick jaw snap + fire puff (the dragon's attack is its fire breath) */
+    jawG.rotation.x=open*.5+fi*Math.sin(t*28)*.03;
+    head.rotation.y=Math.sin(t*.8)*.2;head.rotation.x=.04+Math.sin(t*1.3)*.05-open*.1-fi*.1+fa.a*.25;      /* head lifts to breathe, thrusts at each attack */
+    mouth.scale.setScalar(.01+open*1.1+fi*(1.5+Math.sin(t*14)*.35));
+    fireCore.visible=fi>.01;if(fi>.01){fireCore.material=fO;const cs=(6+Math.sin(t*20)*1.2)*fi;fireCore.scale.set(cs,cs,1)}
+    for(const f of fire){
+      if(fi<=.01){f.q.visible=false;continue}
+      const age=(t*1.4+f.ph)%1,turb=Math.sin(t*9+f.sp)*age*1.4,ex=(f.a-.5)*2*age*FIRE_SPREAD+turb,ey=(f.b-.5)*2*age*FIRE_SPREAD*.7+age*age*5.5;
+      f.q.visible=true;f.q.position.set(ex,ey,2+age*FIRE_LEN);
+      f.q.material=age<.2?fY:age<.55?fO:fR;
+      const sz=(3+age*12)*(1-age*age*.55)*Math.min(1,(1-age)*3.2)*fi;f.q.scale.set(sz,sz,1)}
+    /* ground pose first (walk cycle, tail, bob), then every part is blended toward its flying pose by its weight */
     walk(legs,t,mv,8,.6);
-    body.position.y=Math.abs(Math.sin(t*8))*1.1*mv+Math.sin(t*2)*.3;
-    mouth.scale.setScalar(2.2+Math.sin(t*5)*.5+Math.sin(t*11)*.25);
+    for(let i=0;i<4;i++){const l=legs[i];
+      l.g.rotation.x=lerp(l.g.rotation.x,(l.hind?.75:.95)+Math.sin(th-.8+i)*.05,lw);        /* legs folded up and back */
+      l.kn.rotation.x=lerp(l.kn.rotation.x,l.a2+(l.hind?.5:.9),lw)}
+    tail.rotation.y=lerp(Math.sin(t*1.7)*.26,Math.sin(t*1.7)*.3,hw);
+    tail.rotation.x=lerp(Math.sin(t*1.1)*.04,-.12+Math.sin(th-1)*.1,hw);                    /* tail lifts and ripples with the beat */
+    const crouch=fdir>0?CROUCH*Math.sin(PI*Math.min(1,p/.18)):0;                            /* a small dip before the jump */
+    body.position.y=lerp(Math.abs(Math.sin(t*8))*1.1*mv+Math.sin(t*2)*.3,FLY_H-Math.cos(th)*2.2+Math.sin(t*1.1)*.8,hw)-crouch;   /* ground bob -> hover + lift on each downstroke */
+    body.rotation.x=(mv*.16+Math.sin(th)*.03)*hw;                                           /* lean into the flight */
   }};
 }
 
@@ -433,13 +529,16 @@ function mkFairy(B){
     const lo=G(body,[s*1.2,16.5,-2]);lo.scale.set(s*.72,.72,.72);lo.rotation.y=s*.2;A(lo,'wingFairyLo',w3,[0,0,0]);A(lo,'wingFairyLo',w2,[0,0,.05],.85);
     wings.push(up,lo)}
   const sp=[];for(let i=0;i<9;i++)sp.push(A(B,'sphL',i%2?dust:dust2,[0,0,0],1.2));
-  return{fr:13,hh:32,k:.85,anim(t,mv){
+  return{fr:13,hh:32,k:.85,anim(t,mv,fight,fa){
     const f=Math.sin(t*26)*.42;
     wings[0].rotation.z=-.25-f;wings[2].rotation.z=.25+f;wings[1].rotation.z=-.15-f*.8;wings[3].rotation.z=.15+f*.8;
     body.position.y=8+Math.sin(t*2.3)*1.6+mv*.8;body.rotation.x=-.08*mv+Math.sin(t*1.6)*.03;body.rotation.z=Math.sin(t*1.4)*.05;
     head.rotation.z=Math.sin(t*1.7)*.07;pony.rotation.x=Math.sin(t*2.2)*.2;
     armR.rotation.x=Math.sin(t*2.6)*.2;star.scale.setScalar(3.4+Math.sin(t*6)*.5);star.rotation.y=t*2;
     sp.forEach((q,i)=>{const k=((t*.35+i*.11)%1),a=i*2.1+t*.9;q.position.set(Math.cos(a)*(7+k*7),6+k*22+Math.sin(t+i)*2,Math.sin(a)*(7+k*7)-2);q.scale.setScalar(1.7*(1-k)+.2)});
+    /* v5_222 FIGHT: the wand swings forward and the star flares at each attack, wings beat wider while fighting */
+    {const a=fa.a,f=fa.f,e=f*.25+a*.5;armR.rotation.x-=a*1.3;armR.rotation.z-=a*.3;star.scale.setScalar(3.4+Math.sin(t*6)*.5+a*3.5+f*.8);head.rotation.x+=a*.15;
+     wings.forEach((w,i)=>{w.rotation.z+=(i<2?-1:1)*e})}
   }};
 }
 
@@ -545,7 +644,7 @@ function mkPhoenix(B){
   SP(body,fsp(0xff9a30,.32,'soft'),[0,24,-2],28,22);   /* a warm glow between the wings (no flames on the back any more) */
   const em=[];for(let i=0;i<12;i++)em.push(SP(B,ember,[0,0,0],3,3));
   const LIFT=1.0;
-  return{fr:19,hh:44,k:.74,anim(t,mv){
+  return{fr:19,hh:44,k:.74,anim(t,mv,fight,fa){
     const f=Math.sin(t*(6+mv*3))*.5,lift=Math.sin(t*6.6+.5);
     wings[0].rotation.z=-(LIFT+f);wings[1].rotation.z=LIFT+f;
     /* v5_203f the wing BENDS like a real bird's: each feather follows the flap a little later the farther out it is (lag = its reach), so the tips trail the root on the way up and down and
@@ -561,6 +660,8 @@ function mkPhoenix(B){
     tem.forEach((q,i)=>{const u=((t*.28+i/tem.length)%1),a=i*2.4+t*2,x=u*(cpath.length-1),j=Math.min(cpath.length-2,x|0),fr=x-j,p0=cpath[j],p1=cpath[j+1];
       q.position.set(Math.sin(a)*(1.4+u*2.5),p0[0]+(p1[0]-p0[0])*fr+Math.sin(a*1.3)*1.2,-(p0[1]+(p1[1]-p0[1])*fr));q.scale.setScalar((2.4*(1-u*.85)+.2)*2.6)});
     em.forEach((q,i)=>{const k=((t*.45+i*.083)%1),a=i*1.9+t;q.position.set(Math.cos(a)*(5+k*9),12+k*26,Math.sin(a)*(5+k*9)-5);q.scale.setScalar((2.2*(1-k)+.1)*2.4)});
+    /* v5_222 FIGHT: wings spread wider while fighting and flare at each attack, the head strikes down and forward, the body leans in */
+    {const a=fa.a,f=fa.f;wings[0].rotation.z-=f*.12+a*.5;wings[1].rotation.z+=f*.12+a*.5;head.rotation.x+=a*.55;body.rotation.x+=a*.1}
   }};
 }
 
@@ -588,11 +689,14 @@ function mkTiger(B){
     const rs=hind?4.8:5.4;A(L.up,'tor',dark,[0,-2.4,0],[rs*.95,rs*.95,rs*.95],[PI/2,0,0]);A(L.kn,'tor',dark,[0,-L.l2*.32,0],[rs*.8,rs*.8,rs*.8],[PI/2,0,0]);A(L.kn,'tor',dark,[0,-L.l2*.62,0],[rs*.74,rs*.74,rs*.74],[PI/2,0,0]);
     for(const tx of [-1.5,0,1.5])A(L.foot,'sph',cream,[tx,-.3,3],1.6);
     legs.push(L)});
-  return{fr:15,hh:26,anim(t,mv){
+  return{fr:15,hh:26,anim(t,mv,fight,fa){
     walk(legs,t,mv,8.5,.65);
     body.position.y=Math.abs(Math.sin(t*8.5))*.9*mv+Math.sin(t*1.8)*.2;body.rotation.x=Math.sin(t*1.8)*.012;
     head.rotation.y=Math.sin(t*.9)*.15;head.rotation.x=Math.sin(t*1.4)*.05;
     tail.rotation.y=Math.sin(t*2.1)*.4;tail.rotation.x=Math.sin(t*1.5)*.06;
+    /* v5_222 FIGHT: front paws swipe forward (left / right alternating), head lunges, tail lashes low while fighting, front legs a little lower */
+    {const a=fa.a,f=fa.f,L=legs[fa.n&1];L.g.rotation.x-=a*1.2;L.kn.rotation.x+=a*.5;head.rotation.x+=a*.45-f*.05;tail.rotation.x-=f*.3;tail.rotation.y*=1+f*.6;
+     legs[0].g.rotation.x-=f*.1;legs[1].g.rotation.x-=f*.1}
   }};
 }
 
@@ -620,27 +724,41 @@ function mkWolf(B){
       pawS:[4.6,2.8,6.1],pawMat:light,pawZ:.6});
     for(const tx of [-1.2,0,1.2])A(L.foot,'sph',dark,[tx,-.2,2.9],.9);
     legs.push(L)});
-  return{fr:15,hh:30,anim(t,mv){
+  return{fr:15,hh:30,anim(t,mv,fight,fa){
     walk(legs,t,mv,9,.62);
     body.position.y=Math.abs(Math.sin(t*9))*.8*mv+Math.sin(t*1.9)*.2;
     head.rotation.y=Math.sin(t*.7)*.2+Math.sin(t*2.3)*.04;head.rotation.x=Math.sin(t*1.2)*.05-.02;
     tail.rotation.y=Math.sin(t*1.6)*.32;tail.rotation.x=Math.sin(t*1.1)*.06;
+    /* v5_222 FIGHT: head snaps forward and down in a bite at each attack, the front legs brace, head lowered and tail out straight while fighting */
+    {const a=fa.a,f=fa.f;head.rotation.x+=a*.6+f*.08;head.rotation.y*=1-f*.7;tail.rotation.x-=f*.25;
+     legs[0].g.rotation.x-=f*.12+a*.2;legs[1].g.rotation.x-=f*.12+a*.2}
   }};
 }
 const BUILD=[mkChicken,mkDragon,mkFairy,mkPhoenix,mkTiger,mkWolf];
 
 /* ---------------------------------------------------------------- public: make a pet */
+/* v5_223 SIZE BY CLASS (class F .. S): F is very small, S is big. The chicken (always class F) keeps its normal size. Tune this table. */
+const SIZE=[.6,.72,.86,1.02,1.2,1.42,1.7];
 function make(sp,c){
   if(!T)throw new Error('PET3D not initialised');
   sp=sp|0;c=c|0;if(sp<0||sp>=BUILD.length)sp=0;if(sp===0)c=0;
   const mats=[];cur=mats;
   try{
     const root=G(null),B=G(root);
-    const info=BUILD[sp](B),fx=classFX(root,c,info.fr,info.hh);
+    const info=BUILD[sp](B),size=sp===0?1:SIZE[c],K=(info.k||1)*size,fx=classFX(root,c,info.fr*size,info.hh*K),fa={f:0,a:0,n:0},LUNGE=5.5*size;let lastT=null,fs=-1;
     const sh=A(root,'disc',bas(0x000000,{transparent:true,opacity:.28,depthWrite:false}),[0,.15,0],info.fr*.78);
-    B.scale.setScalar((info.k||1)*(1+c*.045));
-    return{root,sp,c,h:info.hh*(1+c*.045),fr:info.fr,
-      anim(t,mv){info.anim(t,mv||0);updFX(fx,t)},
+    B.scale.setScalar(K);
+    return{root,sp,c,h:info.hh*size,fr:info.fr*size,
+      /* v5_222 anim(t, mv, fight, atkAt, atkN): fight = 1 while in combat; atkAt = game time of the pet's last attack, atkN = attack counter (even / odd picks left / right).
+         fa = {f: fight eased 0..1, a: attack pulse 0..1 (quick wind-up, then fades over .5 s), n}. Every pet gets a lunge + lean toward the target here (B is not touched by the species code); each species adds its own move. */
+      anim(t,mv,fight,atkAt,atkN){
+        const dt=lastT===null?0:Math.min(.1,Math.max(0,t-lastT)),want=fight?1:0;lastT=t;
+        fs=lastT===null||fs<0?want:fs+(want-fs)*Math.min(1,dt*5);
+        const age=atkAt===undefined?99:t-atkAt,a=age<0||age>.5?0:age<.1?age/.1:Math.pow(1-(age-.1)/.4,1.6);
+        fa.f=fs;fa.a=a;fa.n=atkN|0;
+        info.anim(t,mv||0,fight?1:0,fa);if(fx&&info.hhNow)fx.hh=info.hhNow()*K;
+        B.position.set(0,a*1.4,a*LUNGE);B.rotation.x=fs*.04+a*.13;     /* lunge forward + lean into the strike; tune LUNGE */
+        updFX(fx,t)},
       dispose(){mats.forEach(m=>{try{m.dispose()}catch(e){}})}};
   }finally{cur=null}
 }

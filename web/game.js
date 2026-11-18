@@ -1,5 +1,7 @@
 (function(){
 'use strict';
+/* v5_217: the browser's right-click menu is disabled everywhere on the page (capture phase, so it also covers overlays, chat, and the login screen). It only cancels the default menu: the game's own right-click handlers (PvP select/attack, camera drag) still run. To allow the menu again, delete this line. */
+document.addEventListener('contextmenu',e=>e.preventDefault(),true);
 const $=id=>document.getElementById(id);
 const LK=window.T3_LIGHT_K||1; /* v5_173 light-intensity factor: 1 on Three r128 (default), PI on r155+ (set by three-compat.js) so a newer Three.js looks the same */
 const stage=$('stage'),cv=$('game'),mm=$('mm'),mctx=mm.getContext('2d');let ctx=cv.getContext('2d');
@@ -135,6 +137,27 @@ const CLASSES=[
  {n:'Spirit Summoner',d:'Spirit caller: wolves (up to 3) and a guardian spirit that focus your target, soul blasts and soul healing. +62.5% max Qi, -5% max HP.'}];
 /* passive class bonuses: crit = extra crit chance, hp / def / qi / spd = multipliers */
 const CLB=[{crit:.05,qi:1.2,def:1.1},{crit:.10,hp:.9},{hp:1.25,def:1.4,spd:1.1},{crit:.15,spd:1.1},{qi:1.625,hp:.95}];
+
+/* ---------- PET STATS FOR THE OWNER (v5_219, per species since v5_220) ----------
+   The summoned pet gives its owner TWO stats, fixed by the pet's SPECIES (PET_PAIR, indexed by species: 0 Chicken, 1 Dragon, 2 Fairy, 3 Phoenix, 4 Tiger, 5 Wolf), whatever class the owner is:
+   Dragon ATK + DEF (powerful, armoured) | Fairy DEF + accuracy (protective, precise magic) | Phoenix HP + evasion (rebirth, hard to catch) | Tiger ATK + evasion (fierce, agile) | Wolf HP + accuracy (tireless hunter) |
+   Chicken HP + evasion (it runs away; it is weak anyway). Each of ATK / HP / DEF / accuracy / evasion is given by exactly two of the five special pets.
+   The size comes from the pet's class F..S (PET_GF = fraction of the S value). A Chicken counts as a Class F pet at half strength.
+   PET_STAT_S = value at class S: ATK / HP / DEF in % of the owner's own value, ACC in points, EVA in %-points. Tune here. */
+const PET_GF=[.2,.3,.42,.56,.72,.88,1],PET_CHICKEN_K=.5;
+const PET_STAT_S={atk:10,hp:12,def:12,acc:8,eva:4};
+const PET_PAIR=[['hp','eva'],['atk','def'],['def','acc'],['hp','eva'],['atk','eva'],['hp','acc']];
+const PET_FLAT={acc:1,eva:1}; /* these two are added as points; ATK / HP / DEF are multipliers (1 + pct/100) */
+let _pcK='',_pcV={};
+/* the owner's bonus from the summoned pet for one stat: a fraction for atk / hp / def (0.1 = +10%), points for acc / eva; 0 when no pet or the stat is not in the pet's pair */
+function petPct(k){
+  const pk=P.pet;if(!pk)return 0;
+  if(pk!==_pcK){
+    _pcK=pk;_pcV={};const a=pk.split(':'),s=a[0]|0,c=a[1]|0,g=PET_GF[Math.max(0,Math.min(6,c))]*(s===0?PET_CHICKEN_K:1);
+    for(const st of (PET_PAIR[s]||[]))_pcV[st]=PET_STAT_S[st]*g*(PET_FLAT[st]?1:.01);
+  }
+  return _pcV[k]||0;
+}
 const CLS_ORDER=[[['pierce'],['nova'],['mend','heal'],['meteor'],['chain'],['might'],['drain'],['fan'],['strike'],['cleave'],['leap'],['flurry']],
  [['kunai'],['shadowstep'],['venom'],['bladestorm'],['smoke'],['execute'],['siphon'],['rush']],
  [['bash'],['bulwark'],['quake'],['charge'],['roar'],['counter'],['hammer'],['ironskin'],['shockwave']],
@@ -337,11 +360,11 @@ const atkCd=()=>.55/(1+Math.min(60,gearStat('aspd'))/100);
 const moveSpd=()=>200*(1+Math.min(25,gearStat('spd'))/100)*(P.spdMul||1)*(P.vlT>0?1.35:1)*(CLB[P.cls].spd||1);
 const realmIdx=()=>Math.floor((P.lvl-1)/10);
 const realmName=i=>i<REALMS.length?REALMS[i]:'Sovereign Tier '+(i-REALMS.length+1);
-const maxHp=()=>Math.round((100+P.lvl*32+gearStat('hp'))*(1+forgeP('hp'))*(1+realmIdx()*.1)*(CLB[P.cls].hp||1));
+const maxHp=()=>Math.round((100+P.lvl*32+gearStat('hp'))*(1+forgeP('hp'))*(1+realmIdx()*.1)*(CLB[P.cls].hp||1)*(1+petPct('hp')));
 const qrgVal=()=>Math.min(QRG_CAP,gearStat('qrg')); /* v5_143 gear Qi regen, % of max Qi per second */
 const QI_MUL=1.5; /* v5_143: max Qi reduced by 25% (was 2 since v5_123 = 2x max Qi). 1 = base pool, 2 = the old doubled pool */
 const maxQi=()=>Math.round((60+P.lvl*4)*(CLB[P.cls].qi||1)*QI_MUL);
-const atkVal=()=>Math.round((10+P.lvl*3.5+gearStat('atk'))*(1+forgeP('atk'))*(1+realmIdx()*.12)*(1+(P.bfT>0?P.bf:0)));
+const atkVal=()=>Math.round((10+P.lvl*3.5+gearStat('atk'))*(1+forgeP('atk'))*(1+realmIdx()*.12)*(1+(P.bfT>0?P.bf:0))*(1+petPct('atk')));
 /* DEF now grows with level (3 per level, +4% per realm) and armor level. Shared defense curve (keep equal to pDef* in game.go):
    reduction = def / (def + PDEF_K + attackerLevel*PDEF_K_LV), capped at PDEF_CAP. The ATTACKER's level is in the formula, so
    the same DEF protects less against a higher-level monster or player. */
@@ -353,7 +376,7 @@ const MON_ATK_MUL=3;
 const monGap=(mLv,pLv)=>{const g=mLv-pLv;return g>=0?1+Math.min(3,g*.03):Math.max(.4,1+g*.01)};
 /* level gap, you hitting a monster: monsters above your level shrug off more damage (x1/(1+0.03*gap), down to x0.2) */
 const atkGap=(mLv,pLv)=>{const g=mLv-pLv;return g>0?Math.max(.2,1/(1+g*.03)):1};
-const defVal=()=>Math.round((P.lvl*3+gearStat('def'))*(1+forgeP('def'))*(1+realmIdx()*.04)*(CLB[P.cls].def||1));
+const defVal=()=>Math.round((P.lvl*3+gearStat('def'))*(1+forgeP('def'))*(1+realmIdx()*.04)*(CLB[P.cls].def||1)*(1+petPct('def')));
 /* ---------- EVASION + ACCURACY ----------
    Evasion: % chance to dodge a monster / player hit completely (base 5% + gear, capped at EVA_CAP). An attacker above your level pierces it:
    -EVA_LV_PEN %-points of dodge per level above you.
@@ -362,8 +385,8 @@ const defVal=()=>Math.round((P.lvl*3+gearStat('def'))*(1+forgeP('def'))*(1+realm
    Equipment: Gloves roll accuracy, Boots roll evasion, and any Rare+ piece can roll either as an extra stat. Tune the constants below. */
 const EVA_BASE=5,EVA_CAP=50,EVA_LV_PEN=.4,ACC_BASE=100,ACC_MIN_HIT=.2;
 const EVA_PER_LV=.02,ACC_PER_LV=.04; /* level scaling: +0.02% evasion, +0.04 accuracy per level */
-const evaVal=()=>Math.min(EVA_CAP,EVA_BASE+P.lvl*EVA_PER_LV+gearStat('eva'));
-const accVal=()=>ACC_BASE+P.lvl*ACC_PER_LV+gearStat('acc');
+const evaVal=()=>Math.min(EVA_CAP,EVA_BASE+P.lvl*EVA_PER_LV+gearStat('eva')+petPct('eva'));
+const accVal=()=>ACC_BASE+P.lvl*ACC_PER_LV+gearStat('acc')+petPct('acc');
 /* ---------- CRIT STATS (all in %, each = level part + gear + forge) ----------
    Crit chance      15% base +0.01% per level + gear (cap 75%).
    Crit ATK DMG boost  added to the 180% crit multiplier: +0.05% per level + gear.   crit multiplier = 180% + boost.
@@ -828,9 +851,9 @@ function gainExp(n){
   }
   if(gained)lvBanner(P.lvl,gained,bt);
 }
-function hitMonster(m,dmg,crit){
+function hitMonster(m,dmg,crit,sure){ /* sure (v5_219): skip the accuracy roll, used for pet burn ticks */
   if(m.dead||m.pend||pvpOnly()||inTown())return 0; /* v5_90 no attacking inside the safe hub */
-  if(rnd()>hitChance(m)){ /* missed: no damage, but the monster still notices you */
+  if(!sure&&rnd()>hitChance(m)){ /* missed: no damage, but the monster still notices you */
     if(m.state==='idle'&&!inTown())m.state='chase';
     pop(m.x,m.y-m.r-8,'MISS','#9aa7ad',12);SFX('miss');combatPing();return 0;
   }
@@ -1634,6 +1657,18 @@ function forgePop(ok,nm,lv){ /* big SUCCESS / FAILED popup over the forge window
 }
 /* v5_131 Forge window = bag layout: the avatar with the equipped gear around it; tap a piece and its stats + Forge button show on the right. */
 let fgSel='wpn';
+/* v5_227 ARMOR FIRE TIER = the LOWEST forge tier of ALL gear slots (weapon, secondary weapon, gloves, bracelet, ring, belt, earrings, necklace, robe, legguards, boots).
+   tier = floor(forge level / 10), 1..10 (tier 10 = rainbow fire). An empty slot (nothing equipped) counts as tier 0, so every slot must hold a piece at that level.
+   The starting weapon / robe count with their core forge level (wlv / alv). src = P (yours) or a peer (its equipment comes from the network, q.eq). */
+function armorFireTier(src){
+  let m=10;
+  for(const s of GEAR){
+    let lv=0;
+    if(s.core)lv=s.core==='wlv'?src.wlv:src.alv;
+    else{const o=src===P?P.gear[s.k]:(src.eq&&src.eq[s.k]);if(o&&o.g>0)lv=o.lv}
+    lv|=0;m=Math.min(m,lv>=10?Math.min(10,Math.floor(lv/10)):0);
+    if(!m)return 0}
+  return m}
 const FG_L=['wpn','wpn2','glove','brace','ring','belt'],FG_R=['ear','neck','robe','legs','boot'];
 function fgTarget(k){ /* what the forge levels for this slot, or null when the slot is empty */
   const q=GEAR.find(z=>z.k===k),o=P.gear[k];if(!q)return null;
@@ -2200,7 +2235,7 @@ function openShop(){
 $('shopClose').addEventListener('click',()=>{closeBuy();closeXc();$('shop').hidden=true});
 setInterval(()=>{if(started)save()},8000); /* v5_186 20 s -> 8 s */
 
-/* ---------- PETS (v5_195): eggs drop from bosses, hatch in the bag, combine F > E > D > C > B > A > S. No pet stats yet. ----------
+/* ---------- PETS (v5_195): eggs drop from bosses, hatch in the bag, combine F > E > D > C > B > A > S. v5_219: the summoned pet gives its owner 2 stats (by pet species, see PET_PAIR in 01_core.js) and attacks monsters (petFight below). ----------
    P.eggs  = number of eggs (one stacked bag slot).
    P.pets  = { 's:c': count } stacks, s = species index (0 chicken, 1-5 special), c = class index (0 F ... 6 S). One bag slot per stack.
    Chicken is the common pet: it has no class and cannot be combined. */
@@ -2300,7 +2335,7 @@ function petBagItems(a){
   const o=petsObj(),ks=Object.keys(o).filter(k=>o[k]>0).sort((x,y)=>{const a=petParse(x),b=petParse(y);return b.c-a.c||a.s-b.s});
   for(const k of ks){const p=petParse(k),n=o[k];
     a.push({id:'pet_'+k,n:p.s===0?'Chicken':PET_SP[p.s].n+' (Class '+PET_CLS[p.c]+')',v:n,t:p.s===0?'\u00d7'+fmtQ(n):PET_CLS[p.c]+(n>1?' \u00d7'+n:''),r:p.s===0?'cm':PET_CLS_SLOT[p.c],ic:petIcon(p.s,p.c),
-      d:p.s===0?'A common pet. It cannot be combined.':'Class '+PET_CLS[p.c]+' pet.'+(petCanCombine(p)?' Combine two Class '+PET_CLS[p.c]+' '+PET_SP[p.s].n+'s (same pet only) for a '+PET_UP[p.c]+'% chance of a Class '+PET_CLS[p.c+1]+' pet; on failure 1 of the 2 is destroyed.':' The highest class.'),pet:{key:k,s:p.s,c:p.c,n:n}})}
+      d:(p.s===0?'A common pet. It cannot be combined.':'Class '+PET_CLS[p.c]+' pet.')+petInfoText(p.s,p.c)+(p.s===0?'':(petCanCombine(p)?' Combine two Class '+PET_CLS[p.c]+' '+PET_SP[p.s].n+'s (same pet only) for a '+PET_UP[p.c]+'% chance of a Class '+PET_CLS[p.c+1]+' pet; on failure 1 of the 2 is destroyed.':' The highest class.')),pet:{key:k,s:p.s,c:p.c,n:n}})}
   return a;
 }
 /* returns true when the tap was a combine-mode tap (and was handled) */
@@ -2351,16 +2386,65 @@ function petBagActions(sel,info){
 function petPartners(p){let n=0;const o=petsObj();for(const k in o){if(k===p.key)continue;const q=petParse(k);if(q.s===p.s&&q.c===p.c)n+=o[k]}return n}
 function petCombValidate(){if(!petComb)return;const o=petsObj();if(!(o[petComb.a]>0))petComb=null;else if(petComb.b&&!(o[petComb.b]>0))petComb.b=null}
 
+
+/* ---------- PET ATTACK (v5_219) ----------
+   The summoned pet fights for you (monsters only: nothing in town or in PvP mode). Each hit = your ATK (without the pet's own ATK bonus, so it does not snowball) x the pet's class %
+   (PET_ATK_PCT, F..S) x the species factor f, once every iv seconds, on your target or the nearest monster within PET_RANGE of you. It goes through hitMonster, so accuracy, monster
+   defence, level gap and kill credit work like your own hits. Spirit Summoners already have wolves, so their pet's attack is halved (PET_SUMMONER_K).
+   Species: Tiger / Wolf fast melee | Dragon slow fire breath that also scorches up to 2 enemies near the target | Phoenix hit + burn | Fairy weak hit + heals you | Chicken weak peck. */
+const PET_ATK_PCT=[6,9,13,18,24,31,40],PET_RANGE=320,PET_SUMMONER_K=.5;
+const PET_FIGHT=[
+ {kind:'peck',f:.4,iv:1.5,col:'#f3e6c4'},   /* 0 Chicken */
+ {kind:'fire',f:1.15,iv:2.2,col:'#ff7a22'},  /* 1 Dragon */
+ {kind:'spark',f:.5,iv:1.5,col:'#ff9ad5',heal:[.5,.7,1,1.3,1.6,2,2.5],hiv:5},   /* 2 Fairy: heal = % of your max HP every hiv seconds while you are hurt, by class F..S */
+ {kind:'burn',f:.9,iv:1.5,col:'#ffb02e'},    /* 3 Phoenix: 3 burn ticks of 25% of the hit */
+ {kind:'claw',f:1,iv:1.2,col:'#ffb347'},     /* 4 Tiger */
+ {kind:'bite',f:1,iv:1.2,col:'#aab7c4'}];    /* 5 Wolf */
+const petHitDmg=()=>{ /* damage of one pet hit before the monster's own defence, 0 when there is no pet */
+  if(!P.pet)return 0;const p=petParse(P.pet),F=PET_FIGHT[p.s];if(!F)return 0;
+  const atk=atkVal()/(1+petPct('atk'));
+  return atk*PET_ATK_PCT[p.s===0?0:p.c]/100*F.f*(P.cls===4?PET_SUMMONER_K:1)};
+let petCd=0,petHc=0,petFightAt=-99,petAtkN=0,petTgt=null; /* petFightAt (v5_221): game time of the pet's last attack, drives the dragon's take-off / landing */
+function petFight(dt){
+  if(!P.pet||!P.pf||P.dead>0||inTown())return;
+  const p=petParse(P.pet),F=PET_FIGHT[p.s];if(!F)return;
+  const f=P.pf;petCd-=dt;
+  if(F.heal){petHc-=dt;if(petHc<=0){petHc=F.hiv;const mh=maxHp();if(P.hp<mh*.95){const h=Math.max(1,Math.round(mh*F.heal[p.c]/100));P.hp=Math.min(mh,P.hp+h);pop(P.x,P.y-40,'+'+h,'#7dffb0',13);spark(f.x,f.y,'#ff9ad5',10,110,.5,3);ring(P.x,P.y,40,'#7dffb0')}}}
+  if(petCd>0||pvpOnly())return;
+  let b=(P.target&&!P.target.isPl&&!P.target.dead&&!P.target.pend&&dist(P.target.x,P.target.y,P.x,P.y)<PET_RANGE)?P.target:null,bd=PET_RANGE;
+  if(!b)for(const m of mons){if(m.dead||m.pend)continue;const d=dist(m.x,m.y,P.x,P.y);if(d<bd){bd=d;b=m}}
+  if(!b)return;
+  petCd=F.iv;petFightAt=time;petAtkN++;petTgt=b;
+  const base=petHitDmg(),one=(m,mul)=>{const d=Math.max(1,Math.round(base*(mul||1)*(.9+rnd()*.2)));hitMonster(m,d,false);return d};
+  sigLine(f.x,f.y,b.x,b.y,F.col,6);spark(b.x,b.y,F.col,8,150,.35,3);
+  const d=one(b);
+  if(F.kind==='fire'){ /* breath also scorches up to 2 other enemies near the target */
+    ring(b.x,b.y,90,F.col);let n=0;
+    for(const m of mons){if(n>=2)break;if(m===b||m.dead||m.pend)continue;if(dist(m.x,m.y,b.x,b.y)<110){one(m,.6);spark(m.x,m.y,F.col,6,120,.3,3);n++}}
+  }else if(F.kind==='burn'&&d>0){ /* 3 burn ticks (no accuracy roll) */
+    const tick=Math.max(1,Math.round(base*.25));
+    for(let j=1;j<=3;j++)delayed.push({t:.8*j,f:()=>{if(!b.dead&&!b.pend){hitMonster(b,tick,false,true);spark(b.x,b.y,'#ff5a2a',5,90,.3,2.6)}}});
+  }
+}
+/* text for the bag panel: what this pet gives YOU (fixed by its species) and how it attacks */
+function petInfoText(s,c){
+  const g=PET_GF[c]*(s===0?PET_CHICKEN_K:1),st=PET_PAIR[s]||[],lbl={atk:'ATK',hp:'HP',def:'DEF',acc:'accuracy',eva:'evasion'};
+  const gives=st.map(k=>'+'+(Math.round(PET_STAT_S[k]*g*10)/10)+(PET_FLAT[k]?(k==='eva'?'% ':' '):'% ')+lbl[k]).join(', ');
+  const F=PET_FIGHT[s],pc=PET_ATK_PCT[s===0?0:c]*F.f*(P.cls===4?PET_SUMMONER_K:1);
+  const how=F.kind==='spark'?'weak sparks and heals you '+F.heal[c]+'% HP every '+F.hiv+' s when hurt':{peck:'weak pecks',fire:'fire breath that also scorches 2 nearby enemies',burn:'hits that also burn',claw:'fast claw strikes',bite:'fast bites'}[F.kind];
+  return ' Gives you '+gives+'. It attacks for about '+(Math.round(pc*10)/10)+'% of your ATK every '+F.iv+' s ('+how+').';
+}
+
 /* ---------- summon: ONE pet follows beside you (any pet, common or special). Summoning another replaces it. Summoning does not use the pet up. ---------- */
 function petValidate(){if(P.pet&&!(petsObj()[P.pet]>0)){P.pet=null;P.pf=null}}
 function petLoad(k){return typeof k==='string'&&petsObj()[k]>0?k:null}
 function petSummon(k){
   if(!(petsObj()[k]>0))return;const p=petParse(k),old=P.pet;
-  P.pet=k;P.pf=null;
+  P.pet=k;P.pf=null;P.hp=Math.min(P.hp,maxHp()); /* the pet's HP bonus changes max HP */
   say((old&&old!==k?'You swapped your pet. ':'')+(p.s===0?'Chicken':PET_SP[p.s].n+' (Class '+PET_CLS[p.c]+')')+' is now by your side.',petCol(p.s,p.c),5000);
   bagLog('Summoned '+petName(p.s,p.c).replace(/ \[Class (.)\]/,' (Class $1)'),petCol(p.s,p.c));save();netInfo(true);renderBag();
 }
-function petDismiss(){if(!P.pet)return;const p=petParse(P.pet);P.pet=null;P.pf=null;say('Pet dismissed.','#8d9aa2',3000);bagLog('Dismissed pet','#8d9aa2');save();netInfo(true);renderBag()}
+function petDismiss(){if(!P.pet)return;const p=petParse(P.pet);P.pet=null;P.pf=null;P.hp=Math.min(P.hp,maxHp());say('Pet dismissed.','#8d9aa2',3000);bagLog('Dismissed pet','#8d9aa2');save();netInfo(true);renderBag()}
 /* sprite: the pet's icon on a canvas (class-coloured glow behind special pets). Used by the 2D view directly and by the 3D view as a billboard sprite. */
 const PET_SPR={};
 function petSprite(k){
@@ -2403,7 +2487,7 @@ function petPreview(V,t){
   petValidate();
   const rig=petRigFor(V,V.sc,P.pet);
   if(!rig)return false;
-  rig.root.position.set(26,0,12);rig.root.rotation.y=-.6+Math.sin(t*.5)*.08;rig.root.scale.setScalar(1.25);
+  rig.root.position.set(26,0,12);rig.root.rotation.y=-.6+Math.sin(t*.5)*.08;rig.root.scale.setScalar(1.25*Math.min(1,90/rig.h));   /* v5_223 big classes shrink to fit the preview */
   rig.anim(t,0);return true;
 }
 function petRender3(){
@@ -2412,12 +2496,14 @@ function petRender3(){
   const rig=petRigFor(T,T.sc,P.pet),f=P.pf;
   if(rig){
     if(T.petSp)T.petSp.visible=false;
-    const want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):Math.PI/2-P.face;
+    const fighting=!inTown()&&P.dead<=0&&(combatT>0||time-petFightAt<4);
+    let want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):Math.PI/2-P.face;
+    if(fighting&&petTgt&&!petTgt.dead&&time-petFightAt<2.5)want=Math.atan2(petTgt.x-f.x,petTgt.y-f.y);   /* v5_222 turn to face the enemy it is attacking */
     if(f.yaw===undefined)f.yaw=want;
-    let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*7);
+    let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*(fighting?10:7));
     rig.root.visible=true;rig.root.scale.setScalar(PET_WORLD_K);
     rig.root.position.set(f.x-C,gh3(f.x,f.y),f.y-C);rig.root.rotation.y=f.yaw;
-    rig.anim(time,f.mv);return;
+    rig.anim(time,f.mv,fighting,petFightAt,petAtkN);return;   /* v5_221 fighting = in combat or the pet attacked in the last 4 s: the dragon flies, otherwise it lands. v5_222 every pet plays its fight animation */   /* v5_221 fighting = in combat or the pet attacked in the last 4 s: the dragon flies, otherwise it lands */
   }
   /* fallback (pets3d.js missing or the model failed): billboard sprite of the icon */
   if(T.petKey!==P.pet||!T.petSp){
@@ -2465,7 +2551,9 @@ function peerPets3(list){
     let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*7);
     rig.root.visible=true;rig.root.scale.setScalar(PET_WORLD_K);
     rig.root.position.set(f.x-C,gh3(f.x,f.y),f.y-C);rig.root.rotation.y=f.yaw;
-    rig.anim(time,f.mv);
+    if(q.swing>0||q.hurt>0)q.fightUntil=time+5;   /* v5_221 a peer is fighting while it swings / gets hurt (+5 s): its dragon flies */
+    if(q.swing>.1&&time-(q.petAtkAt||-99)>1.2){q.petAtkAt=time;q.petAtkN=(q.petAtkN|0)+1}   /* v5_222 their pet strikes along with each of their swings (at most every 1.2 s) */
+    rig.anim(time,f.mv,time<(q.fightUntil||0),q.petAtkAt,q.petAtkN);
   }
   for(const [q,h] of map)if(!seen.has(q)){
     if(h.pr){T.sc.remove(h.pr.root);try{h.pr.dispose()}catch(e){}h.pr=null}
@@ -2809,7 +2897,7 @@ function paintWd3(){
   if(rig.skin!==w)AL3D.setSkin(rig,w); /* switching class tab / changing an option re-dresses the model */
   if(WDV.drag)WDV.vel*=.7;else{WDV.yaw+=WDV.vel;WDV.vel*=.94;if(Math.abs(WDV.vel)<.0004)WDV.vel=0}
   rig.root.rotation.y=WDV.yaw;
-  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
+  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,ft:armorFireTier(P),hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
   r.render(sc,cam);return true;
 }
 function wdPreview(){
@@ -2913,7 +3001,7 @@ function paintBag3(){
   if(rig.skin!==SKW())AL3D.setSkin(rig,SKW());
   if(BAGV.drag)BAGV.vel*=.7;else{BAGV.yaw+=BAGV.vel;BAGV.vel*=.94;if(Math.abs(BAGV.vel)<.0004)BAGV.vel=0}
   rig.root.rotation.y=BAGV.yaw;{const hp=petPreview(BAGV,t);rig.root.position.x=hp?-16:0;BAGV.sh.position.x=rig.root.position.x}
-  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
+  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,ft:armorFireTier(P),hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
   r.render(sc,cam);return true;
 }
 function bagPreview(){
@@ -2958,7 +3046,7 @@ function paintFg3(){
   if(rig.skin!==SKW())AL3D.setSkin(rig,SKW());
   if(FGV.drag)FGV.vel*=.7;else{FGV.yaw+=FGV.vel;FGV.vel*=.94;if(Math.abs(FGV.vel)<.0004)FGV.vel=0}
   rig.root.rotation.y=FGV.yaw;{const hp=petPreview(FGV,t);rig.root.position.x=hp?-16:0;FGV.sh.position.x=rig.root.position.x}
-  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
+  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,ft:armorFireTier(P),hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
   r.render(sc,cam);return true;
 }
 function fgPreview(){
@@ -3401,6 +3489,7 @@ function updateMisc(dt){
       if(sp.cd<=0&&!pvpOnly()){let b=(P.target&&!P.target.isPl&&!P.target.dead&&!P.target.pend&&dist(P.target.x,P.target.y,P.x,P.y)<sp.r)?P.target:null,bd=sp.r;if(!b)for(const m of mons){if(m.dead||m.pend)continue;const d=dist(m.x,m.y,P.x,P.y);if(d<bd){bd=d;b=m}}
         if(b){sp.cd=sp.iv;sp.tg=b;sp.wu=Math.min(SPIRIT_WU,sp.iv*.6);sp.wr=0}}}
   }
+  petFight(dt);
   spiritViz(P,P.spirits,dt);spiritSync();
   if(MP)for(const q of NET.peers.values())if(q.spx){if(performance.now()/1000>q.spx.e){q.spx=null;continue}if(Math.hypot(q.x-P.x,q.y-P.y)<1100)spiritViz(q,q.spx.list,dt)}
   for(let i=projs.length-1;i>=0;i--){
@@ -4216,14 +4305,14 @@ function render3D(){
       const cl=gh3(tx+ox+C,tz+oz+C)+30-(ty+st*D);if(cl>lift)lift=cl;
       T3.lift=lift>(T3.lift||0)?lift:(T3.lift||0)+(lift-(T3.lift||0))*.06;
       T3.cam.position.set(tx+ox+(Math.random()-.5)*sh,ty+st*D+T3.lift,tz+oz)}T3.cam.lookAt(tx,gy+24+(T3.cz||0),tz);if(camView.tilt<CAM_TILT_MIN)T3.cam.rotateX(CAM_TILT_MIN-camView.tilt);T3.cam.updateMatrixWorld();T3.pm.multiplyMatrices(T3.cam.projectionMatrix,T3.cam.matrixWorldInverse);T3.frus.setFromProjectionMatrix(T3.pm);
-    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=Math.PI/2-P.face;pl.rotation.x=P.dead>0?-1.4:0;if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
+    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=Math.PI/2-P.face;pl.rotation.x=P.dead>0?-1.4:0;if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());P.ft=armorFireTier(P);AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
     let rpl=NONE;
     if(MP&&NET.peers.size){const prg=LOW?800:1200,PMAX=LOW?PQ.peers:14;let nw=0;rpl=[];
       for(const q of NET.peers.values()){const had=T3.rp.has(q),e=prg+(had?150:0);if(Math.abs(q.x-P.x)>e||Math.abs(q.y-P.y)>e)continue;
         if(!had){if(nw>=1)continue;nw++}rpl.push(q)}
       if(rpl.length>PMAX){rpl.sort((a,b)=>Math.hypot(a.x-P.x,a.y-P.y)-Math.hypot(b.x-P.x,b.y-P.y));rpl.length=PMAX}}
     sync3(T3.rp,rpl,q=>{const R=AL3D.makePlayer(q.sk),g=R.root;g.userData.rig=R;g.userData.mat={dispose(){try{Object.values(R.m).forEach(x=>x.dispose&&x.dispose())}catch(e){}}};return g},
-      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=Math.PI/2-q.face;g.rotation.x=q.dead>0?-1.4:0;AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
+      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=Math.PI/2-q.face;g.rotation.x=q.dead>0?-1.4:0;q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
       null);
     peerPets3(rpl===NONE?NONE:rpl); /* v5_201 other players' pets */
     {const rg=((LOW?650:900)+(LOW?200:300)*T3.zoom)*(PQ.lock?PQ.mon:1);sync3(T3.mp,mons,mkMon,updMon,m=>(!m.dead||m.dieT>0)&&Math.abs(m.x-P.x)<rg+(T3.mp.has(m)?150:0)&&Math.abs(m.y-P.y)<rg-100+(T3.mp.has(m)?150:0))}

@@ -1,4 +1,4 @@
-/* ---------- PETS (v5_195): eggs drop from bosses, hatch in the bag, combine F > E > D > C > B > A > S. No pet stats yet. ----------
+/* ---------- PETS (v5_195): eggs drop from bosses, hatch in the bag, combine F > E > D > C > B > A > S. v5_219: the summoned pet gives its owner 2 stats (by pet species, see PET_PAIR in 01_core.js) and attacks monsters (petFight below). ----------
    P.eggs  = number of eggs (one stacked bag slot).
    P.pets  = { 's:c': count } stacks, s = species index (0 chicken, 1-5 special), c = class index (0 F ... 6 S). One bag slot per stack.
    Chicken is the common pet: it has no class and cannot be combined. */
@@ -98,7 +98,7 @@ function petBagItems(a){
   const o=petsObj(),ks=Object.keys(o).filter(k=>o[k]>0).sort((x,y)=>{const a=petParse(x),b=petParse(y);return b.c-a.c||a.s-b.s});
   for(const k of ks){const p=petParse(k),n=o[k];
     a.push({id:'pet_'+k,n:p.s===0?'Chicken':PET_SP[p.s].n+' (Class '+PET_CLS[p.c]+')',v:n,t:p.s===0?'\u00d7'+fmtQ(n):PET_CLS[p.c]+(n>1?' \u00d7'+n:''),r:p.s===0?'cm':PET_CLS_SLOT[p.c],ic:petIcon(p.s,p.c),
-      d:p.s===0?'A common pet. It cannot be combined.':'Class '+PET_CLS[p.c]+' pet.'+(petCanCombine(p)?' Combine two Class '+PET_CLS[p.c]+' '+PET_SP[p.s].n+'s (same pet only) for a '+PET_UP[p.c]+'% chance of a Class '+PET_CLS[p.c+1]+' pet; on failure 1 of the 2 is destroyed.':' The highest class.'),pet:{key:k,s:p.s,c:p.c,n:n}})}
+      d:(p.s===0?'A common pet. It cannot be combined.':'Class '+PET_CLS[p.c]+' pet.')+petInfoText(p.s,p.c)+(p.s===0?'':(petCanCombine(p)?' Combine two Class '+PET_CLS[p.c]+' '+PET_SP[p.s].n+'s (same pet only) for a '+PET_UP[p.c]+'% chance of a Class '+PET_CLS[p.c+1]+' pet; on failure 1 of the 2 is destroyed.':' The highest class.')),pet:{key:k,s:p.s,c:p.c,n:n}})}
   return a;
 }
 /* returns true when the tap was a combine-mode tap (and was handled) */
@@ -149,16 +149,65 @@ function petBagActions(sel,info){
 function petPartners(p){let n=0;const o=petsObj();for(const k in o){if(k===p.key)continue;const q=petParse(k);if(q.s===p.s&&q.c===p.c)n+=o[k]}return n}
 function petCombValidate(){if(!petComb)return;const o=petsObj();if(!(o[petComb.a]>0))petComb=null;else if(petComb.b&&!(o[petComb.b]>0))petComb.b=null}
 
+
+/* ---------- PET ATTACK (v5_219) ----------
+   The summoned pet fights for you (monsters only: nothing in town or in PvP mode). Each hit = your ATK (without the pet's own ATK bonus, so it does not snowball) x the pet's class %
+   (PET_ATK_PCT, F..S) x the species factor f, once every iv seconds, on your target or the nearest monster within PET_RANGE of you. It goes through hitMonster, so accuracy, monster
+   defence, level gap and kill credit work like your own hits. Spirit Summoners already have wolves, so their pet's attack is halved (PET_SUMMONER_K).
+   Species: Tiger / Wolf fast melee | Dragon slow fire breath that also scorches up to 2 enemies near the target | Phoenix hit + burn | Fairy weak hit + heals you | Chicken weak peck. */
+const PET_ATK_PCT=[6,9,13,18,24,31,40],PET_RANGE=320,PET_SUMMONER_K=.5;
+const PET_FIGHT=[
+ {kind:'peck',f:.4,iv:1.5,col:'#f3e6c4'},   /* 0 Chicken */
+ {kind:'fire',f:1.15,iv:2.2,col:'#ff7a22'},  /* 1 Dragon */
+ {kind:'spark',f:.5,iv:1.5,col:'#ff9ad5',heal:[.5,.7,1,1.3,1.6,2,2.5],hiv:5},   /* 2 Fairy: heal = % of your max HP every hiv seconds while you are hurt, by class F..S */
+ {kind:'burn',f:.9,iv:1.5,col:'#ffb02e'},    /* 3 Phoenix: 3 burn ticks of 25% of the hit */
+ {kind:'claw',f:1,iv:1.2,col:'#ffb347'},     /* 4 Tiger */
+ {kind:'bite',f:1,iv:1.2,col:'#aab7c4'}];    /* 5 Wolf */
+const petHitDmg=()=>{ /* damage of one pet hit before the monster's own defence, 0 when there is no pet */
+  if(!P.pet)return 0;const p=petParse(P.pet),F=PET_FIGHT[p.s];if(!F)return 0;
+  const atk=atkVal()/(1+petPct('atk'));
+  return atk*PET_ATK_PCT[p.s===0?0:p.c]/100*F.f*(P.cls===4?PET_SUMMONER_K:1)};
+let petCd=0,petHc=0,petFightAt=-99,petAtkN=0,petTgt=null; /* petFightAt (v5_221): game time of the pet's last attack, drives the dragon's take-off / landing */
+function petFight(dt){
+  if(!P.pet||!P.pf||P.dead>0||inTown())return;
+  const p=petParse(P.pet),F=PET_FIGHT[p.s];if(!F)return;
+  const f=P.pf;petCd-=dt;
+  if(F.heal){petHc-=dt;if(petHc<=0){petHc=F.hiv;const mh=maxHp();if(P.hp<mh*.95){const h=Math.max(1,Math.round(mh*F.heal[p.c]/100));P.hp=Math.min(mh,P.hp+h);pop(P.x,P.y-40,'+'+h,'#7dffb0',13);spark(f.x,f.y,'#ff9ad5',10,110,.5,3);ring(P.x,P.y,40,'#7dffb0')}}}
+  if(petCd>0||pvpOnly())return;
+  let b=(P.target&&!P.target.isPl&&!P.target.dead&&!P.target.pend&&dist(P.target.x,P.target.y,P.x,P.y)<PET_RANGE)?P.target:null,bd=PET_RANGE;
+  if(!b)for(const m of mons){if(m.dead||m.pend)continue;const d=dist(m.x,m.y,P.x,P.y);if(d<bd){bd=d;b=m}}
+  if(!b)return;
+  petCd=F.iv;petFightAt=time;petAtkN++;petTgt=b;
+  const base=petHitDmg(),one=(m,mul)=>{const d=Math.max(1,Math.round(base*(mul||1)*(.9+rnd()*.2)));hitMonster(m,d,false);return d};
+  sigLine(f.x,f.y,b.x,b.y,F.col,6);spark(b.x,b.y,F.col,8,150,.35,3);
+  const d=one(b);
+  if(F.kind==='fire'){ /* breath also scorches up to 2 other enemies near the target */
+    ring(b.x,b.y,90,F.col);let n=0;
+    for(const m of mons){if(n>=2)break;if(m===b||m.dead||m.pend)continue;if(dist(m.x,m.y,b.x,b.y)<110){one(m,.6);spark(m.x,m.y,F.col,6,120,.3,3);n++}}
+  }else if(F.kind==='burn'&&d>0){ /* 3 burn ticks (no accuracy roll) */
+    const tick=Math.max(1,Math.round(base*.25));
+    for(let j=1;j<=3;j++)delayed.push({t:.8*j,f:()=>{if(!b.dead&&!b.pend){hitMonster(b,tick,false,true);spark(b.x,b.y,'#ff5a2a',5,90,.3,2.6)}}});
+  }
+}
+/* text for the bag panel: what this pet gives YOU (fixed by its species) and how it attacks */
+function petInfoText(s,c){
+  const g=PET_GF[c]*(s===0?PET_CHICKEN_K:1),st=PET_PAIR[s]||[],lbl={atk:'ATK',hp:'HP',def:'DEF',acc:'accuracy',eva:'evasion'};
+  const gives=st.map(k=>'+'+(Math.round(PET_STAT_S[k]*g*10)/10)+(PET_FLAT[k]?(k==='eva'?'% ':' '):'% ')+lbl[k]).join(', ');
+  const F=PET_FIGHT[s],pc=PET_ATK_PCT[s===0?0:c]*F.f*(P.cls===4?PET_SUMMONER_K:1);
+  const how=F.kind==='spark'?'weak sparks and heals you '+F.heal[c]+'% HP every '+F.hiv+' s when hurt':{peck:'weak pecks',fire:'fire breath that also scorches 2 nearby enemies',burn:'hits that also burn',claw:'fast claw strikes',bite:'fast bites'}[F.kind];
+  return ' Gives you '+gives+'. It attacks for about '+(Math.round(pc*10)/10)+'% of your ATK every '+F.iv+' s ('+how+').';
+}
+
 /* ---------- summon: ONE pet follows beside you (any pet, common or special). Summoning another replaces it. Summoning does not use the pet up. ---------- */
 function petValidate(){if(P.pet&&!(petsObj()[P.pet]>0)){P.pet=null;P.pf=null}}
 function petLoad(k){return typeof k==='string'&&petsObj()[k]>0?k:null}
 function petSummon(k){
   if(!(petsObj()[k]>0))return;const p=petParse(k),old=P.pet;
-  P.pet=k;P.pf=null;
+  P.pet=k;P.pf=null;P.hp=Math.min(P.hp,maxHp()); /* the pet's HP bonus changes max HP */
   say((old&&old!==k?'You swapped your pet. ':'')+(p.s===0?'Chicken':PET_SP[p.s].n+' (Class '+PET_CLS[p.c]+')')+' is now by your side.',petCol(p.s,p.c),5000);
   bagLog('Summoned '+petName(p.s,p.c).replace(/ \[Class (.)\]/,' (Class $1)'),petCol(p.s,p.c));save();netInfo(true);renderBag();
 }
-function petDismiss(){if(!P.pet)return;const p=petParse(P.pet);P.pet=null;P.pf=null;say('Pet dismissed.','#8d9aa2',3000);bagLog('Dismissed pet','#8d9aa2');save();netInfo(true);renderBag()}
+function petDismiss(){if(!P.pet)return;const p=petParse(P.pet);P.pet=null;P.pf=null;P.hp=Math.min(P.hp,maxHp());say('Pet dismissed.','#8d9aa2',3000);bagLog('Dismissed pet','#8d9aa2');save();netInfo(true);renderBag()}
 /* sprite: the pet's icon on a canvas (class-coloured glow behind special pets). Used by the 2D view directly and by the 3D view as a billboard sprite. */
 const PET_SPR={};
 function petSprite(k){
@@ -201,7 +250,7 @@ function petPreview(V,t){
   petValidate();
   const rig=petRigFor(V,V.sc,P.pet);
   if(!rig)return false;
-  rig.root.position.set(26,0,12);rig.root.rotation.y=-.6+Math.sin(t*.5)*.08;rig.root.scale.setScalar(1.25);
+  rig.root.position.set(26,0,12);rig.root.rotation.y=-.6+Math.sin(t*.5)*.08;rig.root.scale.setScalar(1.25*Math.min(1,90/rig.h));   /* v5_223 big classes shrink to fit the preview */
   rig.anim(t,0);return true;
 }
 function petRender3(){
@@ -210,12 +259,14 @@ function petRender3(){
   const rig=petRigFor(T,T.sc,P.pet),f=P.pf;
   if(rig){
     if(T.petSp)T.petSp.visible=false;
-    const want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):Math.PI/2-P.face;
+    const fighting=!inTown()&&P.dead<=0&&(combatT>0||time-petFightAt<4);
+    let want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):Math.PI/2-P.face;
+    if(fighting&&petTgt&&!petTgt.dead&&time-petFightAt<2.5)want=Math.atan2(petTgt.x-f.x,petTgt.y-f.y);   /* v5_222 turn to face the enemy it is attacking */
     if(f.yaw===undefined)f.yaw=want;
-    let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*7);
+    let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*(fighting?10:7));
     rig.root.visible=true;rig.root.scale.setScalar(PET_WORLD_K);
     rig.root.position.set(f.x-C,gh3(f.x,f.y),f.y-C);rig.root.rotation.y=f.yaw;
-    rig.anim(time,f.mv);return;
+    rig.anim(time,f.mv,fighting,petFightAt,petAtkN);return;   /* v5_221 fighting = in combat or the pet attacked in the last 4 s: the dragon flies, otherwise it lands. v5_222 every pet plays its fight animation */   /* v5_221 fighting = in combat or the pet attacked in the last 4 s: the dragon flies, otherwise it lands */
   }
   /* fallback (pets3d.js missing or the model failed): billboard sprite of the icon */
   if(T.petKey!==P.pet||!T.petSp){
@@ -263,7 +314,9 @@ function peerPets3(list){
     let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*7);
     rig.root.visible=true;rig.root.scale.setScalar(PET_WORLD_K);
     rig.root.position.set(f.x-C,gh3(f.x,f.y),f.y-C);rig.root.rotation.y=f.yaw;
-    rig.anim(time,f.mv);
+    if(q.swing>0||q.hurt>0)q.fightUntil=time+5;   /* v5_221 a peer is fighting while it swings / gets hurt (+5 s): its dragon flies */
+    if(q.swing>.1&&time-(q.petAtkAt||-99)>1.2){q.petAtkAt=time;q.petAtkN=(q.petAtkN|0)+1}   /* v5_222 their pet strikes along with each of their swings (at most every 1.2 s) */
+    rig.anim(time,f.mv,time<(q.fightUntil||0),q.petAtkAt,q.petAtkN);
   }
   for(const [q,h] of map)if(!seen.has(q)){
     if(h.pr){T.sc.remove(h.pr.root);try{h.pr.dispose()}catch(e){}h.pr=null}

@@ -22,6 +22,18 @@ function forgePop(ok,nm,lv){ /* big SUCCESS / FAILED popup over the forge window
 }
 /* v5_131 Forge window = bag layout: the avatar with the equipped gear around it; tap a piece and its stats + Forge button show on the right. */
 let fgSel='wpn';
+/* v5_227 ARMOR FIRE TIER = the LOWEST forge tier of ALL gear slots (weapon, secondary weapon, gloves, bracelet, ring, belt, earrings, necklace, robe, legguards, boots).
+   tier = floor(forge level / 10), 1..10 (tier 10 = rainbow fire). An empty slot (nothing equipped) counts as tier 0, so every slot must hold a piece at that level.
+   The starting weapon / robe count with their core forge level (wlv / alv). src = P (yours) or a peer (its equipment comes from the network, q.eq). */
+function armorFireTier(src){
+  let m=10;
+  for(const s of GEAR){
+    let lv=0;
+    if(s.core)lv=s.core==='wlv'?src.wlv:src.alv;
+    else{const o=src===P?P.gear[s.k]:(src.eq&&src.eq[s.k]);if(o&&o.g>0)lv=o.lv}
+    lv|=0;m=Math.min(m,lv>=10?Math.min(10,Math.floor(lv/10)):0);
+    if(!m)return 0}
+  return m}
 const FG_L=['wpn','wpn2','glove','brace','ring','belt'],FG_R=['ear','neck','robe','legs','boot'];
 function fgTarget(k){ /* what the forge levels for this slot, or null when the slot is empty */
   const q=GEAR.find(z=>z.k===k),o=P.gear[k];if(!q)return null;

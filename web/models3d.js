@@ -87,6 +87,7 @@ const packLook=l=>(((l.p&63)|((l.h&15)<<6)|((l.o&7)<<10)|((l.w&15)<<13)|((l.a&7)
 
 /* ------------------------------------------------------------------ helpers */
 let LITE=false;
+let FLT=null;
 function init(THREE,lite){T=THREE;LITE=!!lite}
 function geo(k){
   if(GC[k])return GC[k];
@@ -543,7 +544,16 @@ function makePlayer(skinIdx){
   R.m.oglow=softMat('ring','#cfe8ff',.3);   /* ring glow on the ground around the character */
   R.m.oband=softMat('band','#cfe8ff',.3);   /* thin ring of light that rises up the body and fades out */
   R.ogl=A(body,'fplane',R.m.oglow,[0,1.9,0],[44,1,44]);R.ogl.visible=false;R.ogl.renderOrder=2;
-  R.ogb=A(body,'tube',R.m.oband,[0,2,0],[26,7,26]);R.ogb.visible=false;R.ogb.renderOrder=2;
+  R.ogb=A(body,'tube',R.m.oband,[0,2,0],[26,7,26]);R.ogb.visible=false;R.ogb.renderOrder=2;   /* v5_225 the rising band is no longer shown (fire replaces it) */
+  /* v5_225 ARMOR FORGE FIRE: the armor glow is now a ring of flame tongues around the feet (class-tier colour, tall tongues + lighter hot cores) that flicker and sway; more and taller flames every forge tier.
+     White teardrop sprite texture, tinted by the tier colour (same idea as the pet fire in pets3d.js). Built once, shown by setGear, animated in animPlayer. */
+  {const flameTex=()=>{if(FLT)return FLT;const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');g.globalCompositeOperation='lighter';
+      const blob=(cx,cy,rx,ry,a)=>{g.save();g.translate(cx,cy);g.scale(rx,ry);const q=g.createRadialGradient(0,0,0,0,0,1);q.addColorStop(0,'rgba(255,255,255,'+a+')');q.addColorStop(.35,'rgba(255,255,255,'+a*.6+')');q.addColorStop(.7,'rgba(255,255,255,'+a*.18+')');q.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=q;g.fillRect(-1,-1,2,2);g.restore()};
+      blob(128,172,92,70,.9);blob(128,128,64,88,.8);blob(128,86,38,70,.65);blob(128,46,18,44,.5);return FLT=new T.CanvasTexture(c)};
+    const mk=()=>new T.SpriteMaterial({map:flameTex(),transparent:true,depthWrite:false,blending:T.AdditiveBlending});
+    R.ofire=G(body,[0,1.5,0]);R.ofire.visible=false;R.ofl=[];
+    const NO=LITE?10:18,NC=LITE?3:6;
+    for(let i=0;i<NO+NC;i++){const core=i>=NO,fm=mk(),q=new T.Sprite(fm);q.center.set(.5,.1);q.renderOrder=3;R.ofire.add(q);R.ofl.push({q:q,m:fm,core:core,i:core?i-NO:i,n:core?NC:NO,ph:i*1.7+.3,k:core?.7:(.62+.38*(((i*37)%10)/10))})}}
   R.wg=[[],[],[],[],[]];
   const WG=(c,par,p,s)=>{const q=A(par,'sph',R.m.glow2,p,s);q.visible=false;q.userData.b=s.slice();R.wg[c].push(q);return q};
   WG(0,sw,[0,20,0],[9,34,6]).userData.sword=1;           /* Cultivator blade */
@@ -601,9 +611,9 @@ function setSkin(R,sk){
   {const hk=(fem?.94:1)*HEAD_K;R.head.scale.set(hk/ts,hk,hk/ts)}
   R.lk=l;R.skin=sk;
 }
-function setGear(R,wlv,alv){
-  const k=wlv+','+alv;if(R.gear===k)return;R.gear=k;
-  const gt=forgeTier(wlv),at=forgeTier(alv),gc=gt>0?FORGE_GLOW[gt]:null,ac=at>0?FORGE_GLOW[at]:null,L=30+Math.min(wlv,40)*.35,w=gt>0?1+(gt-1)*.16:1;
+function setGear(R,wlv,alv,ft){
+  const k=wlv+','+alv+','+ft;if(R.gear===k)return;R.gear=k;
+  const gt=forgeTier(wlv),at=ft===undefined?forgeTier(alv):ft|0,gc=gt>0?FORGE_GLOW[gt]:null,ac=at>0?(at>=10?'#ff6aa0':FORGE_GLOW[at]):null,L=30+Math.min(wlv,40)*.35,w=gt>0?1+(gt-1)*.16:1;
   R.gt=gt;R.at=at;
   /* primary weapon: blade tint + inner glow + outer glow, colour and size by forge tier */
   R.m.steel.color.set(gc?lc('#cfe8ff',gc,.4):'#cfe8ff');R.m.steel.emissive.set(tn(gc||'#cfe8ff',.35));R.m.glow.color.set(gc||'#cfe8ff');
@@ -614,8 +624,9 @@ function setGear(R,wlv,alv){
   R.wg.forEach((arr,c)=>arr.forEach(q=>{q.visible=gt>0&&cl===c;if(!q.visible)return;
     if(q.userData.sword){q.scale.set(9*w,L+8+gt,6*w);q.position.y=5+L/2}else{const b=q.userData.b;q.scale.set(b[0]*w,b[1]*w,b[2]*w)}}));
   /* outfit: glow shell around the body, emissive trim and sash, colour and size by forge tier */
-  R.ogl.visible=at>0;R.ogb.visible=at>0;
-  if(at>0){const rad=11+.5*at,S=2*rad/.6,bd=2*(12+.4*at);R.m.oglow.color.set(ac);R.m.oband.color.set(ac);R.ogl.scale.set(S,1,S);R.ogb.scale.set(bd,7,bd)}
+  R.ogl.visible=at>0;R.ogb.visible=false;R.ofire.visible=at>0;
+  if(at>0){const FE=at+2,rad=11+.5*FE,S=2*rad/.6,   /* v5_228 FE = 'fire size step': every tier looks like the tier two above it (tier 1 = the old tier 3 ...) so low tiers are clearly visible */
+    bd=2*(12+.4*at);R.m.oglow.color.set(ac);R.m.oband.color.set(ac);R.ogl.scale.set(S,1,S);R.ogb.scale.set(bd,7,bd);for(const f of R.ofl)f.m.color.set(f.core?lc(ac,'#ffffff',.6):ac);R.frad=rad;R.fh=24+FE*4.5;R.fn=FE}
   R.m.trim.emissive.set(ac?tn(ac,.18+.02*at):'#3a2a08');R.m.sash.emissive.set(ac?tn(ac,.12+.015*at):'#000000');
   R.paul.visible=alv>=5&&!cl;R.cape.visible=alv>=20&&!cl;R.halo.visible=alv>=50;
   R.m.nbEdge.color.set(gc||'#a070ff');
@@ -627,7 +638,7 @@ function setGear(R,wlv,alv){
 function animPlayer(R,P,time,ri){
   const dt=clamp(time-R.lt,0,.05);R.lt=time;
   const mv=P.mvAmt,ph=P.anim*.9,st=Math.sin(ph);
-  setGear(R,P.wlv|0,P.alv|0);
+  setGear(R,P.wlv|0,P.alv|0,P.ft);   /* v5_227 P.ft = the armor fire tier computed from ALL gear slots (see armorFireTier in the game code) */
   R.body.position.y=Math.abs(Math.cos(ph))*1.7*mv+Math.sin(time*2.2)*.5*(1-mv);
   R.torso.rotation.x=.07*mv;
   const cl=R.cls|0,lk=cl===2?.72:cl===1?1.1:1;
@@ -687,8 +698,20 @@ function animPlayer(R,P,time,ri){
   R.m.glow.opacity=.28+.1*Math.sin(time*5)+(sl?.3:0);
   {const gt=R.gt|0,at=R.at|0; /* forge glow pulse: faster and stronger every tier */
    R.m.glow2.opacity=gt?(.22+.02*gt+.06*Math.sin(time*(3+gt*.6))+(sl?.12:0)):0;
-   R.m.oglow.opacity=at?(.34+.03*at+.10*Math.sin(time*(2+at*.5))):0;
-   if(at){const f=(time*(.28+.02*at))%1;R.ogb.position.y=3+f*52;R.m.oband.opacity=(.18+.015*at)*Math.sin(f*3.1416)}}
+   R.m.oglow.opacity=at?(.2+.02*at+.06*Math.sin(time*(2+at*.5))):0;   /* the ground glow stays as a dimmer base under the fire */
+   if(at){   /* v5_225 armor fire: 6 + 1.2 x tier tongues (max all), tier 3+ adds hot cores; each flickers (two sine layers) and sways, the ring turns slowly */
+     for(const f of R.ofl){f.m.opacity=f.core?.4:.42+.03*(at+2)+(at<=2?.1:0)}   /* v5_228 tiers 1-2 a little brighter */
+     if(at>=10){   /* v5_227 tier 10 = RAINBOW: every flame has its own hue running around the colour wheel, the ground glow and the trim / sash glow follow */
+       const h=(time*.2)%1;R.ofl.forEach((f,i)=>f.m.color.setHSL((h+i*.043)%1,.95,f.core?.82:.58));
+       R.m.oglow.color.setHSL(h,.9,.6);R.m.trim.emissive.setHSL(h,.8,.2);R.m.sash.emissive.setHSL((h+.5)%1,.8,.16)}
+     const rad=R.frad||14,H=R.fh||30,FE=at+2,no=Math.min(R.ofl.length-(LITE?3:6),6+Math.round(FE*1.2)),nc=LITE?3:Math.min(6,FE-1);
+     let oi=0,ci=0;
+     for(const f of R.ofl){
+       if(f.core?ci>=nc:oi>=no){f.q.visible=false;continue}
+       const idx=f.core?ci++:oi++,n=f.core?nc:no;f.q.visible=true;
+       const a=idx/n*6.2832+time*(f.core?-.35:.35),r=f.core?rad*.45:rad,fl=1+Math.sin(time*9+f.ph)*.17+Math.sin(time*17+f.ph*3)*.09;
+       f.q.position.set(Math.cos(a)*r+Math.sin(time*2.3+f.ph)*(f.core?1:1.8),0,Math.sin(a)*r);
+       f.q.scale.set((f.core?5.5:8+FE*.35)*(1+(fl-1)*.5),H*f.k*fl*(f.core?1:1),1)}}}
   /* v5_109 casting pose: both arms rise over the head, body leans back and glows while a skill is being cast */
   if(P.cast>0){const cm=P.castMax||.6,k=clamp(1-P.cast/cm,0,1),up=Math.sin(Math.min(1,k*3.2)*PI/2),pu=1-clamp((k-.8)/.2,0,1)*.5;
     R.armR.rotation.x=-2.55*up-.12*Math.sin(time*20)*up;R.armL.rotation.x=-2.55*up+.12*Math.sin(time*20)*up;

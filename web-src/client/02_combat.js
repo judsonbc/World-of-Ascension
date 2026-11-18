@@ -25,9 +25,9 @@ function gainExp(n){
   }
   if(gained)lvBanner(P.lvl,gained,bt);
 }
-function hitMonster(m,dmg,crit){
+function hitMonster(m,dmg,crit,sure){ /* sure (v5_219): skip the accuracy roll, used for pet burn ticks */
   if(m.dead||m.pend||pvpOnly()||inTown())return 0; /* v5_90 no attacking inside the safe hub */
-  if(rnd()>hitChance(m)){ /* missed: no damage, but the monster still notices you */
+  if(!sure&&rnd()>hitChance(m)){ /* missed: no damage, but the monster still notices you */
     if(m.state==='idle'&&!inTown())m.state='chase';
     pop(m.x,m.y-m.r-8,'MISS','#9aa7ad',12);SFX('miss');combatPing();return 0;
   }

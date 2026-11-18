@@ -327,7 +327,7 @@ function paintWd3(){
   if(rig.skin!==w)AL3D.setSkin(rig,w); /* switching class tab / changing an option re-dresses the model */
   if(WDV.drag)WDV.vel*=.7;else{WDV.yaw+=WDV.vel;WDV.vel*=.94;if(Math.abs(WDV.vel)<.0004)WDV.vel=0}
   rig.root.rotation.y=WDV.yaw;
-  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
+  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,ft:armorFireTier(P),hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
   r.render(sc,cam);return true;
 }
 function wdPreview(){
@@ -431,7 +431,7 @@ function paintBag3(){
   if(rig.skin!==SKW())AL3D.setSkin(rig,SKW());
   if(BAGV.drag)BAGV.vel*=.7;else{BAGV.yaw+=BAGV.vel;BAGV.vel*=.94;if(Math.abs(BAGV.vel)<.0004)BAGV.vel=0}
   rig.root.rotation.y=BAGV.yaw;{const hp=petPreview(BAGV,t);rig.root.position.x=hp?-16:0;BAGV.sh.position.x=rig.root.position.x}
-  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
+  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,ft:armorFireTier(P),hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
   r.render(sc,cam);return true;
 }
 function bagPreview(){
@@ -476,7 +476,7 @@ function paintFg3(){
   if(rig.skin!==SKW())AL3D.setSkin(rig,SKW());
   if(FGV.drag)FGV.vel*=.7;else{FGV.yaw+=FGV.vel;FGV.vel*=.94;if(Math.abs(FGV.vel)<.0004)FGV.vel=0}
   rig.root.rotation.y=FGV.yaw;{const hp=petPreview(FGV,t);rig.root.position.x=hp?-16:0;FGV.sh.position.x=rig.root.position.x}
-  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
+  AL3D.animPlayer(rig,{mvAmt:0,anim:0,swing:0,wlv:P.wlv,alv:P.alv,ft:armorFireTier(P),hurt:0,bfT:0,sh:0,dead:0},t,realmIdx());
   r.render(sc,cam);return true;
 }
 function fgPreview(){
