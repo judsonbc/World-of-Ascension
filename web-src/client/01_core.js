@@ -104,10 +104,12 @@ const QI_COST_MUL=.891; /* v5_188 another -10% (.99 x .9) */
 /* history: v5_140 final Qi cost reduced by 10% (x.9); v5_162 then +10% on every skill of every class (x.9 x1.1 = x.99) */
 const skCostAt=(s,l)=>Math.max(1,Math.round((s.cost+Math.round(l*QI_PLVL_ADD))*QI_COST_MUL));
 const skCost=s=>skCostAt(s,typeof P!=='undefined'&&P&&P.lvl?P.lvl:1);
-/* v5_188 Qi-REGEN skills (they give Qi back: soulburst, soulheal, mend + signature sg_c25 / sg_s25 / sg_s300) are paid with HP instead of Qi.
+/* v5_229 COST RULE: a skill that heals HP (with or without giving Qi back) is paid with Qi; a skill that gives Qi back and does NOT heal HP is paid with HP (QI_REGEN_T). Today that is only soulburst (Soul Burst line).
+   soulheal, mend, sg_c25, sg_s25 and sg_s300 also heal HP, so they went back to a Qi cost. Add a type to QI_REGEN_T only if it restores Qi and never heals HP.
+   v5_188 Qi-REGEN skills were paid with HP instead of Qi (history: soulburst, soulheal, mend + signature sg_c25 / sg_s25 / sg_s300).
    v5_188e HP price = a FIXED % of your MAX HP per skill (it does not change as you level). The % is the skill's Qi cost as a share of the class's max Qi, both taken at the skill's own unlock level (skHpPct, cached in s._hp).
    A cast needs remaining HP >= QI_REGEN_SAFE (2) x the HP price, otherwise it does not cast. */
-const QI_REGEN_T={soulburst:1,soulheal:1,mend:1,sg_c25:1,sg_s25:1,sg_s300:1};
+const QI_REGEN_T={soulburst:1};
 const QI_REGEN_SAFE=2;
 const skHp=s=>!!QI_REGEN_T[s.t];
 const skHpPct=s=>{if(s._hp==null){const l=Math.max(1,s.lv|0),c=s.c||0;s._hp=skCostAt(s,l)/Math.round((60+l*4)*(CLB[c].qi||1)*QI_MUL)}return s._hp};
@@ -429,7 +431,7 @@ P.hp=maxHp();
 
 let auto=false,started=false,time=0;
 /* ---------- multiplayer state (see the multiplayer client section further down) ---------- */
-const NET={ws:null,on:false,joined:false,id:0,name:'Wanderer',peers:new Map(),online:0,counts:[],pendingEnter:-1,sendT:0,infoT:0,infoKey:'',fails:0,giveUp:false,olKey:''};
+const NET={ws:null,on:false,joined:false,id:0,name:'Wanderer',peers:new Map(),online:0,counts:[],pendingEnter:-1,sendT:0,infoT:0,infoKey:'',fails:0,giveUp:false,rt:0,lastMsg:0,olKey:''};
 let MP=false; /* true while the shared server world is loaded; false = classic solo simulation */
 /* character LOOK: one integer (see AL3D.look in models3d.js) = palette + hair + outfit + headwear + aura.
    It is saved with the character (browser + account) and in its own backup key, so it survives logout, and it is
@@ -657,8 +659,10 @@ function spawnBossWave(){
   }
   announceBosses(out);
 }
+/* v5_231 worldGen counts every buildWorld(): the 3D scene is rebuilt whenever it changes (not only when the world number changes), so what is drawn always matches the solids you collide with */
+let worldGen=0;
 function buildWorld(i,spawn){
-  P.sel=null;
+  worldGen++;P.sel=null;
   setWorld(i);
   mons.length=0;ores.length=0;items.length=0;projs.length=0;fx.length=0;texts.length=0;deco.length=0;parts.length=0;beams.length=0;delayed.length=0;
   const R2=rngSeed(20261101+i*7919);

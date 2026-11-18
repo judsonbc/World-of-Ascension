@@ -106,10 +106,12 @@ const QI_COST_MUL=.891; /* v5_188 another -10% (.99 x .9) */
 /* history: v5_140 final Qi cost reduced by 10% (x.9); v5_162 then +10% on every skill of every class (x.9 x1.1 = x.99) */
 const skCostAt=(s,l)=>Math.max(1,Math.round((s.cost+Math.round(l*QI_PLVL_ADD))*QI_COST_MUL));
 const skCost=s=>skCostAt(s,typeof P!=='undefined'&&P&&P.lvl?P.lvl:1);
-/* v5_188 Qi-REGEN skills (they give Qi back: soulburst, soulheal, mend + signature sg_c25 / sg_s25 / sg_s300) are paid with HP instead of Qi.
+/* v5_229 COST RULE: a skill that heals HP (with or without giving Qi back) is paid with Qi; a skill that gives Qi back and does NOT heal HP is paid with HP (QI_REGEN_T). Today that is only soulburst (Soul Burst line).
+   soulheal, mend, sg_c25, sg_s25 and sg_s300 also heal HP, so they went back to a Qi cost. Add a type to QI_REGEN_T only if it restores Qi and never heals HP.
+   v5_188 Qi-REGEN skills were paid with HP instead of Qi (history: soulburst, soulheal, mend + signature sg_c25 / sg_s25 / sg_s300).
    v5_188e HP price = a FIXED % of your MAX HP per skill (it does not change as you level). The % is the skill's Qi cost as a share of the class's max Qi, both taken at the skill's own unlock level (skHpPct, cached in s._hp).
    A cast needs remaining HP >= QI_REGEN_SAFE (2) x the HP price, otherwise it does not cast. */
-const QI_REGEN_T={soulburst:1,soulheal:1,mend:1,sg_c25:1,sg_s25:1,sg_s300:1};
+const QI_REGEN_T={soulburst:1};
 const QI_REGEN_SAFE=2;
 const skHp=s=>!!QI_REGEN_T[s.t];
 const skHpPct=s=>{if(s._hp==null){const l=Math.max(1,s.lv|0),c=s.c||0;s._hp=skCostAt(s,l)/Math.round((60+l*4)*(CLB[c].qi||1)*QI_MUL)}return s._hp};
@@ -431,7 +433,7 @@ P.hp=maxHp();
 
 let auto=false,started=false,time=0;
 /* ---------- multiplayer state (see the multiplayer client section further down) ---------- */
-const NET={ws:null,on:false,joined:false,id:0,name:'Wanderer',peers:new Map(),online:0,counts:[],pendingEnter:-1,sendT:0,infoT:0,infoKey:'',fails:0,giveUp:false,olKey:''};
+const NET={ws:null,on:false,joined:false,id:0,name:'Wanderer',peers:new Map(),online:0,counts:[],pendingEnter:-1,sendT:0,infoT:0,infoKey:'',fails:0,giveUp:false,rt:0,lastMsg:0,olKey:''};
 let MP=false; /* true while the shared server world is loaded; false = classic solo simulation */
 /* character LOOK: one integer (see AL3D.look in models3d.js) = palette + hair + outfit + headwear + aura.
    It is saved with the character (browser + account) and in its own backup key, so it survives logout, and it is
@@ -659,8 +661,10 @@ function spawnBossWave(){
   }
   announceBosses(out);
 }
+/* v5_231 worldGen counts every buildWorld(): the 3D scene is rebuilt whenever it changes (not only when the world number changes), so what is drawn always matches the solids you collide with */
+let worldGen=0;
 function buildWorld(i,spawn){
-  P.sel=null;
+  worldGen++;P.sel=null;
   setWorld(i);
   mons.length=0;ores.length=0;items.length=0;projs.length=0;fx.length=0;texts.length=0;deco.length=0;parts.length=0;beams.length=0;delayed.length=0;
   const R2=rngSeed(20261101+i*7919);
@@ -908,7 +912,7 @@ function dropGear(m){
 const fmtSt=(k,v)=>SPECIAL[k]?Math.round(v*100)/100:Math.round(v*10)/10;
 function statArr(st,lv,q){const a=[];for(const k of Object.keys(st)){const f=q&&q.st[k];if(f&&FLAT_STATS[k]){a.push('+'+fmtSt(k,st[k])+STAT_LBL[k]);const p=slotFlatPct(q,k,lv)*100;if(p>0)a.push('+'+fg2(p)+'% '+STAT_LBL[k].trim()+' (forge)')}else a.push('+'+fmtSt(k,st[k]+(f?forgeEff(lv)*f[1]:0))+STAT_LBL[k])}return a}
 function statTxt(st,lv,q){return statArr(st,lv,q).join(', ')}
-const BAG_CAP=50,WH_CAP=100;let bagUid=1; /* bag holds 50 slots; the hub Warehouse holds 100 spare gear pieces */
+const BAG_CAP=100,WH_CAP=100;let bagUid=1; /* v5_232 bag holds 100 slots (was 50); the hub Warehouse holds 100 spare gear pieces */
 const bagArr=()=>P.bag||(P.bag=[]);
 const whArr=()=>P.wh||(P.wh=[]);
 const oreOf=it=>(2+it.g*2)*(1+it.r);
@@ -944,7 +948,7 @@ function aimT(){const t=P.target&&!P.target.dead?P.target:null;if(t)return t;con
    by hand and in auto-hunt. Before, Bash / Hammer reached 170-200 units and Earthquake / War Cry / Seismic Wave / the buffs triggered on enemies much farther away. */
 const IG_PAD=40,IG_DMG_T={bash:1,hammer:1,quake:1,roar:1,counter:1,shockwave:1},IG_AUTO_T={bash:1,hammer:1,quake:1,roar:1,counter:1,shockwave:1,bulwark:1,ironskin:1};
 const CAST_T=.3,CAST_T_LONG=.5, /* v5_155 cast pose halved (was .6 / 1.0) */ CAST_NOROOT={charge:1,shadowstep:1,rush:1,gale:1,leap:1},CAST_LONG={meteor:1,spiritbomb:1,rain:1,quake:1,hammer:1,wail:1,wolves:1,guardian:1,roar:1,eagle:1,bulwark:1,volley:1};
-const BOSS_LEASH=4500,BOSS_LOSE=3600,MON_LEASH=800,MON_LOSE=1000; /* v5_157 leash enlarged (keep equal to monLeash / monLose / bossLeash / bossLose in game.go): was boss 3000 / 2400, monster 520 / 650 */
+const BOSS_LEASH=4500,BOSS_LOSE=1500,MON_LEASH=800,MON_LOSE=1000; /* v5_157 leash enlarged (keep equal to monLeash / monLose / bossLeash / bossLose in game.go): was boss 3000 / 2400, monster 520 / 650; boss lose later set to 1500 */
 const MELEE_SKILL_RANGE=200,MELEE_RANGED_T={pierce:1,fan:1,meteor:1,chain:1,drain:1,kunai:1,venom:1};
 const AIM_REACH={charge:400,shadowstep:420,rush:420,shockwave:420,execute:200,siphon:170,bash:170,hammer:200}; /* v5_122 reach used to pick a target for a skill cast with no target */
 /* v5_122 manual casts never need a target in range: nothing in reach -> the skill still fires (toward where you face; dashes move you forward) and costs Qi / starts its cooldown.
@@ -2459,17 +2463,35 @@ function petSprite(k){
   return e;
 }
 let petT=0;
-/* follower position: eases toward a spot to the right of you (screen-right in 3D, from the camera yaw), snaps if you teleport. Returns the hop height. */
-function petStep(is3){
-  petValidate();if(!P.pet)return 0;
-  const now=performance.now(),dt=Math.min(.1,petT?(now-petT)/1000:.016);petT=now;
-  const yaw=is3&&typeof camView!=='undefined'?camView.yaw:0,rx=Math.cos(yaw),ry=-Math.sin(yaw);
-  const tx=P.x+rx*54,ty=P.y+ry*54;
-  if(!P.pf||Math.hypot(tx-P.pf.x,ty-P.pf.y)>700)P.pf={x:tx,y:ty,mv:0};
-  const f=P.pf,k=1-Math.exp(-7*dt),ox=f.x,oy=f.y;f.x+=(tx-f.x)*k;f.y+=(ty-f.y)*k;
+/* v5_230 PET ROAMING: the pet no longer sits on a fixed spot beside you. It wanders: it picks a random spot between PET_ROAM_MIN and PET_ROAM_R (the target distance)
+   from you, walks there at PET_WALK, pauses PET_PAUSE seconds, then picks the next one. When you move away and it is further than PET_ROAM_R it picks a new spot near you
+   and catches up faster (up to PET_CATCH_MAX). Teleport (more than PET_SNAP away) snaps it next to you. Used for your pet and for other players' pets (peerPetStep).
+   Tune PET_ROAM_R (how far it may wander), PET_ROAM_MIN, PET_WALK, PET_PAUSE, PET_CATCH_MAX. Returns the hop height. */
+const PET_ROAM_R=170,PET_ROAM_MIN=45,PET_WALK=85,PET_CATCH_MAX=420,PET_PAUSE=[1.2,3.2],PET_SNAP=700;
+function petRoamStep(f,px,py,dt){
+  const ox=f.x,oy=f.y,d=Math.hypot(f.x-px,f.y-py);
+  const pick=()=>{const a=Math.random()*6.2832,r=PET_ROAM_MIN+Math.random()*(PET_ROAM_R-PET_ROAM_MIN);f.wx=px+Math.cos(a)*r;f.wy=py+Math.sin(a)*r;f.wait=0};
+  if(f.wx===undefined||Math.hypot(f.wx-px,f.wy-py)>PET_ROAM_R)pick();   /* no spot yet, or you walked off and the spot is now too far from you */
+  if(f.wait>0&&d>PET_ROAM_R*1.15)f.wait=0;                              /* you left it behind: stop resting and follow */
+  let want=0;
+  if(f.wait>0){f.wait-=dt;if(f.wait<=0)pick()}
+  else{
+    const dx=f.wx-f.x,dy=f.wy-f.y,dd=Math.hypot(dx,dy);
+    if(dd<10){f.wait=PET_PAUSE[0]+Math.random()*(PET_PAUSE[1]-PET_PAUSE[0])}   /* arrived: rest a moment */
+    else want=d>PET_ROAM_R?Math.min(PET_CATCH_MAX,PET_WALK+(d-PET_ROAM_R)*8):PET_WALK;
+    f.spd=f.spd||0;f.spd+=(want-f.spd)*Math.min(1,dt*6);
+    const mvd=Math.min(f.spd*dt,dd);if(dd>.001){f.x+=dx/dd*mvd;f.y+=dy/dd*mvd}
+  }
+  if(want===0)f.spd=(f.spd||0)*Math.max(0,1-dt*8);   /* resting: slow to a stop */
   f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sp=Math.hypot(f.x-ox,f.y-oy)/Math.max(dt,.001);f.mv+=((sp>40?1:0)-f.mv)*Math.min(1,dt*10);
   f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
   return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+}
+function petStep(is3){
+  petValidate();if(!P.pet)return 0;
+  const now=performance.now(),dt=Math.min(.1,petT?(now-petT)/1000:.016);petT=now;
+  if(!P.pf||Math.hypot(P.pf.x-P.x,P.pf.y-P.y)>PET_SNAP)P.pf={x:P.x+54,y:P.y,mv:0};
+  return petRoamStep(P.pf,P.x,P.y,dt);
 }
 /* ---- 3D pet models (web/pets3d.js). Each view (world, bag, forge) owns its own rig; the model is rebuilt only when the summoned pet changes. ---- */
 const PET_WORLD_K=1.15;
@@ -2524,17 +2546,12 @@ function petDraw2D(){
 }
 
 /* ---------- OTHER PLAYERS' PETS (v5_201): each peer reports its summoned pet key (q.pet, from the server 'pt' field); it is drawn following that player. ---------- */
-/* follower position for a peer (same easing / offset as your own pet, see petStep) */
+/* follower position for a peer (same roaming as your own pet, see petRoamStep) */
 function peerPetStep(q,is3){
   if(!q.pet)return 0;
   const now=performance.now(),dt=Math.min(.1,q.pfT?(now-q.pfT)/1000:.016);q.pfT=now;
-  const yaw=is3&&typeof camView!=='undefined'?camView.yaw:0,rx=Math.cos(yaw),ry=-Math.sin(yaw);
-  const tx=q.x+rx*54,ty=q.y+ry*54;
-  if(!q.pf||Math.hypot(tx-q.pf.x,ty-q.pf.y)>700)q.pf={x:tx,y:ty,mv:0};
-  const f=q.pf,k=1-Math.exp(-7*dt),ox=f.x,oy=f.y;f.x+=(tx-f.x)*k;f.y+=(ty-f.y)*k;
-  f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sp=Math.hypot(f.x-ox,f.y-oy)/Math.max(dt,.001);f.mv+=((sp>40?1:0)-f.mv)*Math.min(1,dt*10);
-  f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
-  return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+  if(!q.pf||Math.hypot(q.pf.x-q.x,q.pf.y-q.y)>PET_SNAP)q.pf={x:q.x+54,y:q.y,mv:0};
+  return petRoamStep(q.pf,q.x,q.y,dt);
 }
 /* 3D: list = the peers drawn this frame (rpl). Pets of peers that left, were dismissed or are out of range are removed. */
 function peerPets3(list){
@@ -3402,7 +3419,8 @@ function updateMonsters(dt){
     for(let i=mons.length-1;i>=0;i--){
       const m=mons[i];if(!m.boss)continue;
       if(m.dead){if((m.dieT||0)<=0)mons.splice(i,1);continue}
-      if((m.life-=dt)<=0){if(P.target===m)P.target=null;say(m.name+' (Lv '+m.lvl+') has vanished.','#8d9aa2');mons.splice(i,1)}
+      if(m.state!=='chase')m.life-=dt; /* vanish timer is paused while the boss is in attack (chase) mode */
+      if(m.life<=0){if(P.target===m)P.target=null;say(m.name+' (Lv '+m.lvl+') has vanished.','#8d9aa2');mons.splice(i,1)}
     }
   }
   for(const m of mons){
@@ -4098,6 +4116,9 @@ function mkH(i){const [t,a,sc]=WMAP[tIx(i)%12],ph=tIx(i)*1.37;
     const bx=x*.0007+ph*2.1,bz=z*.00077+ph*.8,mx=x*.0023+ph*3.3,mz=z*.0021+ph*1.1;
     h+=75*(Math.sin(bx)*Math.cos(bz*1.2)+.45*Math.sin(bx*2.1+bz*1.7))/1.45+32*(Math.sin(mx*1.1+Math.cos(mz))*Math.cos(mz*.9-Math.sin(mx*.7)));
     const d=Math.hypot(x,z),f=Math.min(1,Math.max(0,(d-TOWN)/220));return h*f*f*(3-2*f)}}
+/* v5_231 World 1 is built at start-up in 01_core, BEFORE WMAP / mkH exist, so its villages were placed without the terrain checks (flat ground only, no houses in the water)
+   and differed from every later rebuild of World 1 (joining a shared world, reconnecting, 'You are here'). Rebuild it once now that the terrain functions exist, so every build of a world is identical. */
+buildWorld(curWorld);
 function init3(){
   const r=new THREE.WebGLRenderer({canvas:$('g3'),antialias:LOW&&PQ.lock?PQ.aa:true,stencil:false,powerPreference:'high-performance'});T3.lv=LOW&&PQ.lock?PQ.lv:PRS.length-1;T3.pr0=Math.min(window.devicePixelRatio||1,2);r.setPixelRatio(prWant());T3.cpr=prWant();
   T3.r=r;T3.sc=new THREE.Scene();T3.sc.matrixAutoUpdate=false;T3.frus=new THREE.Frustum();T3.pm=new THREE.Matrix4();T3.sph=new THREE.Sphere();T3.skyC=new THREE.Color();T3.skyB=new THREE.Color('#8fa6b8');T3.cam=new THREE.PerspectiveCamera(50,1,10,9000);T3.v=new THREE.Vector3();
@@ -4295,7 +4316,7 @@ function render3D(){
     const want=prWant();
     if(T3.w!==VW||T3.h!==VH||T3.cpr!==want){T3.r.setPixelRatio(want);T3.cpr=want;T3.r.setSize(VW,VH,false);T3.cam.aspect=VW/VH;T3.cam.updateProjectionMatrix();T3.w=VW;T3.h=VH;$('g3').style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block'}
     $('g3').style.display='block';
-    if(T3.built!==curWorld){rebuild3();T3.built=curWorld}
+    if(T3.built!==curWorld||T3.gen!==worldGen){rebuild3();T3.built=curWorld;T3.gen=worldGen}
     T3.fr++;const dl=daylight(),gy=gh3(P.x,P.y),tx=P.x-C,tz=P.y-C,z=T3.zoom,sh=shake*8;
     const sky=T3.skyC.copy(T3.fog).lerp(T3.skyB,dl*.35).multiplyScalar(.45+.55*dl);
     T3.sc.background=sky;T3.sc.fog.color.copy(sky);T3.amb.intensity=(.45+.4*dl)*LK;T3.sun.intensity=(.35+.75*dl)*LK;
@@ -4638,25 +4659,44 @@ function netJoin(){
 function setNetStatus(){
   const s=$('netStat');if(!s)return;
   if(NET.on){const on=Math.max(NET.online|0,NET.joined?1:0);s.textContent='Online \u00b7 '+on+' adventurer'+(on===1?'':'s')+' in the world';s.style.color='#5fd3a5'}
-  else{s.textContent=NET.giveUp?'No server found \u00b7 playing solo':'Connecting to server\u2026';s.style.color='#8d9aa2'}
+  else{s.textContent=NET.giveUp?'No server found \u00b7 playing solo':(NET.fails>=3?'Server unreachable \u00b7 playing solo, retrying\u2026':'Connecting to server\u2026');s.style.color='#8d9aa2'}
 }
 function netConnect(){
+  if(NET.rt){clearTimeout(NET.rt);NET.rt=0}
+  if(NET.giveUp)return;
+  if(NET.ws&&NET.ws.readyState<=1)return; /* already connecting / connected */
   if(!/^https?:$/.test(location.protocol)){NET.giveUp=true;setNetStatus();return} /* opened as a file: solo only */
   let ws;
-  try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}catch(e){NET.giveUp=true;setNetStatus();return}
-  NET.ws=ws;
-  ws.onopen=()=>{NET.on=true;NET.fails=0;setNetStatus()};
-  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}try{netMsg(m)}catch(err){console.error(err)}};
+  try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}catch(e){netRetry();return}
+  NET.ws=ws;NET.lastMsg=Date.now();
+  ws.onopen=()=>{NET.on=true;NET.fails=0;NET.lastMsg=Date.now();setNetStatus()};
+  ws.onmessage=e=>{NET.lastMsg=Date.now();let m;try{m=JSON.parse(e.data)}catch(_){return}try{netMsg(m)}catch(err){console.error(err)}};
   ws.onclose=()=>{
+    if(NET.ws!==ws)return; /* an old socket: already handled */
     const was=NET.on;NET.on=false;NET.joined=false;NET.ws=null;
     setParty([]);pinvHide();
     if(MP){MP=false;NET.peers.clear();buildWorld(curWorld);P.target=null;P.pvpT=0;say('Connection lost \u2014 playing solo while reconnecting\u2026','#d9503f')}
-    if(!was&&++NET.fails>=3)NET.giveUp=true;
+    if(!was)NET.fails++;
     setNetStatus();
-    if(!NET.giveUp)setTimeout(netConnect,2500);
+    netRetry();
   };
   ws.onerror=()=>{};
 }
+/* v5_233 never give up: keep retrying with a growing pause (2.5 s, 5 s ... max 15 s) so the game goes back online by itself when the internet / server is back.
+   Also retries at once when the browser reports it is online again or the tab becomes visible. Only a deliberate stop (opened as a file, kicked / logged in elsewhere) sets NET.giveUp. */
+function netRetry(){
+  if(NET.giveUp||NET.rt)return;
+  NET.rt=setTimeout(()=>{NET.rt=0;netConnect()},Math.min(15000,2500*(1+Math.min(NET.fails,5))));
+}
+function netNudge(){if(!NET.giveUp&&!NET.on&&!(NET.ws&&NET.ws.readyState<=1)){NET.fails=0;netConnect()}}
+window.addEventListener('online',netNudge);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)netNudge()});
+/* watchdog: a dead connection (internet lost but the socket never closed) sends nothing back; the server answers our 2 s ping, so 20 s of silence means it is dead */
+setInterval(()=>{
+  const w=NET.ws;if(!w||!NET.joined||Date.now()-(NET.lastMsg||0)<20000)return;
+  try{w.close()}catch(e){}
+  setTimeout(()=>{if(NET.ws===w&&w.onclose)w.onclose()},3000);
+},5000);
 /* network ticks run on a timer, not requestAnimationFrame, so a backgrounded tab keeps reporting its position */
 setInterval(()=>{
   if(!NET.joined)return;
@@ -5827,6 +5867,8 @@ if(AUTH.token)api('/api/me').then(enterAccount).catch(e=>{
 });
 hud();
 try{$('nameIn').value=authGet('al_name')||''}catch(e){}
+/* v5_235 iPhone Safari: no pinch / double-tap page zoom (viewport max-scale + touch-action:manipulation do most of it; gesture events are the iOS pinch). The game's own two-finger camera uses pointer events and is not affected. */
+for(const g of ['gesturestart','gesturechange','gestureend'])document.addEventListener(g,e=>e.preventDefault(),{passive:false});
 netConnect();
 /* v5_120 read-only bridge for tutorial.js (the guided tutorial). It only exposes state for reading; nothing here changes the game. */
 window.WOA_API={get P(){return P},get SCD(){return SCD},get EQ(){return EQ},get AUTH(){return AUTH},get started(){return started},get MP(){return MP},PHONE:PHONE,

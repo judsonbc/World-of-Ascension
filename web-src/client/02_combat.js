@@ -82,7 +82,7 @@ function dropGear(m){
 const fmtSt=(k,v)=>SPECIAL[k]?Math.round(v*100)/100:Math.round(v*10)/10;
 function statArr(st,lv,q){const a=[];for(const k of Object.keys(st)){const f=q&&q.st[k];if(f&&FLAT_STATS[k]){a.push('+'+fmtSt(k,st[k])+STAT_LBL[k]);const p=slotFlatPct(q,k,lv)*100;if(p>0)a.push('+'+fg2(p)+'% '+STAT_LBL[k].trim()+' (forge)')}else a.push('+'+fmtSt(k,st[k]+(f?forgeEff(lv)*f[1]:0))+STAT_LBL[k])}return a}
 function statTxt(st,lv,q){return statArr(st,lv,q).join(', ')}
-const BAG_CAP=50,WH_CAP=100;let bagUid=1; /* bag holds 50 slots; the hub Warehouse holds 100 spare gear pieces */
+const BAG_CAP=100,WH_CAP=100;let bagUid=1; /* v5_232 bag holds 100 slots (was 50); the hub Warehouse holds 100 spare gear pieces */
 const bagArr=()=>P.bag||(P.bag=[]);
 const whArr=()=>P.wh||(P.wh=[]);
 const oreOf=it=>(2+it.g*2)*(1+it.r);
@@ -118,7 +118,7 @@ function aimT(){const t=P.target&&!P.target.dead?P.target:null;if(t)return t;con
    by hand and in auto-hunt. Before, Bash / Hammer reached 170-200 units and Earthquake / War Cry / Seismic Wave / the buffs triggered on enemies much farther away. */
 const IG_PAD=40,IG_DMG_T={bash:1,hammer:1,quake:1,roar:1,counter:1,shockwave:1},IG_AUTO_T={bash:1,hammer:1,quake:1,roar:1,counter:1,shockwave:1,bulwark:1,ironskin:1};
 const CAST_T=.3,CAST_T_LONG=.5, /* v5_155 cast pose halved (was .6 / 1.0) */ CAST_NOROOT={charge:1,shadowstep:1,rush:1,gale:1,leap:1},CAST_LONG={meteor:1,spiritbomb:1,rain:1,quake:1,hammer:1,wail:1,wolves:1,guardian:1,roar:1,eagle:1,bulwark:1,volley:1};
-const BOSS_LEASH=4500,BOSS_LOSE=3600,MON_LEASH=800,MON_LOSE=1000; /* v5_157 leash enlarged (keep equal to monLeash / monLose / bossLeash / bossLose in game.go): was boss 3000 / 2400, monster 520 / 650 */
+const BOSS_LEASH=4500,BOSS_LOSE=1500,MON_LEASH=800,MON_LOSE=1000; /* v5_157 leash enlarged (keep equal to monLeash / monLose / bossLeash / bossLose in game.go): was boss 3000 / 2400, monster 520 / 650; boss lose later set to 1500 */
 const MELEE_SKILL_RANGE=200,MELEE_RANGED_T={pierce:1,fan:1,meteor:1,chain:1,drain:1,kunai:1,venom:1};
 const AIM_REACH={charge:400,shadowstep:420,rush:420,shockwave:420,execute:200,siphon:170,bash:170,hammer:200}; /* v5_122 reach used to pick a target for a skill cast with no target */
 /* v5_122 manual casts never need a target in range: nothing in reach -> the skill still fires (toward where you face; dashes move you forward) and costs Qi / starts its cooldown.

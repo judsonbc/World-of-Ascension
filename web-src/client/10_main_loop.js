@@ -192,6 +192,8 @@ if(AUTH.token)api('/api/me').then(enterAccount).catch(e=>{
 });
 hud();
 try{$('nameIn').value=authGet('al_name')||''}catch(e){}
+/* v5_235 iPhone Safari: no pinch / double-tap page zoom (viewport max-scale + touch-action:manipulation do most of it; gesture events are the iOS pinch). The game's own two-finger camera uses pointer events and is not affected. */
+for(const g of ['gesturestart','gesturechange','gestureend'])document.addEventListener(g,e=>e.preventDefault(),{passive:false});
 netConnect();
 /* v5_120 read-only bridge for tutorial.js (the guided tutorial). It only exposes state for reading; nothing here changes the game. */
 window.WOA_API={get P(){return P},get SCD(){return SCD},get EQ(){return EQ},get AUTH(){return AUTH},get started(){return started},get MP(){return MP},PHONE:PHONE,

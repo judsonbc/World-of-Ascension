@@ -25,6 +25,9 @@ function mkH(i){const [t,a,sc]=WMAP[tIx(i)%12],ph=tIx(i)*1.37;
     const bx=x*.0007+ph*2.1,bz=z*.00077+ph*.8,mx=x*.0023+ph*3.3,mz=z*.0021+ph*1.1;
     h+=75*(Math.sin(bx)*Math.cos(bz*1.2)+.45*Math.sin(bx*2.1+bz*1.7))/1.45+32*(Math.sin(mx*1.1+Math.cos(mz))*Math.cos(mz*.9-Math.sin(mx*.7)));
     const d=Math.hypot(x,z),f=Math.min(1,Math.max(0,(d-TOWN)/220));return h*f*f*(3-2*f)}}
+/* v5_231 World 1 is built at start-up in 01_core, BEFORE WMAP / mkH exist, so its villages were placed without the terrain checks (flat ground only, no houses in the water)
+   and differed from every later rebuild of World 1 (joining a shared world, reconnecting, 'You are here'). Rebuild it once now that the terrain functions exist, so every build of a world is identical. */
+buildWorld(curWorld);
 function init3(){
   const r=new THREE.WebGLRenderer({canvas:$('g3'),antialias:LOW&&PQ.lock?PQ.aa:true,stencil:false,powerPreference:'high-performance'});T3.lv=LOW&&PQ.lock?PQ.lv:PRS.length-1;T3.pr0=Math.min(window.devicePixelRatio||1,2);r.setPixelRatio(prWant());T3.cpr=prWant();
   T3.r=r;T3.sc=new THREE.Scene();T3.sc.matrixAutoUpdate=false;T3.frus=new THREE.Frustum();T3.pm=new THREE.Matrix4();T3.sph=new THREE.Sphere();T3.skyC=new THREE.Color();T3.skyB=new THREE.Color('#8fa6b8');T3.cam=new THREE.PerspectiveCamera(50,1,10,9000);T3.v=new THREE.Vector3();
@@ -222,7 +225,7 @@ function render3D(){
     const want=prWant();
     if(T3.w!==VW||T3.h!==VH||T3.cpr!==want){T3.r.setPixelRatio(want);T3.cpr=want;T3.r.setSize(VW,VH,false);T3.cam.aspect=VW/VH;T3.cam.updateProjectionMatrix();T3.w=VW;T3.h=VH;$('g3').style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block'}
     $('g3').style.display='block';
-    if(T3.built!==curWorld){rebuild3();T3.built=curWorld}
+    if(T3.built!==curWorld||T3.gen!==worldGen){rebuild3();T3.built=curWorld;T3.gen=worldGen}
     T3.fr++;const dl=daylight(),gy=gh3(P.x,P.y),tx=P.x-C,tz=P.y-C,z=T3.zoom,sh=shake*8;
     const sky=T3.skyC.copy(T3.fog).lerp(T3.skyB,dl*.35).multiplyScalar(.45+.55*dl);
     T3.sc.background=sky;T3.sc.fog.color.copy(sky);T3.amb.intensity=(.45+.4*dl)*LK;T3.sun.intensity=(.35+.75*dl)*LK;

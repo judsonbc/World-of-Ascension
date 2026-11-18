@@ -324,7 +324,8 @@ function updateMonsters(dt){
     for(let i=mons.length-1;i>=0;i--){
       const m=mons[i];if(!m.boss)continue;
       if(m.dead){if((m.dieT||0)<=0)mons.splice(i,1);continue}
-      if((m.life-=dt)<=0){if(P.target===m)P.target=null;say(m.name+' (Lv '+m.lvl+') has vanished.','#8d9aa2');mons.splice(i,1)}
+      if(m.state!=='chase')m.life-=dt; /* vanish timer is paused while the boss is in attack (chase) mode */
+      if(m.life<=0){if(P.target===m)P.target=null;say(m.name+' (Lv '+m.lvl+') has vanished.','#8d9aa2');mons.splice(i,1)}
     }
   }
   for(const m of mons){

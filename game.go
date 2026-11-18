@@ -35,7 +35,7 @@ const (
 	// v5_157 monster / boss LEASH (keep equal to MON_LOSE / MON_LEASH / BOSS_LOSE / BOSS_LEASH in web/game.js): a chasing monster gives up and returns home when you are
 	// further than *Lose from it, or when it is further than *Leash from its home. Was 650 / 520 for every monster (the client had 2400 / 3000 for bosses in solo only).
 	monLose, monLeash   = 1000.0, 800.0
-	bossLose, bossLeash = 3600.0, 4500.0
+	bossLose, bossLeash = 1500.0, 4500.0
 
 	// PvP: right-clicking another player flags you for pvpFlagSecs; every PvP hit (given or taken) refreshes it.
 	pvpFlagSecs = 30.0
@@ -493,7 +493,10 @@ func (r *Realm) simMon(m *Mon, dt float64) {
 		if m.dead {
 			return
 		}
-		if m.life -= dt; m.life <= 0 {
+		if m.state != 1 { // vanish timer is paused while the boss is in attack (chase) mode
+			m.life -= dt
+		}
+		if m.life <= 0 {
 			r.despawn(m)
 			return
 		}

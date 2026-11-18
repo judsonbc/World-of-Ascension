@@ -222,17 +222,35 @@ function petSprite(k){
   return e;
 }
 let petT=0;
-/* follower position: eases toward a spot to the right of you (screen-right in 3D, from the camera yaw), snaps if you teleport. Returns the hop height. */
-function petStep(is3){
-  petValidate();if(!P.pet)return 0;
-  const now=performance.now(),dt=Math.min(.1,petT?(now-petT)/1000:.016);petT=now;
-  const yaw=is3&&typeof camView!=='undefined'?camView.yaw:0,rx=Math.cos(yaw),ry=-Math.sin(yaw);
-  const tx=P.x+rx*54,ty=P.y+ry*54;
-  if(!P.pf||Math.hypot(tx-P.pf.x,ty-P.pf.y)>700)P.pf={x:tx,y:ty,mv:0};
-  const f=P.pf,k=1-Math.exp(-7*dt),ox=f.x,oy=f.y;f.x+=(tx-f.x)*k;f.y+=(ty-f.y)*k;
+/* v5_230 PET ROAMING: the pet no longer sits on a fixed spot beside you. It wanders: it picks a random spot between PET_ROAM_MIN and PET_ROAM_R (the target distance)
+   from you, walks there at PET_WALK, pauses PET_PAUSE seconds, then picks the next one. When you move away and it is further than PET_ROAM_R it picks a new spot near you
+   and catches up faster (up to PET_CATCH_MAX). Teleport (more than PET_SNAP away) snaps it next to you. Used for your pet and for other players' pets (peerPetStep).
+   Tune PET_ROAM_R (how far it may wander), PET_ROAM_MIN, PET_WALK, PET_PAUSE, PET_CATCH_MAX. Returns the hop height. */
+const PET_ROAM_R=170,PET_ROAM_MIN=45,PET_WALK=85,PET_CATCH_MAX=420,PET_PAUSE=[1.2,3.2],PET_SNAP=700;
+function petRoamStep(f,px,py,dt){
+  const ox=f.x,oy=f.y,d=Math.hypot(f.x-px,f.y-py);
+  const pick=()=>{const a=Math.random()*6.2832,r=PET_ROAM_MIN+Math.random()*(PET_ROAM_R-PET_ROAM_MIN);f.wx=px+Math.cos(a)*r;f.wy=py+Math.sin(a)*r;f.wait=0};
+  if(f.wx===undefined||Math.hypot(f.wx-px,f.wy-py)>PET_ROAM_R)pick();   /* no spot yet, or you walked off and the spot is now too far from you */
+  if(f.wait>0&&d>PET_ROAM_R*1.15)f.wait=0;                              /* you left it behind: stop resting and follow */
+  let want=0;
+  if(f.wait>0){f.wait-=dt;if(f.wait<=0)pick()}
+  else{
+    const dx=f.wx-f.x,dy=f.wy-f.y,dd=Math.hypot(dx,dy);
+    if(dd<10){f.wait=PET_PAUSE[0]+Math.random()*(PET_PAUSE[1]-PET_PAUSE[0])}   /* arrived: rest a moment */
+    else want=d>PET_ROAM_R?Math.min(PET_CATCH_MAX,PET_WALK+(d-PET_ROAM_R)*8):PET_WALK;
+    f.spd=f.spd||0;f.spd+=(want-f.spd)*Math.min(1,dt*6);
+    const mvd=Math.min(f.spd*dt,dd);if(dd>.001){f.x+=dx/dd*mvd;f.y+=dy/dd*mvd}
+  }
+  if(want===0)f.spd=(f.spd||0)*Math.max(0,1-dt*8);   /* resting: slow to a stop */
   f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sp=Math.hypot(f.x-ox,f.y-oy)/Math.max(dt,.001);f.mv+=((sp>40?1:0)-f.mv)*Math.min(1,dt*10);
   f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
   return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+}
+function petStep(is3){
+  petValidate();if(!P.pet)return 0;
+  const now=performance.now(),dt=Math.min(.1,petT?(now-petT)/1000:.016);petT=now;
+  if(!P.pf||Math.hypot(P.pf.x-P.x,P.pf.y-P.y)>PET_SNAP)P.pf={x:P.x+54,y:P.y,mv:0};
+  return petRoamStep(P.pf,P.x,P.y,dt);
 }
 /* ---- 3D pet models (web/pets3d.js). Each view (world, bag, forge) owns its own rig; the model is rebuilt only when the summoned pet changes. ---- */
 const PET_WORLD_K=1.15;
@@ -287,17 +305,12 @@ function petDraw2D(){
 }
 
 /* ---------- OTHER PLAYERS' PETS (v5_201): each peer reports its summoned pet key (q.pet, from the server 'pt' field); it is drawn following that player. ---------- */
-/* follower position for a peer (same easing / offset as your own pet, see petStep) */
+/* follower position for a peer (same roaming as your own pet, see petRoamStep) */
 function peerPetStep(q,is3){
   if(!q.pet)return 0;
   const now=performance.now(),dt=Math.min(.1,q.pfT?(now-q.pfT)/1000:.016);q.pfT=now;
-  const yaw=is3&&typeof camView!=='undefined'?camView.yaw:0,rx=Math.cos(yaw),ry=-Math.sin(yaw);
-  const tx=q.x+rx*54,ty=q.y+ry*54;
-  if(!q.pf||Math.hypot(tx-q.pf.x,ty-q.pf.y)>700)q.pf={x:tx,y:ty,mv:0};
-  const f=q.pf,k=1-Math.exp(-7*dt),ox=f.x,oy=f.y;f.x+=(tx-f.x)*k;f.y+=(ty-f.y)*k;
-  f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sp=Math.hypot(f.x-ox,f.y-oy)/Math.max(dt,.001);f.mv+=((sp>40?1:0)-f.mv)*Math.min(1,dt*10);
-  f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
-  return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+  if(!q.pf||Math.hypot(q.pf.x-q.x,q.pf.y-q.y)>PET_SNAP)q.pf={x:q.x+54,y:q.y,mv:0};
+  return petRoamStep(q.pf,q.x,q.y,dt);
 }
 /* 3D: list = the peers drawn this frame (rpl). Pets of peers that left, were dismissed or are out of range are removed. */
 function peerPets3(list){

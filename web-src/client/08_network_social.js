@@ -33,25 +33,44 @@ function netJoin(){
 function setNetStatus(){
   const s=$('netStat');if(!s)return;
   if(NET.on){const on=Math.max(NET.online|0,NET.joined?1:0);s.textContent='Online \u00b7 '+on+' adventurer'+(on===1?'':'s')+' in the world';s.style.color='#5fd3a5'}
-  else{s.textContent=NET.giveUp?'No server found \u00b7 playing solo':'Connecting to server\u2026';s.style.color='#8d9aa2'}
+  else{s.textContent=NET.giveUp?'No server found \u00b7 playing solo':(NET.fails>=3?'Server unreachable \u00b7 playing solo, retrying\u2026':'Connecting to server\u2026');s.style.color='#8d9aa2'}
 }
 function netConnect(){
+  if(NET.rt){clearTimeout(NET.rt);NET.rt=0}
+  if(NET.giveUp)return;
+  if(NET.ws&&NET.ws.readyState<=1)return; /* already connecting / connected */
   if(!/^https?:$/.test(location.protocol)){NET.giveUp=true;setNetStatus();return} /* opened as a file: solo only */
   let ws;
-  try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}catch(e){NET.giveUp=true;setNetStatus();return}
-  NET.ws=ws;
-  ws.onopen=()=>{NET.on=true;NET.fails=0;setNetStatus()};
-  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}try{netMsg(m)}catch(err){console.error(err)}};
+  try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}catch(e){netRetry();return}
+  NET.ws=ws;NET.lastMsg=Date.now();
+  ws.onopen=()=>{NET.on=true;NET.fails=0;NET.lastMsg=Date.now();setNetStatus()};
+  ws.onmessage=e=>{NET.lastMsg=Date.now();let m;try{m=JSON.parse(e.data)}catch(_){return}try{netMsg(m)}catch(err){console.error(err)}};
   ws.onclose=()=>{
+    if(NET.ws!==ws)return; /* an old socket: already handled */
     const was=NET.on;NET.on=false;NET.joined=false;NET.ws=null;
     setParty([]);pinvHide();
     if(MP){MP=false;NET.peers.clear();buildWorld(curWorld);P.target=null;P.pvpT=0;say('Connection lost \u2014 playing solo while reconnecting\u2026','#d9503f')}
-    if(!was&&++NET.fails>=3)NET.giveUp=true;
+    if(!was)NET.fails++;
     setNetStatus();
-    if(!NET.giveUp)setTimeout(netConnect,2500);
+    netRetry();
   };
   ws.onerror=()=>{};
 }
+/* v5_233 never give up: keep retrying with a growing pause (2.5 s, 5 s ... max 15 s) so the game goes back online by itself when the internet / server is back.
+   Also retries at once when the browser reports it is online again or the tab becomes visible. Only a deliberate stop (opened as a file, kicked / logged in elsewhere) sets NET.giveUp. */
+function netRetry(){
+  if(NET.giveUp||NET.rt)return;
+  NET.rt=setTimeout(()=>{NET.rt=0;netConnect()},Math.min(15000,2500*(1+Math.min(NET.fails,5))));
+}
+function netNudge(){if(!NET.giveUp&&!NET.on&&!(NET.ws&&NET.ws.readyState<=1)){NET.fails=0;netConnect()}}
+window.addEventListener('online',netNudge);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)netNudge()});
+/* watchdog: a dead connection (internet lost but the socket never closed) sends nothing back; the server answers our 2 s ping, so 20 s of silence means it is dead */
+setInterval(()=>{
+  const w=NET.ws;if(!w||!NET.joined||Date.now()-(NET.lastMsg||0)<20000)return;
+  try{w.close()}catch(e){}
+  setTimeout(()=>{if(NET.ws===w&&w.onclose)w.onclose()},3000);
+},5000);
 /* network ticks run on a timer, not requestAnimationFrame, so a backgrounded tab keeps reporting its position */
 setInterval(()=>{
   if(!NET.joined)return;
