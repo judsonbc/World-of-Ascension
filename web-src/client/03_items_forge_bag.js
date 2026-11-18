@@ -79,12 +79,14 @@ function renderForge(){
   };
   fill($('fgEqL'),FG_L);fill($('fgEqR'),FG_R);
   const info=$('fgInfo');info.innerHTML='';
-  const add=(cls,html)=>{const d=document.createElement('div');d.className=cls;d.innerHTML=html;info.appendChild(d);return d};
+  /* v5_240: three zones so a phone in portrait can keep the title / level / bar and the cost + Forge button fixed and scroll only the description */
+  const zn={};for(const z of ['top','desc','bot']){const e=document.createElement('div');e.className='fg'+z;info.appendChild(e);zn[z]=e}
+  const add=(cls,html,z)=>{const d=document.createElement('div');d.className=cls;d.innerHTML=html;zn[z||'top'].appendChild(d);return d};
   const t=fgTarget(fgSel);
-  if(!GEAR.some(z=>z.k===fgSel)){add('fgs','Tap a piece of gear to see its stats and forge it.')}
+  if(!GEAR.some(z=>z.k===fgSel)){add('fgs','Tap a piece of gear to see its stats and forge it.','desc')}
   else if(!t){
     const q=GEAR.find(z=>z.k===fgSel);
-    add('fgn',q.n);add('fgs','<b>Not found.</b> Random world boss drop \u00b7 '+Object.keys(q.st).map(k=>STAT_LBL[k].replace(/^[% ]+/,'')).join(' &amp; '));
+    add('fgn',q.n);add('fgs','<b>Not found.</b> Random world boss drop \u00b7 '+Object.keys(q.st).map(k=>STAT_LBL[k].replace(/^[% ]+/,'')).join(' &amp; '),'desc');
   }else{
     const lv=t.obj[t.key],q=t.q,o=t.o;
     const bar=()=>{if(lv>=FORGE_MAX)return;const busy=fgBusy&&fgBusy.k===t.k,el=busy?Math.min(FG_TIME,performance.now()-fgBusy.t0)/1000:0;
@@ -94,24 +96,24 @@ function renderForge(){
       add('fgs',RAR[o.r].n+' \u00b7 Grade '+o.g);
       add('fgl','+'+lv+(lv<FORGE_MAX?' \u2192 +'+(lv+1):' MAX'));
       bar();
-      add('fgs','<b>Now:</b> '+statTxt(o.st,lv,q));
-      if(lv<FORGE_MAX)add('fgs','<b>Next level:</b> '+statTxt(o.st,lv+1,q));
-      if(lv<FORGE_MAX){const d=forgeGain(lv);add('fgs','<b>Forge gain:</b> <span class="fgg">'+Object.keys(q.st).map(k=>FLAT_STATS[k]?'+'+fg2(slotFlatPctF(q,k,d)*100)+'% '+STAT_LBL[k].trim():'+'+fg2(d*FORGE_PCT_REF*q.st[k][1])+STAT_LBL[k]).join(', ')+'</span>');if(lv>=10)add('fgs','Higher forge levels give more than lower ones.')}
+      add('fgs','<b>Now:</b> '+statTxt(o.st,lv,q),'desc');
+      if(lv<FORGE_MAX)add('fgs','<b>Next level:</b> '+statTxt(o.st,lv+1,q),'desc');
+      if(lv<FORGE_MAX){const d=forgeGain(lv);add('fgs','<b>Forge gain:</b> <span class="fgg">'+Object.keys(q.st).map(k=>FLAT_STATS[k]?'+'+fg2(slotFlatPctF(q,k,d)*100)+'% '+STAT_LBL[k].trim():'+'+fg2(d*FORGE_PCT_REF*q.st[k][1])+STAT_LBL[k]).join(', ')+'</span>','desc');if(lv>=10)add('fgs','Higher forge levels give more than lower ones.','desc')}
     }else{
       const lvTxt=add('fgl','+'+lv+(lv<FORGE_MAX?' \u2192 +'+(lv+1):' MAX'));
       bar();
       const now=corePctArr(q,forgeFrac(lv)).join(', ');
       const nxt=corePctArr(q,forgeFrac(lv+1)).join(', ');
-      add('fgs','Your starting '+(t.k==='wpn'?'Blade':'Robe')+'. A boss drop can replace it.');
-      add('fgs','<b>Now:</b> '+now);if(lv<FORGE_MAX)add('fgs','<b>Next level:</b> '+nxt);
-      if(lv<FORGE_MAX){const d=forgeGain(lv);add('fgs','<b>Forge gain:</b> <span class="fgg">'+corePctArr(q,d).join(', ')+'</span>');if(lv>=10)add('fgs','Higher forge levels give more than lower ones.')}
+      add('fgs','Your starting '+(t.k==='wpn'?'Blade':'Robe')+'. A boss drop can replace it.','desc');
+      add('fgs','<b>Now:</b> '+now,'desc');if(lv<FORGE_MAX)add('fgs','<b>Next level:</b> '+nxt,'desc');
+      if(lv<FORGE_MAX){const d=forgeGain(lv);add('fgs','<b>Forge gain:</b> <span class="fgg">'+corePctArr(q,d).join(', ')+'</span>','desc');if(lv>=10)add('fgs','Higher forge levels give more than lower ones.','desc')}
     }
     if(lv<FORGE_MAX){
       const c=forgeCost(lv,t.armor),okO=P.ore>=c.ore,okC=P.coins>=c.coins;
-      add('fgc','<span class="'+(okO?'':'no')+'">'+c.ore.toLocaleString()+' ore</span><span class="'+(okC?'':'no')+'">'+c.coins.toLocaleString()+' coins</span><span>'+c.chance+'% success</span>');
-      add('fgs','A failed strike burns the materials but keeps your level.');
+      add('fgc','<span class="'+(okO?'':'no')+'">'+c.ore.toLocaleString()+' ore</span><span class="'+(okC?'':'no')+'">'+c.coins.toLocaleString()+' coins</span><span>'+c.chance+'% success</span>','bot');
+      add('fgs','A failed strike burns the materials but keeps your level.','desc');
       const b=document.createElement('button');b.type='button';b.className='btn pri fgb';b.textContent='Forge '+c.chance+'%';
-      b.disabled=!!fgBusy||!(okO&&okC);if(fgBusy&&fgBusy.k===t.k)b.textContent='Forging...';b.addEventListener('click',()=>fgDo(t));info.appendChild(b);
+      b.disabled=!!fgBusy||!(okO&&okC);if(fgBusy&&fgBusy.k===t.k)b.textContent='Forging...';b.addEventListener('click',()=>fgDo(t));zn.bot.appendChild(b);
     }
   }
   if(!FGV.raf)FGV.raf=requestAnimationFrame(fgPreview);
@@ -182,7 +184,7 @@ function lootIcon(key,icon,n,col){
 function bagLog(t,c){P.recent.unshift({t,c});if(P.recent.length>20)P.recent.pop();saveSoon();if(!$('bag').hidden)renderBag()}
 function addPot(k,n){if(n<=0)return;lootIcon('p'+k,k==='tp'?'&#10162;':'&#9879;',n,POTS[k].c);P.pots[k]=Math.min(POT_MAX,P.pots[k]+n);pop(P.x-14,P.y-58,'+'+n+' '+POT_SH[k],POTS[k].c,12);bagLog('+'+n+' '+POTS[k].n+(n>1?'s':''),POTS[k].c)}
 /* ---------- dodge: quick dash with a brief invulnerable window, aimed by dragging the small pad ---------- */
-const DASH_DIST=210,DASH_T=.34,DASH_CD=1.6,DODGE_INV=.35; /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
+const DASH_DIST=210,DASH_T=.34,DASH_CD=5,DODGE_INV=.35; /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
 function doDodge(dx,dy){
   if(!started||P.dead>0||P.dcd>0)return;
   P.cast=0; /* dodging cancels a cast */
@@ -384,6 +386,7 @@ function renderBag(){
   if(!BAGV.raf)BAGV.raf=requestAnimationFrame(bagPreview);
   const info=$('bagInfo');info.innerHTML='';
   const sel=items.find(i=>i.id===bagSel);
+  info.classList.toggle('pinf',!!(sel&&(sel.egg||sel.pet||sel.stored||(sel.eq&&sel.id.slice(0,2)==='g_'))&&!petComb&&!bagMulti)); /* v5_241: egg / pet selected = description scrolls on the left, buttons fixed on the right */
   $('bagMulti').classList.toggle('on',bagMulti);$('bagMulti').textContent=bagMulti?'Done selecting':'Sell multiple';
   if(petComb&&!bagMulti)petCombPanel(info);else
   if(bagMulti){
@@ -421,6 +424,7 @@ function renderBag(){
       info.appendChild(w)}
     if(sel.eq&&sel.id.slice(0,2)==='g_'){const k=sel.id.slice(2),w=document.createElement('div'),b=document.createElement('button');w.className='bagact';b.type='button';b.className='btn';b.textContent='Unequip';b.addEventListener('click',()=>unequipGear(k));w.appendChild(b);info.appendChild(w)}
     if(sel.egg||sel.pet)petBagActions(sel,info);
+    {const ba=info.querySelector('.bagact'),cb=$('bagClose'),wd=cb&&cb.offsetWidth;if(ba&&wd)ba.style.flexBasis='min('+wd+'px,55%)'} /* v5_243: buttons right of the description, as wide as Close */
     if(sel.pot){const k=sel.pot,b=document.createElement('button');b.type='button';b.className='btn pri';b.textContent=pot[k]>0?Math.ceil(pot[k])+'s':(k==='tp'&&P.tp>0?'...':'Use');b.disabled=pot[k]>0;b.addEventListener('click',()=>{usePot(k);renderBag()});info.appendChild(b)}
   }
 }

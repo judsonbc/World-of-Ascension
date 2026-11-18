@@ -176,3 +176,25 @@ $('bTp').addEventListener('pointerdown',e=>{e.preventDefault();useTp()});
 function fitHud(){if(!$('hud'))return;$('hud').style.setProperty('--u',Math.max(.55,Math.min(innerWidth/1000,innerHeight/534,2.6))+'px')}
 window.addEventListener('resize',fitHud);fitHud();
 
+
+/* v5_240 CLOSE (X) BUTTONS: every pop-up window gets a round X at its top right. Windows (modals) click their own Close / Cancel button, so the same cleanup runs. */
+(function(){
+  const MAP={forge:'forgeClose',worlds:'worldClose',wardrobe:'wdClose',book:'bookClose',bag:'bagClose',wh:'whClose',nest:'nestClose',shop:'shopClose',buyDlg:'buyCancel',xcDlg:'xcCancel'};
+  for(const id in MAP){
+    const m=$(id),c=m&&m.querySelector('.card');if(!c)continue;
+    const x=document.createElement('button');x.type='button';x.className='wx';x.textContent='\u2715';x.title='Close';x.setAttribute('aria-label','Close');
+    x.addEventListener('click',e=>{e.stopPropagation();const b=$(MAP[id]);if(b)b.click();else m.hidden=true});
+    c.insertBefore(x,c.firstChild);
+  }
+  const sx=$('swX');if(sx)sx.addEventListener('click',e=>{e.stopPropagation();statsToggle(false)});
+  const mx=$('menuX');if(mx)mx.addEventListener('click',e=>{e.stopPropagation();$('menu').hidden=true});
+})();
+
+/* v5_245 top-right buttons collapse: the arrow hides every icon except Menu (remembered) */
+(function(){
+  const tr=$('tr'),t=$('bTrT');if(!tr||!t)return;
+  const ap=c=>{tr.classList.toggle('col',c);t.firstChild.textContent=c?'\u2039':'\u203a';t.setAttribute('aria-expanded',c?'false':'true')};
+  let c=false;try{c=localStorage.getItem('al_trcol2')==='1'}catch(e){}
+  ap(c);
+  t.addEventListener('click',()=>{c=!c;try{localStorage.setItem('al_trcol2',c?'1':'0')}catch(e){}ap(c)});
+})();

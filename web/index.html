@@ -288,13 +288,60 @@ html.phone #pgear .pgn{font-size:9.5px;line-height:1.15}html.phone #pgear .pgr{f
 /* zone banner (appears when you enter a new area) */
 #banner{position:absolute;left:50%;top:calc(118*var(--u));transform:translateX(-50%);text-align:center;opacity:0;font:400 calc(20*var(--u))/1.2 var(--display);letter-spacing:.06em;white-space:nowrap;padding:calc(8*var(--u)) calc(40*var(--u));background:linear-gradient(90deg,transparent,rgba(8,12,15,.6) 25%,rgba(8,12,15,.6) 75%,transparent);border-top:calc(1*var(--u)) solid rgba(232,224,202,.3);border-bottom:calc(1*var(--u)) solid rgba(232,224,202,.3);animation:bn 5s ease-out}
 #banner small{display:block;font:600 calc(10*var(--u)) var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+
+/* v5_237 Pet Nest: hatch eggs / combine pets */
+#nest .nestwin{width:min(560px,100%);gap:8px;padding:12px;background:linear-gradient(#0d1c36,#08111f);border:1px solid #2a4a7a}
+.nesttabs{display:flex;gap:6px}.nesttabs .btn{flex:1;padding:6px 10px}.nesttabs .btn.on{background:var(--gold);color:#241a05}
+#nestBody{display:flex;flex-direction:column;gap:8px;min-height:0}
+.nstage{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px;border-radius:10px;text-align:center;background:radial-gradient(circle at 50% 40%,#16315a,#0a1424);border:1px solid #2a4a7a}
+.nstage small{color:var(--mist);font-size:12px}.ncount{font:700 15px var(--body);color:var(--paper)}
+.negg{width:92px;height:92px}.negg svg{width:100%;height:100%;display:block;filter:drop-shadow(0 4px 8px rgba(0,0,0,.6))}
+.negg.shake{animation:nShake .95s ease-in-out forwards}
+@keyframes nShake{0%{transform:rotate(0) scale(1)}15%{transform:rotate(-12deg)}30%{transform:rotate(12deg)}45%{transform:rotate(-14deg) scale(1.05)}60%{transform:rotate(14deg) scale(1.08)}80%{transform:rotate(-8deg) scale(1.14);filter:brightness(1.5)}100%{transform:scale(1.25);filter:brightness(2.4);opacity:.15}}
+.nres{display:flex;flex-direction:column;align-items:center;gap:6px;min-height:20px}
+.nline{font-size:13px;color:var(--paper);text-align:center}.nline.bad{color:#ff8a7a}.nline.good{font-weight:700}
+.nlist{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.nit{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:8px;background:rgba(255,255,255,.06);font:600 13px var(--body);animation:nPop .4s cubic-bezier(.2,1.4,.4,1)}
+.nit.sp{box-shadow:0 0 14px rgba(255,225,74,.55);border:1px solid #ffe14a}
+.nit .bslot{position:relative;width:44px;height:44px;flex:none;cursor:default}
+.nbtns{display:flex;gap:8px;justify-content:center}.nbtns .btn{flex:1;max-width:200px}.nbtns .btn:disabled{opacity:.45;cursor:default}
+.nrow{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;border-radius:10px;background:radial-gradient(circle at 50% 40%,#16315a,#0a1424);border:1px solid #2a4a7a}
+.nop{font:700 22px var(--body);color:var(--gold)}
+.nslot{width:68px;height:68px;flex:none;font:700 26px var(--body);color:#9fb4c8;display:flex;align-items:center;justify-content:center}
+.nslot.empty{opacity:.5}.nout.ghost{opacity:.4;filter:grayscale(.5)}
+.nout.won{animation:nPop .5s cubic-bezier(.2,1.4,.4,1);box-shadow:0 0 18px currentColor}
+.nout.lost{border-color:#d9503f;background:radial-gradient(circle at 50% 40%,#5a1c18,#2a0c0a);color:#ff6a55;animation:nShakeX .5s}
+.merge .nslot.a{animation:nML .95s ease-in forwards}.merge .nslot.b{animation:nMR .95s ease-in forwards}.merge .nout{animation:nGlow .95s ease-in}
+@keyframes nML{to{transform:translateX(46px) scale(.6);opacity:.2}}@keyframes nMR{to{transform:translateX(-46px) scale(.6);opacity:.2}}
+@keyframes nGlow{0%{box-shadow:0 0 0 #fff}80%{box-shadow:0 0 22px #fff;filter:brightness(1.4)}100%{box-shadow:0 0 0 #fff}}
+@keyframes nPop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes nShakeX{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.ninfo{font-size:12px;color:var(--mist);text-align:center;min-height:2.6em;display:flex;flex-direction:column;gap:3px}
+.ngrid{display:grid;grid-template-columns:repeat(auto-fill,50px);gap:5px;align-content:start;justify-content:center;overflow-y:auto;min-height:0;flex:1;overscroll-behavior:contain;touch-action:pan-y}
+.ngrid .bslot{width:50px;height:50px}.ngrid .bslot.dim{opacity:.35}
+/* multi-combine: pets on the left, 10 slots on the right */
+#nest.wide .nestwin{width:min(820px,100%)}
+.ncomb{display:flex;gap:8px;min-height:0;height:min(430px,calc(100dvh - 190px))}
+.nleft{flex:0 0 40%;display:flex;flex-direction:column;gap:5px;min-height:0;padding:6px;border-radius:10px;background:radial-gradient(circle at 50% 30%,#16315a,#0a1424);border:1px solid #2a4a7a}
+.nright{flex:1;display:flex;flex-direction:column;gap:5px;min-height:0;min-width:0;padding:6px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid #2a4a7a}
+.nhd{font:700 13px var(--body);letter-spacing:.04em;color:var(--gold)}.nhint{font-size:11px;color:var(--mist)}
+.nrows{display:flex;flex-direction:column;gap:4px;overflow-y:auto;min-height:0;flex:1;overscroll-behavior:contain;touch-action:pan-y}
+.nrw{display:flex;align-items:center;gap:4px;padding:3px 5px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid transparent;flex:none}
+.nrw.rdy{border-color:rgba(227,181,89,.55);background:rgba(227,181,89,.08)}
+.nno{width:16px;font:700 11px var(--body);color:var(--mist);text-align:center}
+.nrw .nop{font-size:15px}.nrw .nslot{width:38px;height:38px;font-size:18px}
+.nch{margin-left:auto;font:700 12px var(--body);color:var(--mist);min-width:30px;text-align:right}
+.nrw.merge .nslot.a{animation:nML .95s ease-in forwards}.nrw.merge .nslot.b{animation:nMR .95s ease-in forwards}.nrw.merge .nout{animation:nGlow .95s ease-in}
+@media (orientation:portrait){.ncomb{flex-direction:column;height:min(520px,calc(100dvh - 200px))}.nleft{flex:0 0 38%}}
+@media (orientation:landscape) and (max-height:520px){#nest.modal{padding:4px}#nest .nestwin{padding:6px;gap:4px}#nestBody{gap:4px}.negg{width:52px;height:52px}.nstage{padding:5px;gap:2px}.nslot{width:52px;height:52px}.nrow{padding:4px;gap:5px}.ncomb{height:calc(100dvh - 118px)}.ngrid{grid-template-columns:repeat(auto-fill,42px)}.ngrid .bslot{width:42px;height:42px}.nrw .nslot{width:32px;height:32px;font-size:15px}.nrw{padding:2px 4px}.nhint{display:none}.ninfo{font-size:11px;min-height:2.2em}.nit .bslot{width:34px;height:34px}.nstage small{font-size:11px}}
+@media (prefers-reduced-motion:reduce){.negg.shake,.merge .nslot,.merge .nout,.nit,.nout.won,.nout.lost{animation-duration:.01s}}
 /* v5_98 level-up popup: same look as the forge SUCCESS / FAILED popup */
-#lvUp{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:30;pointer-events:none;text-align:center;padding:14px 34px;border-radius:12px;background:rgba(10,14,18,.95);border:2px solid var(--gold);box-shadow:0 0 34px rgba(227,181,89,.5);animation:lvPop .35s cubic-bezier(.2,1.4,.4,1);max-width:calc(100vw - 24px)}
+#lvUp{position:fixed;left:50%;top:calc(76px + env(safe-area-inset-top,0px));transform:translateX(-50%);opacity:.88;z-index:30;pointer-events:none;text-align:center;padding:14px 34px;border-radius:12px;background:rgba(10,14,18,.6);border:2px solid var(--gold);box-shadow:0 0 34px rgba(227,181,89,.5);animation:lvPop .35s cubic-bezier(.2,1.4,.4,1);max-width:calc(100vw - 24px)}
 #lvUp[hidden]{display:none}
 #lvUp b{display:block;font:400 30px var(--display);letter-spacing:.14em;color:var(--gold)}
 #lvUp small{display:block;color:var(--mist);margin-top:3px;font-size:13px}
 #lvUp.fade{opacity:0;transition:opacity .5s}
-@keyframes lvPop{from{transform:translate(-50%,-50%) scale(.5);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@keyframes lvPop{from{transform:translateX(-50%) scale(.5);opacity:0}to{transform:translateX(-50%) scale(1);opacity:.88}}
 html.phone #lvUp{padding:10px 24px}html.phone #lvUp b{font-size:24px}html.phone #lvUp small{font-size:12px}
 /* v5_109 screen saver */
 #saver{position:fixed;inset:0;z-index:9999;background:#000;display:none;touch-action:none;-webkit-user-select:none;user-select:none;overflow:hidden}
@@ -310,6 +357,7 @@ html.phone #lvUp{padding:10px 24px}html.phone #lvUp b{font-size:24px}html.phone 
 
 /* top-right: menu icons, zone strip, quest tracker, minimap */
 #tr{position:absolute;right:calc(10*var(--u));top:calc(8*var(--u));display:flex;gap:calc(10*var(--u))}
+#trx{display:flex;gap:calc(10*var(--u))}html.phone #trx{gap:calc(18*var(--u))}#tr.col #trx{display:none}#bTrT{opacity:.85}
 #tr .ic{width:calc(34*var(--u));height:calc(34*var(--u));border-radius:calc(6*var(--u));font-size:calc(17*var(--u))}
 #menu .mrow{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:calc(8*var(--u));margin-top:calc(2*var(--u))}#menu .mrow.ck{justify-content:flex-start;font-size:inherit}#menu .mrow select{flex:1 1 auto;min-width:0;max-width:62%;font-size:inherit;background:#10161a;color:var(--paper);border:1px solid #2c3a40;border-radius:calc(4*var(--u));padding:calc(1*var(--u)) calc(3*var(--u))}#menu button.mrow{justify-content:center}
 #menu{position:absolute;right:calc(10*var(--u));top:calc(50*var(--u));width:calc(230*var(--u));padding:calc(10*var(--u)) calc(12*var(--u));display:grid;grid-template-columns:auto 1fr;gap:calc(3*var(--u)) calc(10*var(--u));font-size:calc(11*var(--u));color:var(--mist);z-index:4}
@@ -564,13 +612,13 @@ html.phone #worlds .card p{font-size:12px;line-height:1.35}
 #worldRows{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1 1 auto;min-height:0}
 #worldClose{flex:0 0 auto}
 /* forge result popup */
-#forgeRes{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;pointer-events:none;text-align:center;padding:14px 34px;border-radius:12px;background:rgba(10,14,18,.95);border:2px solid var(--gold);box-shadow:0 0 34px rgba(227,181,89,.5);animation:frPop .35s cubic-bezier(.2,1.4,.4,1)}
+#forgeRes{position:absolute;left:50%;top:calc(76px + env(safe-area-inset-top,0px));transform:translateX(-50%);opacity:.88;z-index:3;pointer-events:none;text-align:center;padding:14px 34px;border-radius:12px;background:rgba(10,14,18,.6);border:2px solid var(--gold);box-shadow:0 0 34px rgba(227,181,89,.5);animation:frPop .35s cubic-bezier(.2,1.4,.4,1)}
 #forgeRes[hidden]{display:none}
 #forgeRes b{display:block;font:400 30px var(--display);letter-spacing:.14em;color:var(--gold)}
 #forgeRes small{display:block;color:var(--mist);margin-top:3px;font-size:13px}
 #forgeRes.bad{border-color:var(--cinnabar);box-shadow:0 0 34px rgba(217,80,63,.5)}
 #forgeRes.bad b{color:#ff6a55}
-@keyframes frPop{from{transform:translate(-50%,-50%) scale(.5);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@keyframes frPop{from{transform:translateX(-50%) scale(.5);opacity:0}to{transform:translateX(-50%) scale(1);opacity:.88}}
 html.phone #forgeRes{padding:10px 24px}html.phone #forgeRes b{font-size:24px}html.phone #forgeRes small{font-size:12px}
 #title{background:radial-gradient(ellipse at 50% 30%,#1d2a2b,#0a0d10 70%)}
 #title h1{font-family:var(--display);font-weight:400;font-size:clamp(30px,7.5vw,54px);letter-spacing:.08em;margin:0;line-height:1}
@@ -793,6 +841,114 @@ html.phone .wdcard .wdnote{display:none}
  html.phone .wdcard .wdbody{gap:8px}
  html.phone #menu{width:min(340px,calc(100vw - 24px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)))}
 }
+
+/* v5_240 close X buttons + phone-portrait layouts for Forge / Warehouse / Bag / Look */
+.wx{flex:0 0 auto;align-self:flex-end;width:30px;height:26px;margin:-4px -2px -8px 0;padding:0;min-height:0;display:flex;align-items:center;justify-content:center;border:1px solid #2a4a7a;border-radius:8px;background:rgba(10,24,48,.9);color:#e8e0ca;font:700 15px/1 var(--body);cursor:pointer;z-index:6;-webkit-tap-highlight-color:transparent}
+.wx:hover,.wx:active{background:#7a2a22;border-color:#d9503f;color:#fff}
+.wx2{flex:0 0 auto;cursor:pointer;background:transparent;border:0;color:var(--mist);font-size:max(13px,calc(14*var(--u)));line-height:1;min-width:26px;min-height:24px;padding:0 4px;pointer-events:auto}
+.wx2:hover,.wx2:active{color:#ff8a7a}
+#statsWin h4,#online h4{display:flex;justify-content:space-between;align-items:center;gap:8px}
+#menu .wxm{grid-column:1/-1;justify-self:end;position:sticky;top:0;z-index:3;margin:0 0 -4px;background:rgba(13,17,20,.92);border:1px solid var(--line);border-radius:6px}
+.fgtop,.fgdesc,.fgbot{display:contents}
+@media (orientation:landscape) and (max-height:520px){
+ .modal .card{position:relative}
+ .modal .card>.wx{position:absolute;top:4px;right:4px;margin:0}
+ .modal .bagtop,.whhead{padding-right:34px}
+}
+@media (orientation:portrait){
+ html.phone #forge.modal,html.phone #bag.modal,html.phone #wh.modal,html.phone #wardrobe.modal{padding:6px}
+ html.phone #forge .bagwin,html.phone #bag .bagwin,html.phone #wh .whwin,html.phone #wardrobe .wdwin{width:100%;height:100%;max-height:100%;padding:8px;gap:6px;overflow:hidden}
+ html.phone #forge .bagbtns,html.phone #bag .bagbtns,html.phone #wh .bagbtns,html.phone #wardrobe .bagbtns{flex:0 0 auto}
+ html.phone #forge .bwbody,html.phone #bag .bwbody,html.phone #wardrobe .bwbody{flex:1 1 auto;min-height:0;flex-direction:column;overflow:hidden;gap:6px}
+ html.phone #forge .bwhero,html.phone #bag .bwhero{flex:0 0 auto}
+ html.phone #forge .bwstage,html.phone #bag .bwstage{aspect-ratio:auto;width:100%;height:clamp(230px,34vh,290px);height:clamp(230px,34dvh,290px);max-height:none;flex:0 0 auto}
+ html.phone #forge .bwcol,html.phone #bag .bwcol{width:34px}
+ html.phone #forge .bwcol .bslot,html.phone #bag .bwcol .bslot{width:32px;height:32px;aspect-ratio:auto;margin:0 auto}
+ html.phone #forge .bwside,html.phone #bag .bwside,html.phone #wardrobe .bwside{flex:1 1 auto;min-height:0;overflow:hidden;gap:6px}
+ html.phone .bagtop h2{font-size:18px}
+ /* 1. FORGE: only the description scrolls */
+ html.phone #fgInfo{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden;gap:6px;padding:6px 8px}
+ html.phone #fgInfo .fgtop,html.phone #fgInfo .fgbot{display:flex;flex-direction:column;gap:4px;flex:0 0 auto}
+ html.phone #fgInfo .fgdesc{display:flex;flex-direction:column;gap:4px;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+ html.phone #fgInfo .fgb{padding:8px 12px;font-size:14px;min-height:0}
+ /* 2. WAREHOUSE: the two grids always show their gear (the card has a real height now) */
+ html.phone #wh .whcols{flex:1 1 auto;min-height:0;flex-direction:column;overflow:hidden;gap:6px}
+ html.phone #wh .whcol{flex:1 1 0;min-height:0;min-width:0}
+ html.phone #wh .whgrid{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;grid-template-columns:repeat(auto-fill,40px);grid-auto-rows:40px;justify-content:center;gap:4px}
+ html.phone #wh .whgrid .bslot{width:40px;height:40px}
+ html.phone #wh #whInfo{flex:0 0 auto;min-height:40px;padding:6px 8px}
+ html.phone #wh .whhead{flex:0 0 auto}
+ /* 3. BAG: only the gear grid scrolls */
+ html.phone #bag #bagCur{flex:0 0 auto}
+ html.phone #bag #bagItems{flex:1 1 auto;min-height:72px;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;grid-template-columns:repeat(auto-fill,40px);grid-auto-rows:40px;justify-content:center;gap:4px}
+ html.phone #bag #bagItems .bslot{width:40px;height:40px}
+ html.phone #bag #bagInfo{flex:0 0 auto;min-height:40px;max-height:96px;overflow-y:auto;padding:6px 8px}
+ html.phone #bag .bwopts{flex:0 0 auto}
+ /* 4. LOOK: current look text sits LEFT of the avatar, only the items scroll */
+ html.phone #wardrobe .bwhero{flex:0 0 auto;display:flex;flex-direction:row;align-items:center;gap:8px}
+ html.phone #wardrobe .bwstage{order:2;flex:0 0 auto;width:auto;aspect-ratio:380/448;height:clamp(170px,28vh,250px);height:clamp(170px,28dvh,250px);max-height:none;margin:0}
+ html.phone #wardrobe #wdName{order:1;flex:1 1 0;min-width:0;min-height:0;text-align:left;font-size:12px;line-height:1.45;overflow-y:auto;overflow-wrap:anywhere}
+ html.phone #wardrobe .wdclass,html.phone #wardrobe .wdtabs{flex:0 0 auto}
+ html.phone #wardrobe #wdGrid{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;grid-template-columns:repeat(auto-fill,minmax(78px,1fr))}
+ html.phone #wardrobe .wdnote{display:none}
+}
+
+/* v5_241 bag pet / egg info: description scrolls, buttons fixed on the right. Pet Nest: slim buttons, small icons, 10 slots in 2 columns */
+#bagInfo.pinf{flex-wrap:nowrap;align-items:stretch;gap:8px}
+#bagInfo.pinf>div:first-child{flex:1 1 0;min-width:0;max-height:110px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#bagInfo.pinf .bagact{flex:0 0 auto;flex-direction:column;justify-content:center;align-self:center;gap:4px;max-width:46%}
+#bagInfo.pinf .bagact .btn{padding:4px 10px;font-size:12px;min-height:0;white-space:normal;line-height:1.15}
+html.phone #bag #bagInfo.pinf{max-height:96px;overflow:hidden}
+html.phone #bag #bagInfo.pinf>div:first-child{max-height:84px}
+html.phone #bag #bagInfo.pinf .bagact .btn{min-height:0;padding:4px 8px;font-size:12px}
+#nest .nesttabs .btn,#nest .nbtns .btn,html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{padding:2px 10px;font-size:12px;min-height:0;line-height:1.5;border-radius:6px;max-width:none}
+#nest .nbtns{gap:6px}
+#nest .ngrid{grid-template-columns:repeat(auto-fill,34px);gap:3px}
+#nest .ngrid .bslot{width:34px;height:34px}
+#nest .ngrid .bslot .q{font-size:8px;padding:0 2px}
+#nest .nrows{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start}
+#nest .nrw{padding:2px 3px;gap:2px;min-width:0}
+#nest .nno{width:12px;font-size:9px}
+#nest .nrw .nslot{width:24px;height:24px;font-size:12px;border-radius:5px}
+#nest .nrw .nslot svg{width:100%;height:100%}
+#nest .nrw .nop{font-size:11px}
+#nest .nrw .nch{font-size:10px;min-width:0;margin-left:auto}
+#nest .nhd{font-size:12px}
+@media (orientation:portrait){#nest .ncomb .nleft{flex:1 1 0;min-height:0}#nest .ncomb .nright{flex:0 0 auto}#nest .ncomb{height:min(540px,calc(100dvh - 150px))}}
+
+/* v5_242 hatch result list scrolls + smaller; bag pet buttons big, as wide as Close */
+#nest .nlist{max-height:92px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;gap:5px;padding:2px;width:100%;box-sizing:border-box}
+#nest .nit{padding:2px 8px 2px 2px;gap:4px;font-size:11px}
+#nest .nit .bslot{width:28px;height:28px}
+#nest .nline{font-size:12px}
+#bagInfo.pinf .bagact{flex:0 0 auto;max-width:none;overflow-y:auto;max-height:118px}
+#bagInfo.pinf .bagact .btn,html.phone #bag #bagInfo.pinf .bagact .btn{width:100%;box-sizing:border-box;padding:8px 10px;font-size:14px;min-height:36px;line-height:1.15}
+html.phone #bag #bagInfo.pinf{max-height:130px}
+html.phone #bag #bagInfo.pinf>div:first-child{max-height:118px}
+
+/* v5_246 forge: on every screen only the description scrolls; name / level / bar and the cost + Forge button stay fixed */
+#forge .bwside{min-height:0;overflow:hidden}
+#forge #fgInfo{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden;gap:6px}
+#forge #fgInfo .fgtop,#forge #fgInfo .fgbot{display:flex;flex-direction:column;gap:4px;flex:0 0 auto}
+#forge #fgInfo .fgdesc{display:flex;flex-direction:column;gap:4px;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#forge #fgInfo .fgdesc>*{flex:0 0 auto}
+
+/* v5_247 Here / Online list: over the minimap, right under the world-name label, nearest player first, scrolls, stays above the (bigger) JUMP button */
+#online,html.phone #online,html.phone #hud #online{top:calc(90*var(--u));z-index:6;pointer-events:auto;overflow:hidden;max-height:max(56px,calc(100% - 374*var(--u)))}
+html.phone #online,html.phone #hud #online{max-height:max(56px,calc(100% - 400*var(--u)))}
+#online .olist{display:flex;flex-direction:column;gap:calc(2*var(--u));min-height:0;flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
+#online .pn{flex:0 0 auto}
+#jump{right:calc(30*var(--u));width:calc(54*var(--u));height:calc(54*var(--u))}
+#jump b{font-size:calc(26*var(--u))}
+html.phone #jump{right:calc(47*var(--u) + env(safe-area-inset-right,0px));width:calc(52*var(--u));height:calc(52*var(--u))}
+
+/* v5_248 online window: draggable title, collapsible; portrait phone = under the minimap; landscape phone = minimap moved left of the Online window so JUMP never covers it */
+#online h4{cursor:move;touch-action:none;-webkit-user-select:none;user-select:none}
+#online .ohb{display:flex;gap:2px;flex:0 0 auto}
+#online.olc .olist{display:none}
+#online.drag{opacity:.9}
+@media (orientation:portrait){html.phone #online,html.phone #hud #online{top:calc(276*var(--u));max-height:max(56px,calc(100% - 590*var(--u)))}}
+@media (orientation:landscape){html.phone #mmw{right:calc(99*var(--u) + env(safe-area-inset-right,0px))}html.phone #online,html.phone #hud #online{right:calc(285*var(--u) + env(safe-area-inset-right,0px))}} /* v5_249: minimap's right edge touches the JUMP button's left edge (jump right 47u + 52u wide); the Online window sits left of it */
 </style>
 
 <div id="stage">
@@ -813,7 +969,7 @@ html.phone .wdcard .wdnote{display:none}
     </div>
 
     <div id="statsWin" class="panel" hidden>
-      <h4>Character stats</h4>
+      <h4><span>Character stats</span><button class="wx2" id="swX" type="button" title="Close" aria-label="Close">&#10005;</button></h4>
       <div class="swWide"><span>Class</span><b id="swCls"></b><span>Realm</span><b id="swRealm"></b></div>
       <span>Level</span><b id="swLv"></b>
       <span>Power</span><b id="swPw"></b>
@@ -890,6 +1046,7 @@ html.phone .wdcard .wdnote{display:none}
 
     <!-- top-right: menu icons, zone strip, quests, minimap -->
     <div id="tr">
+      <div id="trx">
       <button class="ic" id="bForge" type="button" title="Lotus Forge (O)">&#9874;<span class="lb">Forge</span></button>
       <button class="ic" id="bWorld" type="button" title="World Gate (G)">&#127760;<span class="lb">World</span></button>
       <button class="ic" id="bBook" type="button" title="Skill book (K)">&#128214;<span class="lb">Skills</span></button>
@@ -897,10 +1054,14 @@ html.phone .wdcard .wdnote{display:none}
       <button class="ic" id="bBag" type="button" title="Bag (B)">&#127890;<span class="lb">Bag</span></button>
       <button class="ic" id="bMap" type="button" title="Minimap (M)">&#9906;<span class="lb">Map</span></button>
       <button class="ic" id="bSkin" type="button" title="Wardrobe: skin, hair, outfit, headwear, aura (C)"><span>&#9786;</span><span class="lb">Look</span></button>
+      <button class="ic" id="bNest" type="button" title="Pet Nest (U): hatch eggs and combine pets"><span>&#129370;</span><span class="lb">Nest</span></button>
       <button class="ic" id="bBell" type="button" hidden>&#128276;</button>
+      </div>
+      <button class="ic" id="bTrT" type="button" title="Hide / show the buttons" aria-label="Hide / show the buttons" aria-expanded="true"><span>&#8250;</span></button>
       <button class="ic" id="bGear" type="button" title="Menu"><span>&#9881;</span><span class="lb">Menu</span></button>
     </div>
     <div id="menu" class="panel" hidden>
+      <button class="wx2 wxm" id="menuX" type="button" title="Close" aria-label="Close">&#10005;</button>
       <b>Move</b><span>WASD / arrows / click</span>
       <b>Attack</b><span>Click · F = nearest</span>
       <b>Jump</b><span>Space · JUMP button</span>
@@ -912,6 +1073,7 @@ html.phone .wdcard .wdnote{display:none}
       <b>Private chat</b><span>I · /w name</span>
       <b>Wardrobe / View</b><span>C · V</span>
       <b>Bag / Shop</b><span>B · N (at the merchant)</span>
+      <b>Pet Nest</b><span>U (hatch / combine pets)</span>
       <b>Minimap</b><span>M</span>
       <b>Chat</b><span>Enter</span>
       <div class="vsep"></div>
@@ -1078,6 +1240,15 @@ html.phone .wdcard .wdnote{display:none}
       </div>
       <div id="whInfo"></div>
       <div class="bagbtns"><button class="btn pri" id="whAll" type="button" title="Move every spare gear piece from the bag to the warehouse">Store all spare gear</button><button class="btn" id="whClose" type="button">Close</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="nest" hidden>
+    <div class="card panel nestwin">
+      <div class="bagtop"><h2>Pet Nest</h2><span id="nestCnt"></span></div>
+      <div class="nesttabs"><button class="btn" id="nTabH" type="button">Hatch</button><button class="btn" id="nTabC" type="button">Combine</button></div>
+      <div id="nestBody"></div>
+      <div class="bagbtns"><button class="btn" id="nestClose" type="button">Close</button></div>
     </div>
   </div>
 

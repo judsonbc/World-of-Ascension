@@ -147,7 +147,7 @@ function renderParty(){
   const h=document.createElement('h4'),t=document.createElement('span'),lv=document.createElement('button'),hd=document.createElement('button'),bt=document.createElement('span');
   t.className='phd';t.title='Drag the window to move it \u00b7 double-click to reset';t.textContent='Party \u00b7 '+PARTY.m.length+'/4';
   lv.type='button';lv.textContent='Leave';lv.title='Leave the party';lv.addEventListener('click',()=>partyCmd('leave'));
-  hd.type='button';hd.textContent='\u2013';hd.title='Hide (use the Party button on the left to show it again)';hd.addEventListener('click',()=>partyHide(true));
+  hd.type='button';hd.textContent='\u2715';hd.title='Hide (use the Party button on the left to show it again)';hd.addEventListener('click',()=>partyHide(true));
   const ch=document.createElement('button');ch.type='button';ch.textContent='\u{1F4AC}';ch.title='Party chat';ch.addEventListener('click',()=>{if(cpOpen()&&CP.cur==='party')cpHide();else cpShow('party',!PHONE)});
   bt.className='pbt';bt.appendChild(ch);bt.appendChild(lv);bt.appendChild(hd);h.appendChild(t);h.appendChild(bt);box.appendChild(h);
   for(const x of PARTY.m){
@@ -554,20 +554,57 @@ function playFx(m){
       q.spx=list.length?{e:performance.now()/1000+clamp(+m.t||0,0,20),list}:null;break}
   }
 }
+/* v5_248 the Here / Online window can be dragged by its title bar (position remembered) and collapsed to just the title bar */
+const OLUI=(()=>{let o={};try{o=JSON.parse(localStorage.getItem('al_onlineui')||'{}')||{}}catch(e){}return{c:!!o.c,x:typeof o.x==='number'?o.x:null,y:typeof o.y==='number'?o.y:null}})();
+function onlUiSave(){try{localStorage.setItem('al_onlineui',JSON.stringify(OLUI))}catch(e){}}
+function onlPlace(){
+  const b=$('online');
+  b.classList.toggle('olc',OLUI.c);
+  if(OLUI.x===null){b.style.left=b.style.top=b.style.right=b.style.maxHeight='';return}
+  const r=$('hud').getBoundingClientRect(),w=b.offsetWidth||170,h=b.offsetHeight||60;
+  const x=clamp(OLUI.x*r.width,0,Math.max(0,r.width-w)),y=clamp(OLUI.y*r.height,0,Math.max(0,r.height-h));
+  b.style.right='auto';b.style.left=x+'px';b.style.top=y+'px';b.style.maxHeight=Math.max(56,r.height-y-8)+'px';
+}
+(function(){
+  const b=$('online');let d=null;
+  b.addEventListener('pointerdown',e=>{
+    const h=e.target.closest&&e.target.closest('h4');
+    if(!h||e.target.closest('button')||e.button>0)return;
+    const r=b.getBoundingClientRect();d={dx:e.clientX-r.left,dy:e.clientY-r.top,id:e.pointerId};b.classList.add('drag');e.preventDefault()});
+  window.addEventListener('pointermove',e=>{
+    if(!d||e.pointerId!==d.id)return;
+    const hr=$('hud').getBoundingClientRect(),w=b.offsetWidth,h=b.offsetHeight;
+    OLUI.x=clamp(e.clientX-d.dx-hr.left,0,Math.max(0,hr.width-w))/hr.width;OLUI.y=clamp(e.clientY-d.dy-hr.top,0,Math.max(0,hr.height-h))/hr.height;onlPlace()});
+  const end=e=>{if(!d||(e&&e.pointerId!==d.id))return;d=null;b.classList.remove('drag');onlUiSave()};
+  window.addEventListener('pointerup',end);window.addEventListener('pointercancel',end);
+  b.addEventListener('dblclick',e=>{if(e.target.closest&&e.target.closest('h4')&&!e.target.closest('button')){OLUI.x=OLUI.y=null;onlUiSave();onlPlace()}});
+  window.addEventListener('resize',onlPlace);
+})();
 function renderOnline(){
   const box=$('online');
   if(!MP){if(!box.hidden){box.hidden=true;NET.olKey=''}return}
-  const list=[...NET.peers.values()].sort((a,b)=>b.lvl-a.lvl),key=list.length+':'+NET.online+':'+PARTY.m.length+':'+FR.f.length+':'+FR.out.length+':'+list.slice(0,6).map(q=>q.name+q.lvl+(q.pvp?'!':'')+(PARTY.ids.has(q.id)?'p':'')).join('|');
+  /* v5_247: nearest player first (order refreshed at most every 1.5 s so rows do not jump under a tap); every player is listed, the list scrolls */
+  const list=[...NET.peers.values()],now=performance.now();
+  if(!NET.olOrd||now-NET.olOrdT>1500){list.sort((a,b)=>Math.hypot(a.x-P.x,a.y-P.y)-Math.hypot(b.x-P.x,b.y-P.y));NET.olOrd=list.map(q=>q.id);NET.olOrdT=now}
+  else{const ix=new Map(NET.olOrd.map((id,i)=>[id,i]));list.sort((a,b)=>(ix.has(a.id)?ix.get(a.id):1e9)-(ix.has(b.id)?ix.get(b.id):1e9))}
+  const key=list.length+':'+NET.online+':'+PARTY.m.length+':'+FR.f.length+':'+FR.out.length+':'+list.map(q=>q.id+q.name+q.lvl+(q.pvp?'!':'')+(PARTY.ids.has(q.id)?'p':'')).join('|');
   if(key===NET.olKey)return;
+  const oldL=box.querySelector('.olist'),st=oldL?oldL.scrollTop:0;
   NET.olKey=key;box.hidden=false;box.innerHTML='';
-  const h=document.createElement('h4');h.textContent='Here \u00b7 '+(list.length+1)+'  \u00b7  Online \u00b7 '+NET.online;box.appendChild(h);
-  for(const q of list.slice(0,6)){
+  const h=document.createElement('h4'),ht=document.createElement('span'),hx=document.createElement('button');ht.textContent='Here \u00b7 '+(list.length+1)+'  \u00b7  Online \u00b7 '+NET.online;h.appendChild(ht);
+  const hc=document.createElement('button');hc.type='button';hc.className='wx2';hc.textContent=OLUI.c?'+':'\u2013';hc.title=OLUI.c?'Expand the list':'Collapse the list';hc.setAttribute('aria-label',hc.title);
+  hc.addEventListener('click',e=>{e.stopPropagation();OLUI.c=!OLUI.c;onlUiSave();NET.olKey='';renderOnline()});
+  const hb=document.createElement('span');hb.className='ohb';hb.appendChild(hc);
+  hx.type='button';hx.className='wx2';hx.textContent='\u2715';hx.title='Close';hx.setAttribute('aria-label','Close');hx.addEventListener('click',e=>{e.stopPropagation();if(ONL_OPEN)$('bParty').click()});hb.appendChild(hx);h.appendChild(hb);box.appendChild(h);
+  onlPlace();
+  const ol=document.createElement('div');ol.className='olist';box.appendChild(ol);
+  for(const q of list){
     const r=document.createElement('div');const inP=PARTY.ids.has(q.id);r.className='pn'+(q.pvp?' pvp':'')+(inP?' pty':'');r.title='Tap to whisper';r.addEventListener('click',()=>whisperTo(q.name));
     const a=document.createElement('span'),b=document.createElement('span');a.textContent=(q.pvp?'\u2694 ':'')+q.name;b.textContent='Lv '+q.lvl;r.appendChild(a);r.appendChild(b);
     if(frIs(q.name))r.classList.add('fr');
     else{const hv=document.createElement('span');hv.className='fadd2';hv.textContent='\u2665';hv.title=FR.out.some(n=>n.toLowerCase()===q.name.toLowerCase())?'Friend request already sent to '+q.name:'Send '+q.name+' a friend request';hv.addEventListener('click',e=>{e.stopPropagation();frCmd('friend',q.name)});r.appendChild(hv)}
     if(!inP&&PARTY.m.length<4){const v=document.createElement('span');v.className='inv';v.textContent='+';v.title='Invite '+q.name+' to your party';v.addEventListener('click',e=>{e.stopPropagation();partyCmd('invite',q.name)});r.appendChild(v)}
-    box.appendChild(r);
+    ol.appendChild(r);
   }
-  if(list.length>6){const r=document.createElement('div');r.className='pn';r.textContent='+ '+(list.length-6)+' more';box.appendChild(r)}
+  ol.scrollTop=st;
 }

@@ -12,8 +12,8 @@ window.addEventListener('keydown',e=>{
   else if(k===' ')doJump(); /* v5_169 Space = jump (attack nearest is F) */
   else if(k==='e')startMine();
   else if(k==='f'){const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null;P.fatk=true}} /* F = attack nearest */
-  else if(k==='o')openForge();else if(k==='g')openWorlds();else if(k==='h')openWh();
-  else if(k==='escape'){cpHide();$('forge').hidden=true;$('worlds').hidden=true;$('book').hidden=true;$('wardrobe').hidden=true;$('menu').hidden=true;statsToggle(false);if(!$('bag').hidden)closeBag();$('shop').hidden=true;closeWh()}
+  else if(k==='o')openForge();else if(k==='u'){$('nest').hidden?nestOpen():nestClose()}else if(k==='g')openWorlds();else if(k==='h')openWh();
+  else if(k==='escape'){nestClose();cpHide();$('forge').hidden=true;$('worlds').hidden=true;$('book').hidden=true;$('wardrobe').hidden=true;$('menu').hidden=true;statsToggle(false);if(!$('bag').hidden)closeBag();$('shop').hidden=true;closeWh()}
 });
 window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
 $('bChat').addEventListener('click',toggleChat);
