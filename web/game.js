@@ -5881,7 +5881,7 @@ const CMDHELP=[
  'Friends:  /friend name (send a request)  \u00b7 /friend accept [name]  \u00b7 /friend decline [name]  \u00b7 /unfriend name  \u00b7 /friends (open the window)',
  'Private:  /w name message  \u00b7 /r message (reply)  \u00b7 or tap a name in the Here list',
  'Fun:  /fireworks  \u00b7 /roll [sides]  \u00b7 /flip',
- 'Server:  /who  \u00b7 /announce message'];
+ 'Server:  /who  \u00b7 /announce message  \u00b7 /backup (copy all player data to your private GitHub repository)'];
 const CMDNUM=(v,d)=>{const n=parseFloat(v);return isFinite(n)?n:d};
 function refreshCurrencyUi(){if($('bag')&&!$('bag').hidden)renderBag();if($('forge')&&!$('forge').hidden)renderForge();if($('shop')&&!$('shop').hidden&&typeof renderShop==='function')renderShop()}
 const isReset=v=>v!==undefined&&/^(reset|zero|clear|none)$/i.test(String(v));
@@ -5979,7 +5979,8 @@ const CMDS={
     if(!keys||keys.length===0){say('Usage: /forgereset [slot|all]   slots: '+GEAR.map(q=>q.k).join(' '),'#d9503f');return}
     forgeApply(keys,0);say('Forge level reset to +0 on '+(keys.length===GEAR.length?'all slots':keys.join(', '))+'.','#e3b559')},
   who(){say('/who needs the multiplayer server.','#8d9aa2')},
-  announce(){say('/announce needs the multiplayer server.','#8d9aa2')}
+  announce(){say('/announce needs the multiplayer server.','#8d9aa2')},
+  backup(){say('/backup needs the multiplayer server.','#8d9aa2')}
 };
 function runCmd(line){
   if(!started)return;

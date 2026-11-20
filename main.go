@@ -51,6 +51,7 @@ func main() {
 	couponList := flag.Bool("coupon-list", false, "list every coupon code and whether it has been used, then exit")
 	flag.Parse()
 	initDataDir(*dataFlag)
+	ghRestoreMissing() // v5_274 data files that are missing here (fresh disk on Render free) are fetched from the GitHub backup, if it is set up
 	if *couponNew > 0 || *couponList {
 		if *couponNew > 0 {
 			if *couponNew > couponMaxN || *couponGold < 1 || *couponGold > 1000000 {
@@ -90,6 +91,7 @@ func main() {
 		log.Fatal(err)
 	}
 	accts = loadAccounts()
+	ghStartTimer()
 	if abs, err := filepath.Abs(dataDir); err == nil {
 		fmt.Println("Player data folder:", abs)
 	}
@@ -161,6 +163,21 @@ func main() {
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		<-c
 		accts.flush()
+		if ghConfigured() { // v5_274 a deploy / restart sends this signal: push the newest data to GitHub before the disk is lost (the host waits ~30 s)
+			done := make(chan struct{})
+			go func() {
+				if msg, err := ghBackup(); err != nil {
+					log.Printf("GitHub backup on shutdown failed: %v", err)
+				} else {
+					log.Print(msg)
+				}
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(20 * time.Second):
+			}
+		}
 		os.Exit(0)
 	}()
 	log.Fatal(http.Serve(ln, mux))

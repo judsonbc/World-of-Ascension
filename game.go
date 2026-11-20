@@ -1569,6 +1569,20 @@ func (h *Hub) command(p *Player, r *Realm, line string) {
 			}
 		}
 		p.sysMsg("Online " + itoa(len(names)) + ": " + strings.Join(names, ", "))
+	case "backup": // v5_274 push the player data to the private GitHub repository (runs in the background: the network call must not block the game loop)
+		if !ghConfigured() {
+			p.sysMsg("GitHub backup is not set up. On the server set GITHUB_TOKEN and GITHUB_BACKUP_REPO (owner/name of a private repository).")
+			return
+		}
+		p.sysMsg("Backing up to GitHub ...")
+		go func() {
+			if msg, err := ghBackup(); err != nil {
+				log.Printf("GitHub backup failed: %v", err)
+				p.sysMsg("Backup FAILED: " + err.Error())
+			} else {
+				p.sysMsg(msg)
+			}
+		}()
 	case "announce":
 		txt := cleanChat(strings.TrimSpace(strings.TrimPrefix(line, f[0])))
 		if txt == "" {

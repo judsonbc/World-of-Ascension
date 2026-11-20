@@ -1,3 +1,17 @@
+v5_274 GITHUB BACKUP FOR HOSTS WITHOUT A DISK (Render free)  (new ghbackup.go, main.go, game.go, 09_chat_ui.js -> rebuilt web/game.js)
+  - Admin chat command /backup copies users.json (accounts + saves), friends.json, coupons.json and whispers.json to a PRIVATE GitHub repository (only files that changed are pushed).
+  - Automatic restore: at start-up, any of those files that is MISSING in the data folder is fetched from GitHub first (so a Render deploy / restart / idle spin-down that wipes the disk starts from the last backup). Existing files are never overwritten.
+  - The server also pushes a backup when it gets the stop signal (Render sends it on every deploy, ~30 s grace), and optionally every N minutes.
+  - Set on the host (nothing in the code):  GITHUB_TOKEN (fine-grained token, only the backup repo, Contents: read & write)  ·  GITHUB_BACKUP_REPO (owner/name, PRIVATE, NOT the repo Render deploys from)  ·  optional GITHUB_BACKUP_BRANCH (main)  ·  GITHUB_BACKUP_DIR (woa-data)  ·  GITHUB_BACKUP_MINUTES (0 = off, min 5).
+  - Not backed up: secret.key (players log in again after a restore). Not compiled / run against GitHub by the author of this change: run build.bat once to check.
+
+v5_273 SMOOTHER SKY ON PHONES  (web/fx3d.js)
+  - Noise hash: the sky noise (clouds, Milky Way, aurora) used fract(sin(dot())*43758.5453), which phone GPUs evaluate with a coarse sin() and shows as streaks / grid lines. Replaced by a sin-free hash.
+  - Dither: the sky gradient (zenith / horizon) now has a 1-level dither, so there are no horizontal colour bands.
+  - Clouds: less stretching near the horizon (denominator h+.22 -> h+.34, horizon fade a little longer), which removes the fine moire lines there.
+  - Aurora: the hard stripes (sin(u*18)) are now soft curtains (lower frequency, modulated), same colours.
+  - Same sky on PC (the changes are shader-wide), only smoother.
+
 v5_272 NOTHING BUILT IN THE WATER + COMPACT HATCH WINDOW ON LANDSCAPE PHONES  (01_core, 05_terrain3d, 03_pets_nest + web/index.html CSS -> rebuilt web/game.js)
   - Buildings / landmarks: the old check only tested the CENTRE of a building, only on the island worlds, against height 2, so on every other world (and at the edge of island lakes) buildings and landmarks stood half or fully in the water. Now bldWet(i,x,y,r) tests the whole footprint (centre + 2 rings of 8 points) against the real water level of the world (new worldWL in 05_terrain3d = the same level the water surface is drawn at, +10 units so shore-line sites are refused too). Used both for choosing village / landmark sites (findSite) and for every single building (put). Worlds without liquid are unaffected. Existing worlds are generated from a fixed seed, so some buildings will stand in different spots now.
   - Pet Nest > Hatch on a landscape phone: title, tabs and Close share one row; below it the egg, count and Hatch buttons are on the left and the six species slots (3 x 2) on the right, so the window fits without scrolling. The special-pet reveal has its own small size there. Combine tab unchanged.
