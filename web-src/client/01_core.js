@@ -29,10 +29,12 @@ try{if(window.ResizeObserver)new ResizeObserver(()=>{if(stage.clientWidth!==VW||
 
 /* ---------- constants ---------- */
 /* MAP_K = map size multiplier (linear). Must equal mapK in game.go. Monsters, ore and scenery scale with it too. */
+const SCENERY_BIG=30; /* percent of scenery props that are the BIG size (v5_258) */
+const SCENERY_N=1950*5; /* scatter props per world (1500*MAP_K before v5_257); MAP_K is 5 */
 const RING_MONS=[300,400,500,600,700,800,900,1000,300]; /* monsters per ring 1-9; must equal ringMons in game.go */
-const MAP_K=5,WORLD=6400*MAP_K,C=WORLD/2,TOWN=345,MAXLV=1000,FORGE_MAX=100;
+const MAP_K=5,WORLD=6400*MAP_K,C=WORLD/2,TOWN=400,MAXLV=1000,FORGE_MAX=100;
 let RIM=3080*MAP_K; /* current map radius: the Colosseum swaps in ARENA_R */
-const NW=16,ARENA=0,ARENA_R=2250; /* World 0 (Arena) is the PvP arena, worlds 1-15 are the hunting worlds; keep equal to arenaWi / arenaR in game.go */
+const NW=16,ARENA=0,ARENA_R=2250,ARENA_PROPS=600; /* World 0 (Arena) is the PvP arena, worlds 1-15 are the hunting worlds; keep equal to arenaWi / arenaR in game.go */
 const WORLDS=[
  {n:'Ashen Reach',hub:'Lotus Sanctum',lo:1,hi:50,acc:'#e3b559',blurb:'Mist, bandits and the first rim.',
   z:['Mistfall Meadow','Hollow Pass','Stoneback Ridge','Jadewater Marsh','The Ashen Rim','Cinderfall Dunes','Frostveil Peaks','Obsidian Abyss','Celestial Ruin'],
@@ -493,23 +495,23 @@ function bldWet(i,x,y){try{return WMAP[tIx(i)%12][0]==='isles'&&mkH(i)(x-C,y-C)<
    home = [kind, weight] used for ordinary village buildings, land = tall / grand landmarks (lone, or the centre of a village, or a 'downtown' cluster).
    pal = [wallH,wallS,wallL, roofH,roofS,roofL, accentH,accentS,accentL]. */
 const CUL=[
- {home:[[2,3],[0,2],[14,1]],land:[[9,3],[8,3],[6,2]],pal:[35,12,48,20,20,30,45,70,60]},                                   /* 0 Arena: ruined sandstone */
- {home:[[0,6],[1,2],[7,1],[2,1],[14,1]],land:[[3,5],[6,1],[2,2],[10,1]],pal:[40,25,70,5,55,32,45,80,58]},                  /* 1 Ashen Reach: lacquered pagodas */
- {home:[[0,4],[12,3],[1,2],[2,2],[14,1]],land:[[6,4],[9,2],[2,3],[4,1]],pal:[10,18,42,0,60,28,40,70,55]},                  /* 2 Crimson Dominion: war forts */
- {home:[[0,3],[5,3],[7,2],[14,1]],land:[[8,4],[11,4],[4,3],[5,2]],pal:[225,25,66,250,35,40,190,80,75]},                    /* 3 Starfall: observatories and crystals */
- {home:[[0,3],[12,3],[1,2],[2,2]],land:[[9,5],[6,3],[4,2],[8,1]],pal:[15,15,28,10,70,34,28,100,55]},                        /* 4 Ember Throne: forge ziggurats */
- {home:[[0,3],[5,3],[1,2],[7,1],[14,1]],land:[[3,4],[4,4],[5,3],[8,2],[11,1]],pal:[50,20,82,195,45,48,48,90,62]},          /* 5 Heavenfall: celestial spires */
- {home:[[0,5],[12,2],[7,2],[1,1],[14,2]],land:[[13,5],[6,2],[5,2],[10,1],[3,1]],pal:[190,30,72,205,50,35,15,70,58]},       /* 6 Tideglass: harbour */
- {home:[[7,4],[0,4],[12,2],[10,1],[14,1]],land:[[10,3],[3,2],[6,2],[11,1],[2,2]],pal:[30,32,45,110,40,30,85,60,55]},        /* 7 Verdant: wood and windmills */
- {home:[[2,3],[0,3],[1,2],[12,1]],land:[[4,4],[6,3],[8,3],[2,2],[13,1]],pal:[215,12,54,225,25,28,55,95,60]},                /* 8 Stormcrown: sky fortresses */
- {home:[[0,4],[1,2],[6,2],[14,1]],land:[[8,4],[6,4],[4,2],[9,1],[5,1]],pal:[340,10,30,350,50,22,355,80,50]},                /* 9 Bloodmoon: gothic spires */
- {home:[[0,5],[5,2],[7,2],[14,2],[1,1]],land:[[9,4],[8,4],[5,3],[10,1],[4,1]],pal:[38,50,66,30,60,45,45,95,58]},            /* 10 Sunforged: sandstone domes */
- {home:[[0,3],[5,2],[1,2],[7,2]],land:[[4,5],[11,5],[8,2],[5,2]],pal:[290,20,76,270,30,44,180,70,70]},                      /* 11 Mirrorveil: glass towers */
- {home:[[2,3],[0,3],[6,2],[14,1]],land:[[8,4],[11,3],[4,3],[6,2],[9,1]],pal:[265,15,24,275,35,20,285,80,58]},               /* 12 Voidmaw: obsidian */
- {home:[[12,3],[0,3],[1,3],[2,2]],land:[[6,4],[9,3],[8,2],[2,2],[4,1]],pal:[45,22,74,20,40,36,10,80,52]},                   /* 13 Dragonbone: bone halls */
- {home:[[0,3],[1,2],[7,1],[10,2],[14,1]],land:[[4,4],[6,4],[10,3],[8,2],[5,1]],pal:[30,28,50,35,60,36,45,90,60]},           /* 14 Chronos: clockwork */
- {home:[[1,3],[0,2],[5,2],[2,2]],land:[[4,5],[3,3],[8,3],[9,2],[5,1]],pal:[55,10,84,45,40,40,48,100,64]}];                   /* 15 Heaven-Sundering: monuments */
-const KROUND=[6,7,10,13,14]; /* kinds with a circular footprint (hw = radius) */
+ {home:[[2,3],[22,3],[0,1],[14,1],[15,2]],land:[[35,3],[40,1],[9,3],[8,2],[18,3],[22,3],[6,2],[15,2]],pal:[35,12,48,20,20,30,45,70,60]}, /* Arena: ruined sandstone, henge, pyramids */
+ {home:[[0,4],[29,3],[17,1],[7,1],[1,2]],land:[[36,4],[35,3],[37,3],[39,2],[38,2],[40,2],[41,3],[3,5],[29,4],[2,1],[10,1]],pal:[40,25,70,5,55,32,45,80,58]}, /* Ashen Reach: lacquered pagodas, torii shrines */
+ {home:[[12,3],[0,2],[2,3],[25,3],[1,1]],land:[[6,3],[9,2],[32,3],[25,2],[4,1]],pal:[10,18,42,0,60,28,40,70,55]}, /* Crimson Dominion: war forts, smelters, beacons */
+ {home:[[5,3],[16,3],[7,1],[0,2],[14,1]],land:[[11,4],[8,2],[28,3],[20,3],[4,2]],pal:[225,25,66,250,35,40,190,80,75]}, /* Starfall: observatories, mushrooms, storm rods, monoliths */
+ {home:[[25,4],[12,2],[0,2],[2,2]],land:[[9,4],[32,3],[25,3],[4,1],[24,3]],pal:[15,15,28,10,70,34,28,100,55]}, /* Ember Throne: smelters, forge ziggurats, shard spires */
+ {home:[[0,2],[5,3],[26,3],[7,1]],land:[[36,1],[41,1],[3,3],[26,4],[20,3],[4,3],[11,1]],pal:[50,20,82,195,45,48,48,90,62]}, /* Heavenfall: sky temples, celestial spires */
+ {home:[[17,4],[0,3],[27,3],[14,2],[12,1]],land:[[38,1],[40,2],[13,5],[27,2],[5,2],[10,1],[3,1]],pal:[190,30,72,205,50,35,15,70,58]}, /* Tideglass: stilt harbour, shell domes, lighthouses */
+ {home:[[16,4],[7,3],[17,2],[0,2],[10,1]],land:[[35,2],[36,2],[41,2],[37,1],[10,3],[15,3],[16,2],[3,1],[2,1]],pal:[30,32,45,110,40,30,85,60,55]}, /* Verdant: mushroom homes, stilt houses, windmills, henges */
+ {home:[[2,3],[0,2],[26,2],[12,1]],land:[[28,4],[4,3],[26,3],[8,2],[24,2]],pal:[215,12,54,225,25,28,55,95,60]}, /* Stormcrown: storm rods, sky fortresses */
+ {home:[[0,3],[30,2],[22,2],[1,1],[14,1]],land:[[23,5],[8,3],[6,2],[30,2],[5,1]],pal:[340,10,30,350,50,22,355,80,50]}, /* Bloodmoon: cathedrals, ruins, skull gates */
+ {home:[[0,4],[7,3],[31,2],[14,2],[5,1]],land:[[36,1],[18,5],[9,3],[31,3],[8,2],[10,1]],pal:[38,50,66,30,60,45,45,95,58]}, /* Sunforged: pyramids, sundials, domes */
+ {home:[[0,2],[24,3],[5,2],[20,2],[7,1]],land:[[11,4],[20,4],[24,3],[4,3],[8,1]],pal:[290,20,76,270,30,44,180,70,70]}, /* Mirrorveil: glass towers, monoliths, shards */
+ {home:[[24,3],[2,3],[0,2],[6,1]],land:[[23,3],[20,2],[8,3],[24,3],[9,1]],pal:[265,15,24,275,35,20,285,80,58]}, /* Voidmaw: obsidian cathedrals, shard spires */
+ {home:[[12,3],[30,2],[0,2],[15,1],[1,2]],land:[[19,5],[30,3],[6,2],[9,2]],pal:[45,22,74,20,40,36,10,80,52]}, /* Dragonbone: rib arches, skull gates, bone halls */
+ {home:[[0,2],[31,3],[10,2],[7,1],[29,2],[14,1]],land:[[40,1],[21,5],[31,2],[4,3],[6,2],[10,2]],pal:[30,28,50,35,60,36,45,90,60]}, /* Chronos: clock towers, sundials, clockwork */
+ {home:[[1,3],[26,2],[29,3],[5,2],[2,1]],land:[[4,3],[26,4],[20,3],[32,3],[8,2],[9,1]],pal:[55,10,84,45,40,40,48,100,64]}]; /* Heaven-Sundering: monuments, sky temples, beacons */
+const KROUND=[6,7,10,13,14,15,16,20,24,27,28,31,32,38,40,41]; /* kinds with a circular footprint (hw = radius). v5_253 new kinds 15-32 (v5_262 PHILIPPINES: 33 bahay kubo, 34 bahay na bato, 35 The Ruins, 36 cathedral, 37 sugar mill, 38 Masskara monument, 39 capitol, 40 Spanish watchtower, 41 Mt. Kanlaon): 15 henge, 16 mushroom house, 17 stilt house, 18 pyramid, 19 rib arch, 20 crystal monolith, 21 clock tower, 22 ruins, 23 cathedral, 24 shard spire, 25 smelter, 26 sky temple, 27 shell dome, 28 storm rod, 29 torii shrine, 30 skull gate, 31 sundial, 32 beacon */
 function genVillages(i,R2){
   bld.length=0;
   const arena=i===ARENA,cu=CUL[arena?0:Math.min(i,15)],P9=cu.pal,rr=(a,b)=>a+R2()*(b-a),pick=l=>{let t=0;for(const e of l)t+=e[1];let r=R2()*t;for(const e of l){r-=e[1];if(r<=0)return e[0]}return l[0][0]};
@@ -535,6 +537,20 @@ function genVillages(i,R2){
       case 8:{const w=rr(22,30);return [w,w,rr(280,440)]}case 9:{const w=rr(110,150);return [w,w,78]}
       case 10:{const r=rr(34,44);return [r,r,rr(150,210)]}case 11:{const w=rr(30,44);return [w,w,rr(140,320)]}
       case 12:return [rr(100,140),rr(44,58),rr(52,70)];case 13:{const r=rr(34,46);return [r,r,rr(220,330)]}
+      case 15:{const r=rr(70,100);return [r,r,rr(60,90)]}case 16:{const r=rr(36,56);return [r,r,rr(110,190)]}
+      case 17:return [rr(50,70),rr(44,60),rr(90,120)];case 18:{const w=rr(90,140);return [w,w,rr(160,260)]}
+      case 19:return [rr(70,100),rr(30,40),rr(180,260)];case 20:{const r=rr(30,44);return [r,r,rr(220,420)]}
+      case 21:{const w=rr(34,46);return [w,w,rr(340,520)]}case 22:return [rr(80,120),rr(40,60),rr(90,170)];
+      case 23:return [rr(60,80),rr(100,140),rr(200,320)];case 24:{const r=rr(46,70);return [r,r,rr(180,340)]}
+      case 25:return [rr(60,84),rr(50,70),rr(150,230)];case 26:return [rr(70,100),rr(70,100),rr(140,220)];
+      case 27:{const r=rr(44,66);return [r,r,rr(100,170)]}case 28:{const r=rr(22,30);return [r,r,rr(360,560)]}
+      case 29:return [rr(40,56),rr(40,56),rr(100,140)];case 30:return [rr(70,96),rr(34,46),rr(160,230)];
+      case 31:{const r=rr(60,90);return [r,r,rr(70,120)]}case 32:{const r=rr(26,36);return [r,r,rr(180,300)]}
+      case 33:return [rr(40,54),rr(36,48),rr(72,92)];case 34:return [rr(76,100),rr(54,70),rr(104,132)];
+      case 35:return [rr(92,122),rr(62,82),rr(130,190)];case 36:return [rr(60,80),rr(100,130),rr(210,300)];
+      case 37:return [rr(72,92),rr(50,64),rr(300,440)];case 38:{const r=rr(38,50);return [r,r,rr(200,300)]}
+      case 39:return [rr(104,132),rr(60,76),rr(150,220)];case 40:{const r=rr(34,46);return [r,r,rr(220,320)]}
+      case 41:{const r=rr(120,165);return [r,r,rr(300,440)]}
       default:return [17,17,22]}};
   const colors=()=>{const rh=P9[3]+(R2()<.4?(R2()<.5?36:-36):0);return {wc:H(P9[0]+rr(-9,9),P9[1],P9[2]+rr(-8,8)),rc:H(rh,P9[4],P9[5]+rr(-6,6)),ac:H(P9[6],P9[7],P9[8]),tc:H(P9[0]+rr(-6,6),P9[1]*.7,P9[2]*.55),gc:H(P9[6]+rr(-10,10),55,76)}};
   /* put one building (a ziggurat adds 3 nested records). (tx,ty) = the point its door faces. Returns the record or null. */
@@ -686,10 +702,13 @@ function buildWorld(i,spawn){
     const a=R2()*Math.PI*2,d=400+R2()*(RIM-500);
     if(i!==ARENA)ores.push({x:C+Math.cos(a)*d,y:C+Math.sin(a)*d,cd:0});
   }
-  for(let n=0;n<1500*MAP_K;n++){
+  let arenaKept=0; /* v5_260 the Arena is capped at ARENA_PROPS scatter props */
+  for(let n=0;n<SCENERY_N;n++){ /* v5_257 scenery density +30%: 1500 -> 1950 per map-k. Nothing else draws from R2() after this loop, so every old prop keeps its place and the extra 30% are appended */
     const a=R2()*Math.PI*2,d=Math.sqrt(R2())*RIM;
-    if(d<TOWN+40||(i===ARENA&&n%4))continue;
-    deco.push({k:Math.floor(R2()*3),x:C+Math.cos(a)*d,y:C+Math.sin(a)*d,s:.7+R2()*.8});
+    if(d<TOWN+40||(i===ARENA&&(n%12||arenaKept>=ARENA_PROPS)))continue; /* v5_260 the Arena keeps exactly ARENA_PROPS (600) props: every 12th candidate until the cap (v5_259 kept 1 in 8, about 1,200) */
+    if(i===ARENA)arenaKept++;
+    const k=Math.floor(R2()*54),x=C+Math.cos(a)*d,y=C+Math.sin(a)*d,r=R2(); /* same 4 draws as before */
+    deco.push({k,x,y,s:(Math.imul(n,2654435761)>>>0)%100<SCENERY_BIG?1.6+r*.6:.7+r*.4}); /* v5_258 two sizes: SMALL .7-1.1, BIG 1.6-2.2 (about double), picked by a hash of n so no extra random draw */
   }
   genVillages(i,rngSeed(55555+i*104729));
   buildDecoGrid();buildBldGrid();

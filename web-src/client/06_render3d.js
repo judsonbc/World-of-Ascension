@@ -6,6 +6,7 @@ const T3={r:null,fr:0,zoom:1,mp:new Map(),rp:new Map(),it:new Map(),or:new Map()
 const WMAP=[['hills',40,.0017],['mesas',60,.0013],['ridged',55,.0021],['spires',90,.0011],['isles',50,.0012],['isles',60,.0019],['hills',55,.0015],['spires',100,.0013],['crater',70,.0014],['dunes',45,.0018],['mesas',70,.0017],['ridged',80,.0013]];
 const KITS=[[['Cone',1,3.2,1,1.6,0],['Dodeca',1.2,.8,1.2,.4,2],['Sphere',.9,.6,.9,.3,1]],[['Octa',.8,3,.8,1.5,1],['Octa',1.2,1,1.2,.5,0],['Dodeca',.6,.5,.6,.2,3]],[['Box',.8,3.4,.8,1.7,2],['Box',1.4,.7,1.4,.35,3],['Cyl',.5,1.2,.5,.6,0]],[['Cyl',.35,1.8,.35,.9,3],['Sphere',1.4,.9,1.4,1.6,0],['Sphere',.7,.5,.7,.25,1]],[['Cone',.5,3.8,.5,1.9,0],['Cyl',.45,2.2,.45,1.1,1],['Dodeca',1,.6,1,.3,2]]];
 const KOF=[0,2,4,1,3,3,0,1,4,2,3,1];
+const kitOf=i=>i===ARENA?1:KOF[tIx(i)%12]%5; /* scenery kit of a world; v5_260 the PvP Arena uses the CRYSTAL kit (1) again (v5_259 had the forest kit) */
 /* v5_107 gh3 = the height of the DRAWN terrain mesh (triangle interpolation of its vertex grid), not the smooth height function. The mesh cells are 90-200 units wide, so on
    narrow hills the true function and the mesh disagreed and a character / monster could sink into the hill (and be hidden). Same triangles as THREE.PlaneGeometry. */
 const gh3=(x,y)=>{const g=T3.hg;if(!g)return hfn(x-C,y-C);
@@ -42,35 +43,40 @@ function init3(){
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(3600),3));geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(3600),3));
   T3.pp=new THREE.Points(geo,new THREE.PointsMaterial({size:13,vertexColors:true,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,map:T3.dotTex=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d'),r=g.createRadialGradient(24,24,2,32,32,31);r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.55,'rgba(255,255,255,.95)');r.addColorStop(.85,'rgba(255,255,255,.55)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,64,64);const t=new THREE.CanvasTexture(c);return t})()}) /* v5_183 round, softly shaded sprite instead of the default square point */);T3.pp.frustumCulled=false;T3.sc.add(T3.pp);
 }
+/* v5_253 ground palette per world: [steep rock, soil patches, dry patches, winding trail band, high ground] */
+const GSK=[['#a89b84','#8a5a3a','#d9c08a','#6a3a30','#c8b89a'],['#6e6c70','#4a4648','#a8a4a0','#2a2626','#d8d6d6'],['#6a3a30','#8a3a2a','#a85a3a','#3a1a16','#b87a62'],['#7d86a8','#5a62a0','#aab4e0','#8aa0ff','#e0e8ff'],
+ ['#3a3230','#5a2a1c','#8a4a2a','#ff6a2a','#2a2422'],['#c8c4d4','#e0c890','#f0e8c8','#fff0b0','#ffffff'],['#7a8c94','#c8b080','#e4d8a8','#4ab0c8','#cfe8ee'],['#7a7a66','#6a4a2a','#a8b050','#e08ab0','#9aa07a'],
+ ['#5a6270','#3a4250','#7a8494','#2a3040','#aeb8c8'],['#5a3038','#4a1a22','#7a3a40','#8a1a28','#3a1a20'],['#b8945a','#c8782a','#f0d890','#fff0c0','#e8c070'],['#a89ac8','#8a9ad8','#d8c8f0','#e0f4ff','#f0e8ff'],
+ ['#2a2438','#1a1428','#4a3a68','#9a5aff','#120c1c'],['#c8c0a8','#8a6a44','#e8e0c8','#f4f0e0','#d8d0b8'],['#8a7a58','#6a5a38','#d8b868','#f0d070','#b8a070'],['#a89868','#c89a40','#f4e0a0','#fff2b0','#fffbe8']];
 function rebuild3(){
   T3.hg=null;
   if(T3.world){T3.sc.remove(T3.world);T3.world.traverse(o=>{if(o.geometry&&o.geometry.dispose&&!Object.values(G3).includes(o.geometry))o.geometry.dispose()})}
   const wg=new THREE.Group(),i=curWorld,w=W[i];hfn=mkH(i);T3.world=wg;
+  const GS=gStats(i),wl=GS.wl; /* v5_261 water level + height statistics of this world */
   const S=RIM+120,N=LOW?(PQ.lock?PQ.terr:150):360,geo=new THREE.PlaneGeometry(S*2,S*2,N,N).rotateX(-Math.PI/2),pos=geo.attributes.position,col=new Float32Array(pos.count*3),zc=ZONES.map(z=>new THREE.Color(z.fill)),tc=new THREE.Color();
-  const rockC=new THREE.Color('#9d9b94'),soilC=new THREE.Color('#9a7650'),dryC=new THREE.Color('#b9a074');
-  for(let k=0;k<pos.count;k++){const x=pos.getX(k),z=pos.getZ(k),d=Math.hypot(x,z);let h=hfn(x,z);if(d>RIM+40)h=-70;pos.setY(k,h);
+  const wh=new THREE.Color(1,1,1); /* v5_261 vertex colour is now only a gentle zone tint + height shading; the real surfaces (grass, soil, rock ...) come from the ground shader */
+  for(let k=0;k<pos.count;k++){const x=pos.getX(k),z=pos.getZ(k),d=Math.hypot(x,z);let h=hfn(x,z);if(d>RIM+40)h=-70;else if(wl>-1e4&&h<wl-14)h=wl-14; /* lake beds are at most 14 deep so nobody disappears under water */
+    pos.setY(k,h);
     let c=zc[zc.length-1];for(let q=0;q<ZONES.length;q++)if(d<=ZONES[q].d){c=zc[q];break}
-    tc.copy(c).multiplyScalar(Math.max(.4,.85+h*.004+Math.sin(x*.05)*Math.cos(z*.05)*.05)*1.7);
-    if(d>TOWN+60&&d<=RIM+40){ /* v5_167 terrain mix: steep slopes turn to bare rock, flat noisy patches to soil, a few dry-grass patches; partial blends keep each world's own colour */
-      const sx=(hfn(x+45,z)-h)/45,sz=(hfn(x,z+45)-h)/45,sl=Math.hypot(sx,sz),n2=Math.sin(x*.0113+1.3)*Math.cos(z*.0131)+.5*Math.sin(x*.0311-z*.0273+.7),rk=clamp((sl-.22)/.4,0,1);
-      tc.lerp(rockC,rk*.62);tc.lerp(soilC,clamp((n2-.45)/.5,0,1)*.5*(1-rk));tc.lerp(dryC,clamp((-n2-.8)/.5,0,1)*.28)}
-    if(d<TOWN)tc.set('#6b6a58');if(d>RIM+40)tc.set('#05070a');
+    tc.copy(c);tc.multiplyScalar(1/Math.max(.04,.3*tc.r+.59*tc.g+.11*tc.b));tc.lerp(wh,.62);
+    tc.multiplyScalar(clamp(.92+h*.0016+Math.sin(x*.05)*Math.cos(z*.05)*.025,.72,1.14));
+    if(d>RIM+40)tc.set('#05070a');
     col[k*3]=tc.r;col[k*3+1]=tc.g;col[k*3+2]=tc.b}
   {const hh=new Float32Array(pos.count);for(let k=0;k<pos.count;k++)hh[k]=pos.getY(k);T3.hg={S,N,c:2*S/N,h:hh}}
   geo.setAttribute('color',new THREE.BufferAttribute(col,3));geo.computeVertexNormals();
   {const mk=cv=>{const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;try{t.anisotropy=Math.min(LOW?2:8,T3.r.capabilities.getMaxAnisotropy())}catch(e){}return t};
-   if(!T3.gt)T3.gt=mk(groundTile());if(!T3.pz)T3.pz=mk(plazaTile());
-   T3.gt.repeat.set(2*S/380,2*S/380); /* one ground tile = 380 world units */
-   wg.add(new THREE.Mesh(geo,new THREE.MeshLambertMaterial({vertexColors:true,map:T3.gt})));
+   if(!T3.pz)T3.pz=mk(plazaTile());
+   wg.add(new THREE.Mesh(geo,groundMat(i,GS))); /* v5_261 multi-surface ground shader (05_terrain3d) */
    T3.pz.repeat.set(1,1);
    const pg=new THREE.CircleGeometry(TOWN-1,72).rotateX(-Math.PI/2),pu=pg.attributes.uv,pp=pg.attributes.position;for(let k=0;k<pu.count;k++)pu.setXY(k,pp.getX(k)/150,pp.getZ(k)/150); /* cobble = 150 world units */
    const pl=new THREE.Mesh(pg,new THREE.MeshLambertMaterial({color:'#b7b3a3',map:T3.pz,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
    pl.position.y=.7;wg.add(pl)} /* v5_167 cobblestone plaza */
-  if(WMAP[i%12][0]==='isles'){const wt=new THREE.Mesh(new THREE.CircleGeometry(RIM+40,160).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({color:0x2a6f9a,transparent:true,opacity:.75}));wt.position.y=-8;wg.add(wt)}
+  addLiquid(wg,GS.K,wl); /* v5_261 lakes / sea / lava in the basins (the old flat sea plane was tied to the wrong terrain index) */
+  try{addTrailProps(wg,i,wl)}catch(e){console.warn('trail props',e)} /* v5_261b stones + grass tufts on the trail */
   T3.hub=AL3D.buildHub(w.acc,TOWN/1.5);T3.hub.scale.set(1.5,1.5,1.5);wg.add(T3.hub);
   if(i===ARENA){const bg=new THREE.BoxGeometry(12,70,12),bm=new THREE.MeshBasicMaterial({color:0xff5a4a});for(let k=0;k<96;k++){const a=k/96*6.2832,x=Math.cos(a)*(RIM+10),z=Math.sin(a)*(RIM+10),pl=new THREE.Mesh(bg,bm);pl.position.set(x,hfn(x,z)+30,z);wg.add(pl)}}
-  const dp=w.dp||['#16241d','#1c2f25','#4d5258','#5d636a'],kp=AL3D.kit(KOF[tIx(i)%12],dp,w.acc),dm=new THREE.MeshLambertMaterial({vertexColors:true});
-  for(let k=0;k<3;k++){const list=deco.filter((d,ix)=>d.k===k&&(!LOW||ix%3===0)),im=new THREE.InstancedMesh(kp[k],dm,list.length),du=new THREE.Object3D(),c=new THREE.Color();
+  const dp=w.dp||['#16241d','#1c2f25','#4d5258','#5d636a'],kp=AL3D.kit(kitOf(i),dp,w.acc),dm=new THREE.MeshLambertMaterial({vertexColors:true});
+  for(let k=0;k<DECO_N;k++){const list=deco.filter((d,ix)=>d.k===k&&(!LOW||ix%3===0)&&(wl<-1e4||gh3(d.x,d.y)>wl+1)),im=new THREE.InstancedMesh(kp[k],dm,list.length),du=new THREE.Object3D(),c=new THREE.Color();
     list.forEach((d,n)=>{const q=d.s*28;du.position.set(d.x-C,gh3(d.x,d.y)-q*.05,d.y-C);du.scale.set(q,q,q);du.rotation.y=n;du.updateMatrix();im.setMatrixAt(n,du.matrix);c.setScalar(.8+((n*37)%10)/22);im.setColorAt(n,c)});
     im.frustumCulled=false;wg.add(im)}
   if(bld.length){ /* v5_172 buildings: every part is an instance of one of 9 shared shapes -> 9 draw calls for the whole building layer */
@@ -84,12 +90,12 @@ function rebuild3(){
     const STONE='#76706a',DARKC='#1d150f',LITC='#ffd78a';
     bld.forEach((b,idx)=>{
       const hw=b.hw,hh=b.hh,wh=b.wh,k=b.k,rd=b.rd,W=hw*2,D=hh*2,fx=b.fx,fy=b.fy,hr=q=>{const t=Math.sin(b.sd*12.9898+q*78.233)*43758.5453;return t-Math.floor(t)};
-      let by=-1e9;const pts=rd?[[0,0],[1,0],[-1,0],[0,1],[0,-1]]:[[-1,-1],[1,-1],[-1,1],[1,1],[0,0]];let bmin=1e9;for(const[dx,dy]of pts){const gy2=gh3(b.x+dx*hw,b.y+dy*hh);by=Math.max(by,gy2);bmin=Math.min(bmin,gy2)}const fd=Math.max(41,Math.min(220,by-bmin+16)); /* v5_184 foundation reaches down to the lowest corner */
+      let by=-1e9;const pts=[];if(rd){pts.push([0,0]);for(const f of[.35,.7,1.05])for(let q=0;q<12;q++)pts.push([Math.cos(q*.5236)*f,Math.sin(q*.5236)*f])}else for(let i=-4;i<=4;i++)for(let j=-4;j<=4;j++)pts.push([i/4*1.05,j/4*1.05]);let bmin=1e9;for(const[dx,dy]of pts){const gy2=gh3(b.x+dx*hw,b.y+dy*hh);by=Math.max(by,gy2);bmin=Math.min(bmin,gy2)}const fd=Math.max(41,Math.min(600,by-bmin+16)); /* v5_184 foundation reaches down to the lowest corner; v5_264 sampled densely (81 points / 37 rings) and cap 220 -> 600, so no building hangs over a hollow */
       const X=b.x-C,Z=b.y-C,out=[],A=(g,ox,oy,oz,sx,sy,sz,c,ry)=>out.push([g,ox,oy,oz,sx,sy,sz,c,ry||0]);
       /* a flat panel on the front face (door / window): t = offset along the face */
       const F=(t,oy,w,h,c)=>{if(fx)A('b',fx*(hw+.8),oy,t,3,h,w,c);else A('b',t,oy,fy*(hh+.8),w,h,3,c)};
       const door=(w,h)=>F(0,0,w||26,h||40,DARKC),wins=(oy,n,c)=>{for(let q=0;q<n;q++)F((q-(n-1)/2)*((fx?hh:hw)*1.1/Math.max(1,n-1+.4)),oy,11,13,c||LITC)};
-      const found=()=>{if(k!==14)rd?A('y',0,1-fd,0,W+6,fd,D+6,STONE):A('b',0,1-fd,0,W+6,fd,D+6,STONE)};
+      const found=()=>{if(![17,26].includes(k)){const fc=k===41?'#4f7d3e':STONE;rd?A('y',0,1-fd,0,W+6,fd,D+6,fc):A('b',0,1-fd,0,W+6,fd,D+6,fc)}else if(k===26)A('b',0,1-fd,0,W*.3,fd+6,D*.3,'#6b6f7a')}; /* v5_264: wells + Mt. Kanlaon get a foundation too; the sky temple's stepped base now stands on a column to the ground instead of hovering 6 units above it */
       const bands=(w,d,h,y0,gap,c,rnd)=>{for(let y=y0;y<y0+h-14;y+=gap)rnd?A('y',0,y,0,w+3,8,d+3,c):A('b',0,y,0,w+3,8,d+3,c)};
       found();
       if(k===0){
@@ -154,7 +160,89 @@ function rebuild3(){
         const top=wh*.72;A('y',0,top,0,W*.9,8,W*.9,b.tc);A('y',0,top+8,0,W*.52,26,W*.52,'#ffe9a0');A('c',0,top+34,0,W*.7,hw*.9,W*.7,b.rc);A('y',0,top+34+hw*.9-2,0,3,18,3,STONE);door(20,34)
       }else if(k===14){
         A('y',0,0,0,W,20,W,STONE);A('y',0,19,0,W*.7,2,W*.7,'#1d3a50');for(const sx of[-1,1])A('b',sx*hw*.8,20,0,4,40,4,'#5a4a3a');A('p',0,58,0,W*1.4,16,W*1.4,b.rc)
+      }else if(k>=15){const al=hw>=hh,GL=b.ac.replace(/(\d+)%\)$/,'72%)'),GL2=b.rc.replace(/(\d+)%\)$/,'66%)'),BONE='#e8e4dc';
+        switch(k){
+        case 15:{const n=9,r=hw*.82;A('y',0,0,0,W*.98,6,W*.98,'#5c5a52');for(let q=0;q<n;q++){const a=q/n*6.2832,px=Math.cos(a)*r,pz=Math.sin(a)*r,hs=wh*(.85+hr(q)*.4);A('b',px,0,pz,hw*.22,hs,hw*.13,q%2?b.wc:b.tc,1.5708-a);if(q%3===0){const a2=a+3.1416/n;A('b',Math.cos(a2)*r,hs-6,Math.sin(a2)*r,hw*.5,10,hw*.14,b.wc,1.5708-a2)}}A('b',0,6,0,hw*.5,22,hw*.3,b.tc);A('o',0,28,0,hw*.22,hw*.34,hw*.22,b.ac)}break;
+        case 16:{A('y',0,0,0,W*.34,wh*.72,W*.34,'#efe6d2');A('y',0,wh*.18,0,W*.44,9,W*.44,'#d9cdb3');A('d',0,wh*.66,0,W*1.35,wh*.5,W*1.35,b.rc);const R0=W*.675;for(let q=0;q<7;q++){const a=q*.9+hr(q)*.5,r2=R0*(.15+hr(q+3)*.6),hy=wh*.5*Math.sqrt(Math.max(0,1-(r2/R0)*(r2/R0)));A('d',Math.cos(a)*r2,wh*.66+hy-3,Math.sin(a)*r2,W*.15,wh*.07,W*.15,'#fff4e0')}A('b',fx?fx*(W*.17+.8):0,0,fx?0:fy*(W*.17+.8),fx?2:14,26,fx?14:2,DARKC)}break;
+        case 17:{const ph=42;for(const sx of[-1,1])for(const sz of[-1,1])A('y',sx*(hw-8),-fd+2,sz*(hh-8),9,ph+fd,9,'#5a4630');A('b',0,ph,0,W+8,7,D+8,'#6b5236');A('b',0,ph+7,0,W*.8,wh*.55,D*.8,b.wc);A('g',0,ph+7+wh*.55,0,al?W*.98:D*.9,wh*.5,al?D*.9:W*.98,b.rc,al?0:1.5708);A('b',fx?fx*(hw+4):0,0,fx?0:fy*(hh+4),fx?5:12,ph+4,fx?12:5,'#8a6a42');for(let q=0;q<4;q++)A('b',fx?fx*(hw+4):0,q*10+6,fx?0:fy*(hh+4),fx?9:14,3,fx?14:9,'#5a4630')}break;
+        case 18:{A('b',0,0,0,W*1.1,10,D*1.1,STONE);A('p',0,10,0,W,wh,D,b.wc);A('p',0,10+wh*.84,0,W*.17,wh*.16+1,D*.17,b.ac);for(const sx of[-1,1])for(const sz of[-1,1]){A('b',sx*hw*1.04,0,sz*hh*1.04,10,wh*.2,10,b.tc);A('p',sx*hw*1.04,wh*.2,sz*hh*1.04,12,16,12,b.ac)}}break;
+        case 19:{const nr=6;A('b',0,0,0,W*1.02,6,D*1.1,'#b8b09c');A('b',0,wh*.92,0,W*.92,12,12,BONE);for(let q=-3;q<=3;q++)A('o',q*hw*.28,wh*.9-4,0,14,18,14,'#f4f0e6');for(let q=0;q<nr;q++){const z=(q-(nr-1)/2)*hh*.36,c2=q%2?BONE:'#d8d2c2';for(const sx of[-1,1]){A('b',sx*hw*.94,6,z,9,wh*.46,12,c2);A('b',sx*hw*.74,wh*.46,z,9,wh*.26,12,c2);A('b',sx*hw*.46,wh*.7,z,9,wh*.2,12,c2)}A('b',0,wh*.88,z,W*.2,9,10,c2)}}break;
+        case 20:{A('y',0,0,0,W*1.3,12,W*1.3,STONE);A('h',0,12,0,W*.8,26,W*.8,b.tc);A('o',0,48,0,W*.66,wh*.8,W*.66,GL);for(let q=0;q<3;q++){const a=q*2.094+hr(q)*.6;A('o',Math.cos(a)*hw*.95,40+wh*(.3+q*.2),Math.sin(a)*hw*.95,W*.16,W*.34,W*.16,q%2?GL2:b.ac)}}break;
+        case 21:{const cw=W*.98;A('b',0,0,0,W*1.12,14,W*1.12,STONE);A('b',0,14,0,W,wh*.7+20,W,b.wc);A('b',0,34+wh*.7,0,W*1.16,8,W*1.16,b.tc);A('b',0,42+wh*.7,0,cw,cw,cw,b.wc);const cy=42+wh*.7+cw*.5,fz=cw*.5+1;for(const s of[-1,1]){A('b',0,cy,s*fz,cw*.72,cw*.72,2,'#f3ecd2');A('b',s*fz,cy,0,2,cw*.72,cw*.72,'#f3ecd2');A('b',0,cy,s*(fz+1.5),3,cw*.26,1,'#222');A('b',cw*.08,cy,s*(fz+1.5),cw*.2,3,1,'#222');A('b',s*(fz+1.5),cy,0,1,cw*.26,3,'#222');A('b',s*(fz+1.5),cy,cw*.08,1,3,cw*.2,'#222')}A('b',0,42+wh*.7+cw,0,W*1.12,8,W*1.12,b.tc);A('p',0,50+wh*.7+cw,0,W*1.04,W*1.1,W*1.04,b.rc);A('c',0,50+wh*.7+cw+W*1.1,0,6,30,6,b.ac);F(0,14,24,32,DARKC);wins(wh*.45,2)}break;
+        case 22:{A('b',0,0,0,W,8,D,'#6c675d');const n=5;for(let q=0;q<n;q++){const x=(q-(n-1)/2)*W*.8/(n-1),h=wh*(.3+hr(q)*.7);for(const sz of[-1,1]){const h2=sz>0?h:h*(.45+hr(q+7)*.5);A('y',x,8,sz*(hh-14),16,h2,16,b.wc);if(h2>wh*.6)A('b',x,8+h2,sz*(hh-14),20,7,20,b.tc)}}A('b',-hw*.5,8,0,hw*.6,wh*.38,10,b.wc);A('b',hw*.25,8,hh*.25,16,10,28,b.tc);A('b',hw*.58,8,-hh*.3,26,14,18,b.wc);A('b',-hw*.1,8,-hh*.45,22,9,14,b.tc)}break;
+        case 23:{const nh=wh*.42;A('b',0,0,0,W,nh,D,b.wc);A('g',0,nh,0,D*1.08,wh*.3,W*1.14,b.rc,1.5708);for(let q=0;q<4;q++){const z=(q-1.5)*hh*.42;for(const sx of[-1,1])A('b',sx*(hw+7),0,z,8,nh*.8,8,b.tc)}for(const sx of[-1,1]){A('b',sx*hw*.7,0,hh-hw*.42,W*.3,wh*.82,W*.3,b.wc);A('p',sx*hw*.7,wh*.82,hh-hw*.42,W*.38,wh*.4,W*.38,b.rc)}A('b',0,nh,-hh*.1,W*.34,wh*.34,W*.34,b.wc);A('c',0,nh+wh*.34,-hh*.1,W*.42,wh*.48,W*.42,b.rc);A('b',0,wh*.2,hh+.8,20,20,3,GL);A('b',0,0,hh+.8,26,nh*.7,3,DARKC)}break;
+        case 24:{A('h',0,0,0,W*1.1,16,W*1.1,'#2c2a36');A('o',0,10,0,W*.5,wh,W*.5,b.ac);for(let q=0;q<6;q++){const a=q*1.0472+hr(q)*.4,r=hw*.7,sw=W*(.18+hr(q+4)*.14);A('o',Math.cos(a)*r,8,Math.sin(a)*r,sw,wh*(.35+hr(q+9)*.35),sw,q%2?GL:GL2)}}break;
+        case 25:{A('b',0,0,0,W,wh*.5,D,b.wc);A('g',0,wh*.5,0,al?W*1.06:D*1.06,wh*.3,al?D*1.12:W*1.12,b.rc,al?0:1.5708);for(const sx of[-1,1]){const cx=sx*hw*.55,cz=-hh*.35;A('y',cx,0,cz,hw*.36,wh*.95,hw*.36,b.tc);A('y',cx,wh*.95,cz,hw*.46,9,hw*.46,STONE);A('c',cx,wh*.95+9,cz,hw*.3,hw*.34,hw*.3,'#ff6a2a')}F(0,0,30,34,'#ff7a2a');F(0,40,12,12,'#ffb14a');wins(wh*.34,2,'#ff9a3a')}break;
+        case 26:{const y0=36;A('b',0,y0-12,0,W*.7,12,D*.7,'#8b8f9a');A('b',0,y0-22,0,W*.45,10,D*.45,'#7a7e89');A('b',0,y0-30,0,W*.22,8,D*.22,'#6b6f7a');A('b',0,y0,0,W,10,D,b.tc);const n=4;for(let q=0;q<n;q++)for(const sz of[-1,1])A('y',(q-(n-1)/2)*W*.8/(n-1),y0+10,sz*(hh-12),12,wh*.7,12,b.wc);A('b',0,y0+10+wh*.7,0,W*1.05,10,D*1.05,b.tc);A('p',0,y0+20+wh*.7,0,W*1.1,wh*.3,D*1.1,b.rc)}break;
+        case 27:{A('h',0,0,0,W*1.1,14,W*1.1,'#e8d9c0');A('d',0,10,0,W,wh*.8,W,b.wc);for(let q=0;q<8;q++){const a=q*.7854,r=hw*.78;A('c',Math.cos(a)*r,10,Math.sin(a)*r,W*.2,wh*(.4+hr(q)*.3),W*.2,q%2?b.rc:b.ac)}A('o',0,10+wh*.78,0,W*.2,W*.24,W*.2,'#fff6ff')}break;
+        case 28:{A('h',0,0,0,W*1.6,20,W*1.6,STONE);A('h',0,20,0,W*.6,wh*.8,W*.6,b.wc);for(let q=1;q<5;q++)A('y',0,20+q*wh*.15,0,W*.9,5,W*.9,b.tc);A('y',0,20+wh*.8,0,3,wh*.2,3,'#c9d4e0');A('o',0,20+wh*.95,0,W*.7,W*.9,W*.7,b.ac)}break;
+        case 29:{A('b',0,0,0,W,10,D,STONE);A('b',0,10,-hh*.25,W*.6,wh*.42,D*.46,b.wc);A('g',0,10+wh*.42,-hh*.25,W*.8,wh*.3,D*.64,b.rc);const tz=hh*.6;for(const sx of[-1,1]){A('y',sx*hw*.62,10,tz,8,wh*.72,8,'#c4302b');A('b',sx*hw*.86,10,hh*.2,8,16,8,STONE);A('b',sx*hw*.86,26,hh*.2,12,5,12,STONE)}A('b',0,10+wh*.56,tz,W*.9,9,10,'#c4302b');A('b',0,10+wh*.7,tz,W*1.08,9,12,'#1d150f')}break;
+        case 30:{A('b',0,0,0,W*1.06,10,D*1.2,'#cfc8b8');for(const sx of[-1,1])A('b',sx*hw*.76,10,0,hw*.42,wh*.8,D*.9,BONE);A('b',0,10+wh*.64,0,W,wh*.18,D*.8,BONE);A('b',0,10+wh*.82,0,W*.5,wh*.26,D*.8,'#f0ece2');for(const sz of[-1,1]){for(const sx of[-1,1])A('b',sx*hw*.13,10+wh*.9,sz*(hh*.4+.8),hw*.14,hw*.14,2,'#16120f');A('b',0,10+wh*.84,sz*(hh*.4+.8),hw*.07,hw*.1,2,'#16120f')}for(const sx of[-1,1])A('p',sx*hw*.2,10+wh*1.08,0,hw*.16,wh*.2,hw*.16,'#d8d0bd')}break;
+        case 31:{A('y',0,0,0,W,10,W,'#d6cbb0');A('y',0,10,0,W*.86,4,W*.86,b.tc);for(let q=0;q<12;q++){const a=q*.5236;A('b',Math.cos(a)*hw*.72,14,Math.sin(a)*hw*.72,6,8,6,b.ac)}A('p',0,14,0,hw*.18,wh*.9,hw*.7,b.ac);for(let q=0;q<4;q++){const a=q*1.5708+.785,px=Math.cos(a)*hw*.93,pz=Math.sin(a)*hw*.93;A('b',px,0,pz,12,wh*.6,12,b.wc);A('p',px,wh*.6,pz,16,14,16,b.ac)}}break;
+        case 32:{A('h',0,0,0,W*1.4,wh*.55,W*1.4,b.wc);A('y',0,wh*.55,0,W*1.6,10,W*1.6,b.tc);A('h',0,wh*.55+10,0,W*1.5,22,W*1.5,STONE);A('c',0,wh*.55+30,0,W*.9,W*1.6,W*.9,'#ff7a1c');A('c',0,wh*.55+30,0,W*.55,W*2.1,W*.55,'#ffd24a')}break;
+        case 33:{const ph=34,TH='#b59a5a',BAM='#c9ad6a',PT='#8a6a3a',wx=hw*.86,wz=hh*.86;
+          for(const sx of[-1,1])for(const sz of[-1,1])A('y',sx*(hw-6),-fd+2,sz*(hh-6),7,ph+fd,7,PT);
+          A('b',0,ph,0,W+6,5,D+6,'#a8854f');A('b',0,ph+5,0,W*.86,wh*.42,D*.86,BAM);
+          for(let q=1;q<5;q++)A('b',0,ph+5+q*wh*.08,0,W*.88,2,D*.88,'#a88a50'); /* woven bamboo bands */
+          A('g',0,ph+3+wh*.42,0,al?W*1.22:D*1.22,wh*.82,al?D*1.28:W*1.28,TH,al?0:1.5708); /* steep nipa-palm thatch */
+          if(fx){A('b',fx*(wx+.8),ph+5,0,3,wh*.3,16,DARKC);for(const t of[-1,1])A('b',fx*(wx+.8),ph+5+wh*.18,t*hh*.5,3,12,12,DARKC)}else{A('b',0,ph+5,fy*(wz+.8),16,wh*.3,3,DARKC);for(const t of[-1,1])A('b',t*hw*.5,ph+5+wh*.18,fy*(wz+.8),12,12,3,DARKC)}
+          for(let q=0;q<5;q++){const e=hw*0+(4+(5-q)*7);A('b',fx?fx*(hw+e):0,q*ph/5,fx?0:fy*(hh+e),fx?8:20,ph/5,fx?20:8,PT)} /* bamboo stair */
+        }break;
+        case 34:{const g1=wh*.4,g2=wh*.36,CAP='#f2ecd8',WD='#5e4128',STN='#d2cab6';
+          A('b',0,0,0,W,g1,D,STN);A('b',0,g1,0,W+10,7,D+10,WD);A('b',0,g1+7,0,W*.98,g2,D*.98,WD);
+          for(let q=-2;q<=2;q++)for(const sz of[-1,1])A('b',q*W*.19,g1+7+g2*.26,sz*(hh*.98+.8),W*.14,g2*.46,2.5,CAP); /* capiz-shell windows */
+          for(let q=-1;q<=1;q++)for(const sx of[-1,1])A('b',sx*(hw*.98+.8),g1+7+g2*.26,q*D*.28,2.5,g2*.46,D*.2,CAP);
+          A('p',0,g1+7+g2,0,W*1.2,wh*.3,D*1.2,'#a8472e');door(30,46);
+          for(const sx of[-1,1])for(const sz of[-1,1])A('b',sx*(hw*.98+5),g1+7,sz*(hh*.98+5),4,g2*.3,4,'#4a3220') /* corner posts of the volada */
+        }break;
+        case 35:{const CR='#dccaa4',n=5;A('b',0,0,0,W,9,D,'#8d826b');
+          for(const sz of[-1,1]){for(let q=0;q<=n;q++){const x=(q-n/2)*W/n,h=wh*(sz>0?.8+hr(q)*.2:.5+hr(q+5)*.5);A('b',x,9,sz*(hh-6),W/n*.3,h,12,CR);if(hr(q+9)>.55)A('b',x,9+h,sz*(hh-6),W/n*.34,6,13,'#c0ae88');if(q<n&&hr(q+sz*9+2)>.35)A('b',(q+.5-n/2)*W/n,9+wh*.62,sz*(hh-6),W/n*.72,wh*.09,12,CR)}}
+          for(const sx of[-1,1]){A('b',sx*(hw-6),9,0,12,wh*.72,D*.55,CR);A('b',sx*(hw-6),9+wh*.72,-hh*.1,13,wh*.14,D*.2,'#c0ae88')}
+          for(let q=0;q<4;q++)A('y',(q-1.5)*W*.22,9,hh+16,15,wh*(q%3===0?.9:.55+hr(q)*.35),15,'#e8dcc0'); /* the broken portico */
+          A('b',-W*.17,9+wh*.9,hh+16,W*.34,9,17,'#e8dcc0');
+          for(let q=0;q<6;q++)A('b',(hr(q+30)-.5)*W*.9,9+wh*(.1+hr(q+20)*.5),(hr(q+40)>.5?1:-1)*(hh-1),10,10+hr(q)*16,3,'#4f7a3a') /* creeping vines */
+        }break;
+        case 36:{const nh=wh*.5,CRM='#ece4cf',RED='#a8442e',BL='#7aa0c8';A('b',0,0,0,W,nh,D,CRM);A('g',0,nh,0,D*1.06,wh*.2,W*1.1,RED,1.5708);
+          for(const sx of[-1,1]){const tx=sx*hw*.62,tz=hh-hw*.42;A('b',tx,0,tz,W*.28,wh*.76,W*.28,CRM);A('b',tx,wh*.76,tz,W*.34,6,W*.34,'#c9bfa5');A('b',tx,wh*.76+6,tz,W*.24,wh*.07,W*.24,BL);A('p',tx,wh*.83+6,tz,W*.3,wh*.2,W*.3,RED);A('b',tx,wh*1.03+6,tz,3,14,3,'#e8e4dc');A('b',tx,wh*1.03+11,tz,10,3,3,'#e8e4dc')}
+          A('g',0,nh,hh-3,W*.5,wh*.12,10,CRM,0);A('b',0,0,hh+.8,W*.2,nh*.42,3,DARKC);A('b',0,nh*.62,hh+.8,W*.12,W*.12,3,BL);
+          for(let q=0;q<4;q++)for(const sx of[-1,1])A('b',sx*(hw+.8),nh*.45,(q-1.5)*hh*.42,3,nh*.3,hh*.12,BL)
+        }break;
+        case 37:{const BR='#9a4a32',MT='#7d8791',cx=hw*.55,cz=-hh*.55;A('b',0,0,0,W,wh*.28,D,BR);A('g',0,wh*.28,0,al?W*1.04:D*1.04,wh*.1,al?D*1.1:W*1.1,MT,al?0:1.5708);
+          A('h',cx,0,cz,W*.2,wh,W*.2,BR);for(let q=1;q<5;q++)A('y',cx,wh*q/5,cz,W*.24,5,W*.24,'#d9d2c0');A('y',cx,wh-4,cz,W*.28,9,W*.28,'#3a3330');
+          for(let q=0;q<3;q++)A('o',cx+q*8,wh+8+q*34,cz,40+q*16,48,40+q*16,'#d6d2cc');
+          for(const q of[-1,1])A('b',q*hw*.5,0,fx?0:fy*(hh+22),W*.26,16,D*.2,'#c4c36a'); /* piles of cane */
+          A('b',-hw*.2,wh*.28,0,W*.5,6,10,'#6a665e');door(30,42);wins(wh*.17,3,'#3a3330')
+        }break;
+        case 38:{const COL=['#e63946','#2ec4b6','#ff9f1c','#7b2cbf','#06d6a0'],my=18+wh*.35;
+          A('h',0,0,0,W*1.3,18,W*1.3,STONE);A('y',0,18,0,W*.6,wh*.35,W*.6,'#cfc6b2');
+          for(const s of[-1,1]){const z=s*W*.1;A('b',0,my,z,W*1.05,W*1.1,W*.14,'#ffd23a');
+            for(const e of[-1,1])A('b',e*W*.24,my+W*.66,z+s*W*.08,W*.17,W*.1,2,'#1a1a1a');
+            A('b',0,my+W*.3,z+s*W*.08,W*.58,W*.07,2,'#b8202e');for(const e of[-1,1])A('b',e*W*.3,my+W*.37,z+s*W*.08,W*.08,W*.05,2,'#b8202e')}
+          for(let q=-3;q<=3;q++)A('o',q*W*.15,my+W*1.0,0,W*.13,W*(.5+(3-Math.abs(q))*.07),W*.1,COL[(q+3)%5]) /* feathered crown */
+        }break;
+        case 39:{const WHT='#f1ecdf',DM='#9fb8c8';A('b',0,0,0,W*1.04,12,D*1.1,'#cfc8b8');A('b',0,12,0,W,wh*.5,D,WHT);A('b',0,12+wh*.5,0,W*1.02,8,D*1.02,'#d8d1c0');
+          for(let q=0;q<6;q++)A('y',(q-2.5)*W*.12,12,hh+12,9,wh*.5,9,WHT);A('b',0,12+wh*.5,hh+12,W*.7,6,24,WHT);A('g',0,12+wh*.5+6,hh+12,W*.7,wh*.14,22,WHT,0);
+          A('y',0,20+wh*.5,0,W*.34,wh*.12,W*.34,WHT);A('d',0,20+wh*.62,0,W*.34,wh*.3,W*.34,DM);A('y',0,20+wh*.9,0,W*.07,wh*.1,W*.07,WHT);A('c',0,20+wh,0,W*.06,wh*.1,W*.06,'#e3b559');
+          for(let q=-3;q<=3;q++)if(q)A('b',q*W*.13,12+wh*.18,hh+.8,W*.05,wh*.22,2.5,'#6c8db0')
+        }break;
+        case 40:{const SG='#b8ae96',RT='#9a4a32';A('h',0,0,0,W*1.15,wh*.7,W*1.15,SG);A('y',0,wh*.7,0,W*1.25,10,W*1.25,'#8d826b');A('y',0,wh*.7+10,0,W*.9,wh*.16,W*.9,SG);
+          for(let q=0;q<6;q++){const a=q*1.0472;A('b',Math.cos(a)*hw*.5,wh*(.22+(q%3)*.14),Math.sin(a)*hw*.5,4,16,4,DARKC);A('b',Math.cos(a+.52)*hw*.46,wh*.7+22,Math.sin(a+.52)*hw*.46,7,14,7,DARKC)}
+          const top=wh*.86+10;A('c',0,top,0,W*1.05,hw*1.2,W*1.05,RT);A('y',0,top+hw*1.2-2,0,2,22,2,'#8d826b');A('b',5,top+hw*1.2+10,0,10,6,1.5,'#0038a8');A('b',5,top+hw*1.2+4,0,10,6,1.5,'#ce1126')
+        }break;
+        case 41:{A('c',0,0,0,W*1.0,wh*.64,W*1.0,'#4f7d3e');A('c',0,wh*.2,0,W*.76,wh*.52,W*.76,'#6b7a56');A('c',0,wh*.48,0,W*.5,wh*.4,W*.5,'#7d7870');A('c',0,wh*.76,0,W*.26,wh*.2,W*.26,'#5a5550');A('y',0,wh*.95,0,W*.2,8,W*.2,'#3a3532');
+          for(let q=0;q<4;q++)A('o',q*10,wh+4+q*34,0,44+q*16,52,44+q*16,'#d6d2cc')
+        }break;
+        }
       }
+      /* v5_264 SKIRTS: any part whose bottom is at ground level (oy < 24) and that reaches past the foundation (hw+3 / hh+3) gets its own stone column down to the lowest ground under it,
+         so wide plinths, colonnade pillars, buttresses and tower feet never hang over a slope */
+      if(![17].includes(k)){const sk=[];for(const q of out){const g0=q[0],ox=q[1],oy=q[2],oz=q[3],sx=q[4],sz=q[6];
+        if(oy>=24||oy<=-fd+2||g0==='o'||g0==='g'&&oy>1||q[5]<=0)continue;
+        const ex=Math.max(sx,sz)/2,inside=rd?Math.hypot(ox,oz)+ex<=hw+3.5:(Math.abs(ox)+sx/2<=hw+3.5&&Math.abs(oz)+sz/2<=hh+3.5);if(inside)continue;
+        let lo=1e9;const rr=Math.max(ex,1);for(const[dx,dz]of[[0,0],[1,0],[-1,0],[0,1],[0,-1],[.7,.7],[-.7,.7],[.7,-.7],[-.7,-.7]])lo=Math.min(lo,gh3(X+C+ox+dx*rr,Z+C+oz+dz*rr));
+        const hgt=by+oy-(lo-4);if(hgt<2)continue;const round=g0==='y'||g0==='h'||g0==='c'||g0==='d';
+        sk.push([round?'y':'b',ox,oy+1-hgt,oz,sx*(g0==='c'||g0==='d'||g0==='h'?.9:1),hgt,sz*(g0==='c'||g0==='d'||g0==='h'?.9:1),'#6e6a62',0])}
+        for(const q of sk)out.push(q)}
       for(const q of out){const a=q[0];bl.push([a,X+q[1],by+q[2],Z+q[3],q[4],q[5],q[6],q[7],q[8]]);}
     });
     const cnt={};for(const q of bl)cnt[q[0]]=(cnt[q[0]]||0)+1;
@@ -227,6 +315,7 @@ function render3D(){
     $('g3').style.display='block';
     if(T3.built!==curWorld||T3.gen!==worldGen){rebuild3();T3.built=curWorld;T3.gen=worldGen}
     T3.fr++;const dl=daylight(),gy=gh3(P.x,P.y),tx=P.x-C,tz=P.y-C,z=T3.zoom,sh=shake*8;
+    liquidFrame(dl);
     const sky=T3.skyC.copy(T3.fog).lerp(T3.skyB,dl*.35).multiplyScalar(.45+.55*dl);
     T3.sc.background=sky;T3.sc.fog.color.copy(sky);T3.amb.intensity=(.45+.4*dl)*LK;T3.sun.intensity=(.35+.75*dl)*LK;
     {const D=Math.hypot(380,320)*z,et=Math.max(camView.tilt,CAM_TILT_MIN),ct=Math.cos(et),st=Math.sin(et),ox=Math.sin(camView.yaw)*ct*D,oz=Math.cos(camView.yaw)*ct*D,ty=gy+24+(T3.cz=(T3.cz||0)+((P.jz||0)*.7-(T3.cz||0))*.12);

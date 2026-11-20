@@ -24,7 +24,7 @@ const (
 	mapK        = 5 // map size multiplier; must equal MAP_K in web/game.js
 	worldCentre = 3200.0 * mapK
 	rimR        = 3080.0 * mapK
-	townR       = 345.0
+	townR       = 400.0
 	monMult     = 2 // monster density multiplier; must equal MON_MULT in web/game.js
 	nMons       = 5500 // total of ringMons below (monMult is no longer used for the count)
 	nOre        = 80 * mapK

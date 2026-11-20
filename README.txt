@@ -1,4 +1,4 @@
-WORLD OF ASCENSION - current state (v5_201)
+WORLD OF ASCENSION - current state (v5_201; ground shader v5_261)
 Full version history: CHANGELOG.txt
 
 RUN / BUILD

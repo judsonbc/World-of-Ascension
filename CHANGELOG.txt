@@ -1,3 +1,98 @@
+v5_264 NO MORE FLOATING BUILDINGS  (web-src/client 06_render3d -> rebuilt web/game.js)
+  - Cause 1: the ground under a building was only checked at 5 points and the foundation was capped at 220 deep, so on hollows / ridges the middle of a building could hang over lower ground. Now 81 sample points (rectangles) or 37 (round footprints) and the cap is 600.
+  - Cause 2: wells (14) and Mt. Kanlaon (41) had no foundation at all, and the sky temple (26) hovered 6 units above the ground on its stepped base. Wells and the volcano now get a foundation (green for the volcano); the sky temple's lowest step stands on a column down to the ground.
+  - Cause 3: parts wider than the foundation (obelisk / crystal plinths 1.9x, storm rods 1.6x, beacons, colonnade pillars of the halls, cathedral buttresses, tower feet ...) overhung it, so on a slope their downhill side hung in the air. Every part that starts at ground level and reaches past the foundation now gets its own stone skirt down to the lowest ground under it.
+  - Stilt houses (17) keep their own long legs.
+
+v5_263 KABANKALAN PYLON IN THE HUB, NO MORE BAHAY KUBO / BAHAY NA BATO  (01_core, 05_render2d, web/models3d.js, game.go -> rebuilt web/game.js)
+  - Buildings: kinds 33 (Bahay Kubo) and 34 (Bahay na Bato) are no longer placed in any world (removed from every CUL home list). The other Philippine landmarks stay. The drawing code for 33 / 34 is still in 05_render2d / 06_render3d but nothing spawns them.
+  - Hub enlarged: TOWN 345 -> 400 (client TOWN in 01_core and server townR in game.go, kept equal). Ring wall, 12 lanterns, cobble plaza, safe / no-PvP zone, minimap and the lantern collisions all follow.
+  - New landmark in the hub: the Kabankalan City pylon, a symmetric tripod on a TRIANGULAR sloped ramp: 3 identical poles 120 degrees apart with a gap between the tips at the top (height 175 after the v5_263d 25% enlargement), straight white railings along each side of the triangle between the poles, a plain red beam at mid height and a red crown panel near the top on every side, one street lamp per side. No sign, no plants. Behind the pagoda, hub-local (0,-170). Drawn in 3D (buildHub) and 2D; the ramp is a walkable step-high disc and the 3 pole feet are solid (SOL3 / SOL2).
+  - v5_263d: pylon enlarged 25% (3D + 2D + collision). The middle red beams now carry a standable triangular wooden deck flush with their top edge (about 81 world units up, ~12% lower than before so a jump from the ramp reaches it); SOL3 / SOL2 get a disc for the ramp (r 52, step-high), a disc for the deck (r 26, top 81) and 3 tall solid pole feet.
+  - v5_263e: pylon railings cut to half height (7.6), thinner (rails 0.8, balusters 0.6) and 17 balusters per side instead of 7.
+  - v5_263f: pylon lamps are attached to the poles (arm starts inside each pole near the tip, one lamp per pole, reaching outward), with a bright white fixture and a soft additive glow halo (3D sprite, 2D radial gradient).
+
+v5_262 PHILIPPINE BUILDINGS + LANDMARKS (Negros Occidental)  (web-src/client 01_core, 05_render2d, 06_render3d -> rebuilt web/game.js)
+  - 9 new building kinds, drawn in 3D and in 2D: 33 Bahay Kubo (nipa hut on bamboo stilts, thatched roof, stair), 34 Bahay na Bato (Silay-style heritage house: stone ground floor, timber upper floor with capiz-shell windows, hip roof),
+    35 The Ruins (Talisay: roofless mansion shell with arched openings, broken portico, vines), 36 San Sebastian-style cathedral (twin bell towers with spires), 37 Sugar mill (brick factory, tall chimney with smoke, cane piles),
+    38 Masskara monument (giant smiling festival mask with feathered crown), 39 Provincial Capitol (neoclassical, columned portico, blue dome), 40 Spanish stone watchtower (flag in PH colours), 41 Mt. Kanlaon (forested stratovolcano with smoke plume).
+  - Where: Ashen Reach (World 1) is now the Negros-style countryside: bahay kubo + heritage houses are the common homes; cathedral, Ruins, sugar mill, capitol, Masskara, watchtower and volcano are the landmarks. Smaller helpings in Verdant Eternity, Tideglass, Heavenfall, Sunforged, Chronos and the Arena (The Ruins, watchtower).
+  - Same placement + collision rules as every other building (flat ground only, solid, round footprints for 38 / 40 / 41).
+
+v5_261b TRAIL KEPT: the winding trail is about 3x wider (soil with small-stone patches, grass growing back in tufts) and has real 3D stones + grass tufts on it (addTrailProps in 05_terrain3d).
+
+v5_261 REALISTIC 3D GROUND: MULTI-SURFACE TERRAIN + LAKES  (web-src/client 05_terrain3d (new), 06_render3d -> rebuilt web/game.js)
+  - The 3D ground is no longer one repeating tile. A ground shader blends 5 real surfaces over the whole map: grass / sand / basalt (lowland), soil patches, bare rock on steep slopes, snow / pale stone on the highest ~15%, wet gravel or sand on shores. Packed gravel surrounds the town plaza.
+  - Surfaces: grass (with blades), soil, rock, sand (ripples), snow, gravel, cracked dried earth - tileable procedural textures (05_terrain3d, gtCanvas). Each is sampled twice at different scale + rotation, faded by world-space noise and multiplied by a slow colour variation, so no repetition is visible.
+  - Every world has its own kit (GKIT): e.g. World 1 = meadow grass, earth, grey stone, lakes; Ember Throne = basalt + lava; Tideglass = beaches + turquoise sea; Sunforged = desert + oases; Mirrorveil = frost; Voidmaw = dark stone + void pools.
+  - Low basins now fill with liquid (lowest ~4.5% of each world; the Arena stays dry): animated translucent water with a daylight glitter layer, lava (Ember Throne) or void (Voidmaw). Lake beds are at most 14 deep, shores get wet-darkening + foam, scenery is not placed under water.
+  - FIX: the old sea plane checked WMAP[i%12] instead of WMAP[tIx(i)%12], so the island worlds were mixed up; it now follows the real terrain type.
+  - The zone vertex colours only tint the ground gently now. Low-end phones (LOW) use one texture tap per surface and 256 px textures. 2D mode is unchanged.
+
+v5_260 PVP ARENA: 600 PROPS + CRYSTAL KIT  (web-src/client 01_core, 06_render3d -> rebuilt web/game.js)
+  - The Arena (World 0) now has exactly 600 scatter props (ARENA_PROPS in 01_core; was about 1,200 in v5_259): every 12th candidate of the scatter is kept until the cap is reached, so they are spread evenly over the whole arena.
+  - The Arena uses the CRYSTAL scenery kit again (kitOf(0) = 1; v5_259 had the forest kit). Collision uses the same kitOf, so what you see is what blocks you.
+  - Other worlds are unchanged.
+
+v5_259 PVP ARENA: HALF THE PROPS + FOREST KIT  (web-src/client 01_core, 05_render2d, 06_render3d -> rebuilt web/game.js)
+  - The Arena (World 0) keeps 1 prop in 8 of the scatter instead of 1 in 4: 50% fewer props (about 2,400 -> 1,200), more open ground to fight.
+  - The Arena now uses the FOREST scenery kit (trees, plants, rocks) instead of the crystal kit. kitOf(world) in 06_render3d decides the kit; collision uses the same function, so what you see is what blocks you.
+  - Other worlds are unchanged.
+
+v5_258 TWO SIZES PER PROP  (web-src/client/01_core.js -> rebuilt web/game.js)
+  - Every scenery prop now comes in two sizes: SMALL (scale .7-1.1, 70%) and BIG (scale 1.6-2.2, 30%, about double). SCENERY_BIG = percent of big ones.
+  - Collision radius and standable height scale with the prop, so a big boulder is a bigger wall and a bigger step. Positions and kinds unchanged (the size class comes from a hash, not from the random stream).
+
+v5_257 SCENERY DENSITY +30%  (web-src/client/01_core.js -> rebuilt web/game.js)
+  - Scatter props per world: 7,500 -> 9,750 (SCENERY_N). The Arena still gets a quarter of that. Every existing prop keeps its position; the extra 30% are added (nothing else uses the same random stream afterwards).
+  - Cost: more instances per prop type and a few more collision cells; if low-end devices stutter, lower SCENERY_N (LOW mode already draws only every third prop).
+
+v5_256 PROP FIXES: palms / trunks / plant colours  (web/models3d.js only)
+  - Found by rendering every one of the 270 props: palms (forest, crystal, ruins, fungal) and twisted / mangrove / mountain-pine trunks were made of cylinders tilted around their own centres, so the segments came apart.
+    They are now built with limb() (a cylinder that really runs from point A to point B) and frond() (a leaf that starts at a point and points outward), so trunks are joined and fronds start at the crown.
+    Agave, ferns, big leaves and the bare birch use the same helpers.
+  - The first 18 props of every KY block (the plants) use real greens instead of palette slots 0-3, so flora never turns stone-grey or dark red with a world's tint.
+  - Cypress is a tall narrow cone, the palm cluster has two proper palms, snow shrubs differ (snow-capped, holly, cranberry).
+
+v5_255 30 MORE PROPS PER KIT (54 per kit, 270 in all) + PLANTS IN EVERY WORLD  (web/models3d.js KY, web-src/client 01_core, 05_render2d, 06_render3d -> rebuilt web/game.js)
+  - 30 new props per kit (kit props 24-53); 18 of them are PLANTS in every kit, so no world is bare. Flora is themed to the kit:
+      Forest : willow, palm, bamboo, cattails, sunflowers, tulip bed, clover mat, tall grass, sapling, maple, hedge, white-flower shrub, gourd patch, wheat, big fern, vine tree, giant leaf, lavender
+      Crystal: glow fern, crystal palm, glass reeds, glow-bulb flowers, glow moss, crystal bamboo, star lilies, blue shrub, glow grass, crystal willow, lotus, spiral thorn, glow leaf, fruit sapling, pale grass, sparkle flower bed, twisted tree, crystal agave
+      Ruins  : overgrown column, cactus, flowering cactus, agave, dry shrub, olive tree, date palm, wall vines, desert flowers, dry grass, palm cluster, cypress, thorn bush, reeds, mossy rubble, potted fern, ruin sapling, pomegranate bush
+      Fungal : giant fern, curtain tree, swamp reeds, lotus pads, glow moss, glow flower bed, pitcher plant, hanging-moss tree, mangrove tree, swamp grass, spiral vine, elephant-ear leaf, orchids, bulb flowers, thorn vine, palm, cattails, purple berry shrub
+      Snow   : frost fern, berry shrub, spruce sapling, snowy spruce, holly, frost grass, snowdrops, bare birch, juniper, mountain pine, cotton grass, icy reeds, lichen rock, dwarf birch, edelweiss, spruce row, frozen vine post, cranberry bush
+    plus 12 non-plant props per kit (benches, carts, tents, pools, totems, campfires, cairns ...).
+  - Collision radius / standable top of every new prop is in DECO_R3 / DECO_H3 (same order as the models). Positions unchanged: the same single random draw now picks 0-53.
+  - Cost: 54 instanced draw calls per world for scenery.
+
+v5_254 MORE SCENERY: 24 PROPS PER KIT (was 3)  (web/models3d.js kit(), web-src/client 01_core, 05_render2d, 06_render3d -> rebuilt web/game.js)
+  - Every scenery kit now has 24 props (120 in all). Props 0-2 are the originals, 3-23 are new, each with its own collision radius / standable top (DECO_R3 / DECO_H3).
+      Forest : fallen log, tall pine, stump, flower patch, grass tuft, mossy boulders, round oak, birch grove, mushroom ring, berry bush, rock spire, cairn, signpost, ancient tree, fern, lily pond, campfire ring, bramble, stepping stones, fence, blossom tree
+      Crystal: crystal cluster, slab, shard patch, needle, geode, orb pedestal, twin spires, rock with crystals, faceted boulder, crystal flowers, floating crystal, crystal tiers, obsidian spike, crystal tree, rubble ring, crystal bed, monolith, prism cluster, glow lantern, crystal stump, shard fan
+      Ruins  : broken column, fallen column, arch, statue, rubble, crumbled wall, stairs, small obelisk, sarcophagus, brazier, ring well, stele, mosaic floor, broken dome, pillar stumps, skull totem, altar, wall corner, gate posts, capital block, sand mound
+      Fungal : giant mushroom, mushroom trio, spore pods, bracket fungus, puffball, coral fungus, spore flower, fungal log, thin mushrooms, spotted mushroom, moss mound, vine pillar, root tendrils, lantern mushroom, mycelium mat, mossy stump, cap platform, spiky fungus, egg cluster, mossy boulder, giant bulb
+      Snow   : snowy pine, ice boulder, snowdrift, icicles, frozen dead tree, snowman, ice pillar, snowcapped rock, frozen pond, snow cairn, ice spires, snowy bush, log pile, frost flowers, frost spire, igloo, pine pair, ice slab, snowy stump, lantern post, tusks
+  - Scenery POSITIONS are unchanged (the same single random draw now picks 0-23 instead of 0-2). The 2D view still draws 3 shapes (k % 3).
+  - Cost: 24 instanced draw calls per world for scenery instead of 3.
+
+v5_253 WORLD VARIETY: NEW STRUCTURES + A DIFFERENT GROUND SKIN IN EVERY WORLD (web-src/client 01_core, 05_render2d, 06_render3d -> rebuilt web/game.js)
+  - 18 NEW SOLID STRUCTURE KINDS (15-32), drawn in both the 3D and the 2D view, same footprint / collision rules as the old kinds:
+      15 standing-stone henge   16 giant mushroom house   17 stilt house   18 smooth pyramid   19 giant rib arch   20 floating crystal monolith
+      21 clock tower (4 clock faces)   22 ruined colonnade   23 cathedral (nave, twin towers, spire)   24 shard spire cluster   25 smelter (glowing chimneys)
+      26 floating sky temple   27 coral shell dome   28 storm rod   29 torii shrine   30 skull gate   31 sundial   32 fire beacon
+  - EVERY WORLD NOW HAS ITS OWN ARCHITECTURE LIST (CUL in 01_core): the cottage no longer appears in every world (it is rare or gone where it did not fit) and each world mixes its own signature kinds:
+      Arena henges / pyramids / ruins - Ashen Reach torii shrines - Crimson smelters + beacons - Starfall mushrooms, storm rods, monoliths - Ember smelters + shard spires
+      Heavenfall sky temples - Tideglass stilt harbour + shell domes - Verdant mushroom homes + stilt houses + henges - Stormcrown storm rods + sky temples
+      Bloodmoon cathedrals + skull gates + ruins - Sunforged pyramids + sundials - Mirrorveil monoliths + shards - Voidmaw obsidian cathedrals + shards
+      Dragonbone rib arches + skull gates - Chronos clock towers + sundials - Heaven-Sundering sky temples + beacons + monuments
+  - 16 GROUND SKINS: groundTile(world) now draws a different tile per world (cached): Arena raked sand + stains, Ashen ash drifts + embers, Crimson cracked mud, Starfall craters + star dust,
+    Ember basalt plates + lava cracks, Heavenfall cloud swirls + feathers, Tideglass wet sand + tide pools + shells, Verdant moss + clover + flowers + leaves, Stormcrown wet slate + puddle rings + scorch marks,
+    Bloodmoon veins + blood pools + bones + thorns, Sunforged cracked salt plates, Mirrorveil prism facets, Voidmaw void cracks + whirls, Dragonbone scales + ribs + claw gouges, Chronos gears + clock rings + sand swirls,
+    Heaven-Sundering golden fractures + rune circles. Used by both the 3D terrain and the 2D ground.
+  - 3D TERRAIN COLOURS: each world has its own palette (GSK in 06_render3d) for steep rock, soil patches, dry patches, high ground, plus winding trails of a second colour across the land.
+  - Checked: build + syntax, check_constants, all 16 ground tiles drawn in a real browser (contact sheet), all 33 building kinds run through the 2D and 3D drawing code with no errors. NOT checked inside the running game: please look at a few worlds once.
+    If a structure feels too big or too common in a world, change its weight / size in CUL (01_core.js) or its case in dims().
+
 v5_252 PET NEST ON PHONES, CHECKED IN A REAL BROWSER (web/index.html): rendered at 390x844, 360x640 (portrait) and 844x390, 667x375 (landscape), Hatch and Combine tabs. Found and fixed: the generic 1.3x phone zoom on cards made the nest too big (Hatch overflowed and its buttons overlapped the species slots in landscape, the chance % overlapped the next row in portrait, the pet list shrank to ~40 px on a small phone, the landscape card was taller than the screen). Now: no zoom on the nest, landscape Hatch = egg beside its text + the 6 species in one row, landscape Combine fits the screen with all 10 slots visible, portrait fits both small and large phones with all 10 slots visible, nothing off-screen, tab / action buttons stay on one line.
 
 v5_251 OTHER PLAYERS STUCK / NOT UPDATING (web-src/client/08_network_social.js, game.go -> rebuilt web/game.js): (1) a player's position was sent by a main-thread timer; browsers slow those to ~1 per second (and ~1 per minute after a while) in a hidden / background tab, so that player looked frozen on everybody else's screen. The sender now ticks from a Worker (66 ms), with a visible-tab spare timer. (2) If the server reports a player my client does not have (a missed 'joined' message) the client asks for the world's player list again (new 'who' / 'wl' messages, server case \"who\" in game.go, rate limited by tokens); a player my client still has but the server stopped reporting for 4 s is a ghost and is removed. (3) Remote-player smoothing: lag catch-up samples could get a timestamp older than the previous one (jerks / zips), now kept in order; a NaN position resets to the last known spot. The Go change could not be compiled here: run build.bat. A player on a phone whose app is in the background or whose screen is off still freezes for others (the browser pauses the page); that cannot be fixed from the game.
