@@ -1,0 +1,30 @@
+UPDATING THE GAME WITHOUT LOSING PLAYERS (v5_250)
+
+Where player progress lives
+  Levels, gear, pets, friends, whispers and coupons are saved by the SERVER in one data folder:
+    users.json (+ users.json.bak)   accounts and character saves      secret.key   login secret (keep it, or everybody is logged out)
+    friends.json  whispers.json  coupons.json
+  run-lan.bat starts the server with  -data "%USERPROFILE%\WorldOfAscension_data"  so this folder is OUTSIDE the game folder.
+  On a Linux / hosted server use for example   ./WorldOfEly -data /var/lib/worldofascension   (or the ALOTUS_DATA environment variable).
+  The game zip never contains this folder.
+
+Why progress "reverted" before
+  The data files used to sit NEXT TO the program. Two ways that loses progress:
+   1. the new version was started from a different folder (empty folder = empty users.json = everybody level 1), or
+   2. you zipped your own test folder (with its own old users.json inside) and uploaded it over the live server.
+  Both are fixed: the data folder is separate, and pack.bat makes a zip that cannot contain player data.
+
+Update steps
+  1. On the live server press Ctrl+C in the server window (it writes every pending save first).
+  2. Copy the new game files over the old ones (never delete the data folder).
+  3. Run build.bat to build the exe (needs Node + Go), then run-lan.bat (or your own start command with the SAME -data).
+  4. The first lines printed must say  "Player data folder: ..."  and  "N account(s) loaded".  If it says "no accounts found", STOP: you started with the wrong -data or folder.
+  Making an update zip from your own PC:  run pack.bat (leaves out data, users.json, secret.key, coupons, friends, whispers, *.exe).
+
+First time after this update (moving from the old layout)
+  Start the new server from the folder where users.json used to be: it COPIES users.json, users.json.bak, secret.key, friends.json, whispers.json and coupons.json into the data folder automatically (the old files are not deleted).
+  If you start it from a different folder, copy those files into the data folder by hand once.
+
+Safety
+  A users.json that exists but cannot be read is never replaced by an empty one: the server tries users.json.bak, and if that fails it refuses to start instead of wiping accounts.
+  Back up the data folder now and then (copy it).

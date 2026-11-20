@@ -1171,6 +1171,18 @@ func (h *Hub) onMsg(p *Player, raw []byte) {
 				h.onPlayerDown(p)
 			}
 		}
+	case "who": // v5_251 a client that notices a player it does not know asks for the list of everybody in its world again
+		if p.tokens < 1 {
+			return
+		}
+		p.tokens--
+		ps := []PInfo{}
+		for _, q := range r.players {
+			if q != p && q.joined {
+				ps = append(ps, q.info())
+			}
+		}
+		p.send(jsonBytes(map[string]interface{}{"t": "wl", "ps": ps}))
 	case "i":
 		if h.applyInfo(p, &in) {
 			r.sendAll(jsonBytes(map[string]interface{}{"t": "pi", "p": p.info()}), p)

@@ -8,6 +8,8 @@ RUN / BUILD
   node tools/check_constants.js   run BEFORE every build: the constants shared by server and client must agree
   node tools/class_sim.js [level] class comparison from the real skill tables
 
+PLAYER DATA / UPDATING: all accounts, levels and gear are in a separate data folder (-data), not in the game files. Read UPDATING.txt before updating a live server.
+
 FILES
   main.go static.go ws.go    server start-up, static files (everything in web/ is embedded), websocket
   game.go                    world, monsters, PvP rules + damage, chat commands, message handling

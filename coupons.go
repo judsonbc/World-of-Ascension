@@ -29,7 +29,6 @@ import (
 )
 
 const (
-	couponsFile = "coupons.json"
 	couponAlpha = "ABCDEFGHJKMNPQRSTUVWXYZ23456789" // 31 symbols: no 0 O 1 I L, so codes are easy to read out
 	couponLen   = 16                                 // 31^16 is about 2^79 possibilities: cannot be guessed
 	couponMaxN  = 10000                              // most codes per -coupon-new run

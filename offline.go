@@ -19,7 +19,6 @@ import (
 )
 
 const (
-	offlineFile   = "whispers.json"
 	offlineMax    = 50
 	offlineMaxAge = 30 * 24 * time.Hour
 )

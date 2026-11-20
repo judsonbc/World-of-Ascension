@@ -32,22 +32,19 @@ function nestHatchUi(b){
   st.appendChild(nestEl('b','ncount',P.eggs>0?'Pet Egg \u00d7'+P.eggs:'No Pet Eggs'));
   st.appendChild(nestEl('small','',P.eggs>0?EGG_SPECIAL_CHANCE+'% special pet (Dragon, Fairy, Phoenix, Tiger or Wolf, Class F) \u00b7 '+(100-EGG_SPECIAL_CHANCE)+'% Chicken':'World bosses drop Pet Eggs.'));
   b.appendChild(st);
-  const r=nestEl('div','nres');
-  if(nestRes&&nestRes.kind==='hatch'&&!nestBusy){
-    const R=nestRes;
-    if(R.done){
-      r.appendChild(nestEl('div','nline','Hatched '+R.done+' egg'+(R.done>1?'s':'')+':'));
-      const row=nestEl('div','nlist'),keys=Object.keys(R.got).sort((x,y)=>petParse(y).s-petParse(x).s);
-      for(const k of keys){
-        const p=petParse(k),it=nestEl('div','nit'+(p.s>0?' sp':'')),sl=nestEl('div','bslot nsl '+PET_CLS_SLOT[0]);
-        sl.innerHTML=petIcon(p.s,0);it.appendChild(sl);
-        const tx=nestEl('span','',(p.s===0?'Chicken':PET_SP[p.s].n+' [Class F]')+(R.got[k]>1?' \u00d7'+R.got[k]:''));tx.style.color=p.s===0?'#c4cdd2':'#ffe14a';
-        it.appendChild(tx);row.appendChild(it);
-      }
-      r.appendChild(row);
-      if(R.full)r.appendChild(nestEl('div','nline bad','Your bag is full: the other eggs were kept. Make room to hatch them.'));
-    }else r.appendChild(nestEl('div','nline bad','Your bag is full. Make room to hatch this egg.'));
+  /* v5_250: one permanent slot per species (Chicken + 5 specials), each showing how many the last hatch gave (0 when none) */
+  const r=nestEl('div','nres'),R=(nestRes&&nestRes.kind==='hatch'&&!nestBusy)?nestRes:null;
+  if(R&&!R.done)r.appendChild(nestEl('div','nline bad','Your bag is full. Make room to hatch this egg.'));
+  else r.appendChild(nestEl('div','nline',R?'Hatched '+R.done+' egg'+(R.done>1?'s':'')+':':'\u00a0'));
+  const row=nestEl('div','nlist n6');
+  for(let s=0;s<PET_SP.length;s++){
+    const n=R&&R.got?(R.got[petKey(s,0)]|0):0,it=nestEl('div','nit n6i'+(s>0?' sp':'')+(n?' on':'')),sl=nestEl('div','bslot nsl '+PET_CLS_SLOT[0]);
+    sl.innerHTML=petIcon(s,0);it.appendChild(sl);
+    const nm=nestEl('span','nnm',s===0?'Chicken':PET_SP[s].n);nm.style.color=s===0?'#c4cdd2':'#ffe14a';it.appendChild(nm);
+    it.appendChild(nestEl('b','ncn','\u00d7'+n));row.appendChild(it);
   }
+  r.appendChild(row);
+  if(R&&R.done&&R.full)r.appendChild(nestEl('div','nline bad','Your bag is full: the other eggs were kept. Make room to hatch them.'));
   b.appendChild(r);
   const bt=nestEl('div','nbtns');
   bt.appendChild(nestBtn('Hatch','pri',()=>nestHatch(1),P.eggs<1||nestBusy));

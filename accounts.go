@@ -40,8 +40,6 @@ import (
 )
 
 const (
-	usersFile  = "users.json"
-	secretFile = "secret.key"
 	pbkdfIter  = 120000
 	tokenTTL   = 30 * 24 * time.Hour
 	maxSave    = 512 * 1024 // v5_186: was 64 KB; a full bag + warehouse with rolled stats can come close to that, and an over-size save was refused (and the progress silently never reached the account)
@@ -122,12 +120,32 @@ func loadAccounts() *Accounts {
 			log.Printf("warning: cannot write %s (logins will reset on restart): %v", secretFile, err)
 		}
 	}
-	if b, err := os.ReadFile(usersFile); err == nil {
+	// v5_250: a users file that exists but cannot be read is NEVER replaced by an empty one (the next save would wipe every account):
+	// try the backup, and if that fails too, refuse to start so the file can be fixed by hand.
+	for _, f := range []string{usersFile, usersFile + ".bak"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
 		var list []*User
-		if json.Unmarshal(b, &list) == nil {
-			for _, u := range list {
-				a.users[u.Email] = u
-			}
+		if len(b) == 0 {
+			continue
+		}
+		if json.Unmarshal(b, &list) != nil {
+			log.Printf("WARNING: %s is damaged and cannot be read", f)
+			continue
+		}
+		for _, u := range list {
+			a.users[u.Email] = u
+		}
+		if f != usersFile {
+			log.Printf("WARNING: %s was damaged, the accounts were restored from the backup %s", usersFile, f)
+		}
+		break
+	}
+	if len(a.users) == 0 {
+		if st, err := os.Stat(usersFile); err == nil && st.Size() > 2 {
+			log.Fatalf("%s exists but no account could be read from it or its backup. Fix or restore it, then start again (nothing was changed).", usersFile)
 		}
 	}
 	go a.flusher()

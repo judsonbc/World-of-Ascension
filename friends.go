@@ -24,7 +24,6 @@ import (
 )
 
 const (
-	friendsFile   = "friends.json"
 	friendMax     = 50
 	friendPendMax = 30
 )

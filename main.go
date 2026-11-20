@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -46,8 +47,10 @@ func main() {
 	couponNew := flag.Int("coupon-new", 0, "create this many coupon codes, print them and exit (see -coupon-gold, -coupon-note)")
 	couponGold := flag.Int("coupon-gold", 100, "gold each new coupon is worth")
 	couponNote := flag.String("coupon-note", "", "label saved with the new coupons (e.g. the shop or batch name)")
+	dataFlag := flag.String("data", "", "folder for all player data: accounts, saves, friends, coupons (default ./data, or ALOTUS_DATA). Use the same one every time")
 	couponList := flag.Bool("coupon-list", false, "list every coupon code and whether it has been used, then exit")
 	flag.Parse()
+	initDataDir(*dataFlag)
 	if *couponNew > 0 || *couponList {
 		if *couponNew > 0 {
 			if *couponNew > couponMaxN || *couponGold < 1 || *couponGold > 1000000 {
@@ -87,6 +90,14 @@ func main() {
 		log.Fatal(err)
 	}
 	accts = loadAccounts()
+	if abs, err := filepath.Abs(dataDir); err == nil {
+		fmt.Println("Player data folder:", abs)
+	}
+	if len(accts.users) == 0 {
+		fmt.Println("  NOTE: no accounts found there. That is normal on a first start. If this is an UPDATE, stop now and put your old data folder here (or start with -data <old folder>).")
+	} else {
+		fmt.Printf("  %d account(s) loaded\n", len(accts.users))
+	}
 	offl = loadOffline()
 	frs = loadFriends()
 	hub := newHub()

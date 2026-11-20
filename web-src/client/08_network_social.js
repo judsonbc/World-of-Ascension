@@ -17,7 +17,7 @@ function eqClean(raw){const o={};if(!raw||typeof raw!=='object')return o;
   return o}
 function mkPeer(i){
   return {isPl:true,eq:eqClean(i.eq),id:i.id,name:String(i.n||'?').slice(0,16),sk:i.sk|0,lvl:clamp(i.lv|0,1,MAXLV),wlv:i.wl|0,alv:i.al|0,mh:Math.max(1,i.mh|0),hp:Math.max(1,i.mh|0),
-    x:+i.x||C,y:+i.y||C,tx:+i.x||C,ty:+i.y||C,face:0,dir:1,mvAmt:0,anim:0,swing:0,hurt:0,bfT:0,sh:0,dead:0,r:14,mine:0,pvp:false,pm:0,pet:petKeyClean(i.pt),pf:null};
+    x:+i.x||C,y:+i.y||C,tx:+i.x||C,ty:+i.y||C,face:0,dir:1,mvAmt:0,anim:0,swing:0,hurt:0,bfT:0,sh:0,dead:0,r:14,mine:0,pvp:false,pm:0,pet:petKeyClean(i.pt),pf:null,seen:performance.now()};
 }
 function netInfo(force){
   if(!NET.joined)return;
@@ -72,11 +72,18 @@ setInterval(()=>{
   setTimeout(()=>{if(NET.ws===w&&w.onclose)w.onclose()},3000);
 },5000);
 /* network ticks run on a timer, not requestAnimationFrame, so a backgrounded tab keeps reporting its position */
-setInterval(()=>{
-  if(!NET.joined)return;
-  netSend({t:'p',x:+P.x.toFixed(1),y:+P.y.toFixed(1),f:+P.face.toFixed(2),hp:Math.round(P.hp),
-    fl:(P.dead>0?1:0)|(P.bfT>0?2:0)|(P.sh>0?4:0)|(document.hidden?16:0)});
-},66);
+/* v5_251 the position sender now ticks from a Worker: main-thread timers of a hidden tab are slowed to ~1 per second (or 1 per minute after a while), which made other players look frozen / stuck on everybody else's screen */
+(function(){
+  const sendPos=()=>{
+    if(!NET.joined)return;
+    netSend({t:'p',x:+P.x.toFixed(1),y:+P.y.toFixed(1),f:+P.face.toFixed(2),hp:Math.round(P.hp),
+      fl:(P.dead>0?1:0)|(P.bfT>0?2:0)|(P.sh>0?4:0)|(document.hidden?16:0)});
+  };
+  let w=null;
+  try{w=new Worker(URL.createObjectURL(new Blob(['setInterval(function(){postMessage(0)},66)'],{type:'text/javascript'})));w.onmessage=sendPos}catch(e){w=null}
+  if(!w)setInterval(sendPos,66);
+  else setInterval(()=>{if(document.hidden)return;sendPos()},1000); /* spare: keeps reporting if the worker is ever suspended */
+})();
 setInterval(()=>netInfo(),2000);
 setInterval(()=>{if(NET.joined)netSend({t:'pg',i:Date.now()%1000000000})},2000);
 
@@ -373,6 +380,7 @@ function netMsg(m){
       if(!entering)say('Joined the shared world of '+W[m.w].n+' \u00b7 '+(NET.peers.size+1)+' here.',W[m.w].acc);
       break}
     case 's':onSnap(m);break;
+    case 'wl':{if(!MP)break;for(const i of (m.ps||[]))if(i&&i.id!==NET.id&&!NET.peers.has(i.id))NET.peers.set(i.id,mkPeer(i));break}
     case 'h':{
       const o=monAt(m.i);if(!o||o.dead)break;
       o.flash=.1;spark(o.x,o.y,m.c?'#ffd36b':'#ffd9a0',m.c?8:4,150,.3,2.4);
@@ -463,11 +471,16 @@ function onSnap(m){
     if((e[4]&8)&&!(o.atkT>0))o.atkT=.25;
     o.wx=(Math.abs(o.tx-o.x)>.4||Math.abs(o.ty-o.y)>.4)?1:0;
   }
+  let unk=false;const snow=performance.now();
   for(const e of (m.p||NONE)){
-    const q=NET.peers.get(e[0]);if(!q)continue;
+    const q=NET.peers.get(e[0]);if(!q){unk=true;continue}
+    q.seen=snow;
     q.tx=e[1];q.ty=e[2];q.face=e[3];q.hp=e[4];peerSample(q,e[1],e[2]);
     const f=e[5];q.dead=(f&1)?1.5:0;q.bfT=(f&2)?1:0;q.sh=(f&4)?1:0;q.pm=(f>>5)&3;q.pvp=q.pm>=2; /* v5_158 bits 5-6 = PvP mode; red name + swords for Hostile / Carnal */
   }
+  /* v5_251 a player the server reports but I do not have (a missed 'joined' message) -> ask for the list; a player I have but the server no longer reports for 4 s is a ghost -> remove */
+  if(unk&&snow-(NET.whoT||0)>2500){NET.whoT=snow;netSend({t:'who'})}
+  for(const [id,q] of NET.peers){if(snow-(q.seen||snow)>4000){NET.peers.delete(id);if(PG.id===id)pgClose()}}
   if(m.dd)for(const id of m.dd){const o=monAt(id);if(o&&!o.dead)killMonster(o,true)}
   if(m.tm!==undefined)time+=(m.tm-time)*.2;
 }
@@ -492,7 +505,7 @@ function peerSample(q,x,y){
       tt=Math.min(Math.max(t,l.t+.045),l.t+.09);if(Math.abs(tt-t)>.15)tt=t; /* v5_166 even out arrival jitter: stamps stay 45-90 ms apart (updates are really 66 ms apart) */
       if(d>PEER_BLINK){peerBlinkFx(l.x,l.y,x,y);if(d>400){b.length=0;q.x=x;q.y=y}} /* dash / teleport skill */
     }else if(d>PEER_SNAP){peerBlinkFx(l.x,l.y,x,y);b.length=0;q.x=x;q.y=y}  /* respawn / Home Scroll / world change */
-    else if(d>=PEER_STILL){b.push({t:t-Math.min(.6,Math.max(.066,d/PEER_RUN)),x:l.x,y:l.y})} /* lag catch-up: slide at running speed instead of a freeze + zip */
+    else if(d>=PEER_STILL){b.push({t:Math.max(l.t+.02,t-Math.min(.6,Math.max(.066,d/PEER_RUN))),x:l.x,y:l.y})} /* lag catch-up: slide at running speed instead of a freeze + zip */
     else b.push({t:t-.066,x:l.x,y:l.y});                            /* was standing still: do not slide during the pause */
   }
   b.push({t:tt,x,y});if(b.length>16)b.shift();
@@ -500,6 +513,7 @@ function peerSample(q,x,y){
 function updatePeers(dt){
   const k=Math.min(1,dt*12),rt=performance.now()/1000-PEER_DELAY;
   for(const q of NET.peers.values()){
+    if(!(isFinite(q.x)&&isFinite(q.y))){q.x=q.tx;q.y=q.ty;q.buf=[]}
     const ox=q.x,oy=q.y,b=q.buf;
     if(b&&b.length){
       while(b.length>2&&b[1].t<=rt)b.shift();

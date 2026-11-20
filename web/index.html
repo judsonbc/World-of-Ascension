@@ -949,6 +949,46 @@ html.phone #jump{right:calc(47*var(--u) + env(safe-area-inset-right,0px));width:
 #online.drag{opacity:.9}
 @media (orientation:portrait){html.phone #online,html.phone #hud #online{top:calc(276*var(--u));max-height:max(56px,calc(100% - 590*var(--u)))}}
 @media (orientation:landscape){html.phone #mmw{right:calc(99*var(--u) + env(safe-area-inset-right,0px))}html.phone #online,html.phone #hud #online{right:calc(285*var(--u) + env(safe-area-inset-right,0px))}} /* v5_249: minimap's right edge touches the JUMP button's left edge (jump right 47u + 52u wide); the Online window sits left of it */
+
+/* v5_250 hatch: 6 permanent species slots (3 x 2), no scrolling needed */
+#nest .nlist.n6{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-height:none;overflow:visible;padding:2px}
+#nest .nit.n6i{flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;padding:4px 2px;text-align:center;opacity:.55;min-width:0}
+#nest .nit.n6i.on{opacity:1}
+#nest .nit.n6i .bslot{width:34px;height:34px}
+#nest .nit.n6i .nnm{font-size:11px;line-height:1.1}
+#nest .nit.n6i .ncn{font-size:13px}
+
+/* v5_252 Pet Nest on phones: no 1.3x zoom (it squeezed everything), compact landscape layout, nothing overlaps */
+html.phone #nest .nestwin{zoom:1}
+#nest .nrw{overflow:hidden}
+#nest .nrw .nch{white-space:nowrap;flex:0 0 auto;margin-left:auto}
+#nest .nrw .nslot{flex:0 0 auto}
+#nest .nres{flex:0 0 auto}
+#nestBody{min-height:0}
+html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padding:5px 6px;white-space:nowrap}
+@media (orientation:portrait){
+ html.phone #nest .nestwin{width:100%;max-height:100%}
+ html.phone #nest .ncomb .nleft{min-height:110px}
+}
+@media (orientation:landscape) and (max-height:520px){
+ html.phone #nest .nestwin{width:min(100%,820px);max-height:100%;padding:6px;gap:4px}
+ html.phone #nest .nestwin h2{font-size:16px;line-height:1.1}
+ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padding:3px 10px}
+ /* hatch tab: egg + text side by side, the 6 species in one row */
+ #nest .nstage{flex-direction:row;justify-content:center;gap:10px;padding:4px 8px;text-align:left}
+ #nest .nstage>*{margin:0}
+ #nest .negg{width:40px;height:40px}
+ #nest .nlist.n6{grid-template-columns:repeat(6,1fr);gap:4px}
+ #nest .nit.n6i{padding:3px 1px}
+ #nest .nit.n6i .bslot{width:28px;height:28px}
+ #nest .nit.n6i .nnm{font-size:10px}
+ #nest .nit.n6i .ncn{font-size:12px}
+ #nest .nline{font-size:11px;min-height:0}
+ #nest .nres{gap:3px}
+ html.phone #nest .ncomb{height:calc(100dvh - 150px)}
+ #nest .nrw .nslot{width:22px;height:22px}
+ #nest .nrows{gap:3px}
+}
 </style>
 
 <div id="stage">
