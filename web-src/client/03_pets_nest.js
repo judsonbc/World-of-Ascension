@@ -20,6 +20,7 @@ function nestRender(){
   const w=$('nest');if(!w||w.hidden)return;
   if(nestTab==='combine')nestValidate();
   w.classList.toggle('wide',nestTab==='combine');
+  w.classList.toggle('hatchtab',nestTab==='hatch');   /* v5_272: hook for the compact landscape-phone hatch layout */
   $('nTabH').classList.toggle('on',nestTab==='hatch');$('nTabC').classList.toggle('on',nestTab==='combine');
   $('nestCnt').textContent='Eggs: '+P.eggs;
   const b=$('nestBody');b.textContent='';
@@ -27,9 +28,18 @@ function nestRender(){
 }
 /* ---- hatch tab ---- */
 function nestHatchUi(b){
-  const st=nestEl('div','nstage'),eg=nestEl('div','negg'+(nestBusy?' shake':''));
-  eg.innerHTML=ICONS.egg();st.appendChild(eg);
-  st.appendChild(nestEl('b','ncount',P.eggs>0?'Pet Egg \u00d7'+P.eggs:'No Pet Eggs'));
+  /* v5_271: a special pet is shown IN the egg area: the egg glows gold while it shakes, then it bursts and the pet(s) pop out with rays + a pulsing glow */
+  const spk=(nestRes&&nestRes.kind==='hatch'&&nestRes.got)?Object.keys(nestRes.got).filter(k=>petParse(k).s>0).sort():[];
+  const rev=!nestBusy&&spk.length>0;
+  const st=nestEl('div','nstage'+(rev?' spk':'')),eg=nestEl('div','negg'+(nestBusy?' shake':'')+(nestBusy&&spk.length?' spec':'')+(rev?' nrev':''));
+  if(rev){
+    eg.appendChild(nestEl('i','nrays'));
+    for(const k of spk){const p=petParse(k),pe=nestEl('div','nrvp');pe.title=PET_SP[p.s].n;pe.innerHTML=petIcon(p.s,0);eg.appendChild(pe)}
+    for(let i=0;i<6;i++){const d=nestEl('u','nspk');d.style.setProperty('--a',(i*60+20)+'deg');eg.appendChild(d)}
+  }else eg.innerHTML=ICONS.egg();
+  st.appendChild(eg);
+  if(rev){const t=nestEl('b','ncount nspt','\u2605 '+spk.map(k=>PET_SP[petParse(k).s].n+(nestRes.got[k]>1?' \u00d7'+nestRes.got[k]:'')).join(', ')+' hatched! \u2605');st.appendChild(t)}
+  else st.appendChild(nestEl('b','ncount',P.eggs>0?'Pet Egg \u00d7'+P.eggs:'No Pet Eggs'));
   st.appendChild(nestEl('small','',P.eggs>0?EGG_SPECIAL_CHANCE+'% special pet (Dragon, Fairy, Phoenix, Tiger or Wolf, Class F) \u00b7 '+(100-EGG_SPECIAL_CHANCE)+'% Chicken':'World bosses drop Pet Eggs.'));
   b.appendChild(st);
   /* v5_250: one permanent slot per species (Chicken + 5 specials), each showing how many the last hatch gave (0 when none) */
@@ -38,7 +48,7 @@ function nestHatchUi(b){
   else r.appendChild(nestEl('div','nline',R?'Hatched '+R.done+' egg'+(R.done>1?'s':'')+':':'\u00a0'));
   const row=nestEl('div','nlist n6');
   for(let s=0;s<PET_SP.length;s++){
-    const n=R&&R.got?(R.got[petKey(s,0)]|0):0,it=nestEl('div','nit n6i'+(s>0?' sp':'')+(n?' on':'')),sl=nestEl('div','bslot nsl '+PET_CLS_SLOT[0]);
+    const n=R&&R.got?(R.got[petKey(s,0)]|0):0,it=nestEl('div','nit n6i'+(s>0?' sp':'')+(n?' on':'')+(n&&s>0?' hot':'')),sl=nestEl('div','bslot nsl '+PET_CLS_SLOT[0]);
     sl.innerHTML=petIcon(s,0);it.appendChild(sl);
     const nm=nestEl('span','nnm',s===0?'Chicken':PET_SP[s].n);nm.style.color=s===0?'#c4cdd2':'#ffe14a';it.appendChild(nm);
     it.appendChild(nestEl('b','ncn','\u00d7'+n));row.appendChild(it);

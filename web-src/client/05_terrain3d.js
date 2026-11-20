@@ -82,6 +82,15 @@ function gStats(i){
   for(let a=0;a<n;a++)for(let b=0;b<n;b++){const x=(a/(n-1)*2-1)*R,z=(b/(n-1)*2-1)*R,d=Math.hypot(x,z);if(d>TOWN+160&&d<R)hs.push(hfn(x,z))}
   hs.sort((p,q)=>p-q);const pc=f=>hs[Math.min(hs.length-1,Math.floor(f*hs.length))]||0;
   return{wl:!K.liq?-1e5:isl?-8:Math.min(pc(.045),-4),hi0:pc(.82),hi1:Math.max(pc(.82)+30,pc(.96)),K}}
+/* v5_272 water level of a world for the building placer (same formula as gStats, but from mkH(i) so it works while the world is being generated, before hfn is set; cached) */
+const WLC={};
+function worldWL(i){
+  if(i in WLC)return WLC[i];
+  const f=mkH(i),isl=WMAP[tIx(i)%12][0]==='isles',K=GKIT[i%16]||GKIT[1],hs=[],R=RIM-60,n=90;
+  if(!K.liq||isl){WLC[i]=!K.liq?-1e5:-8;return WLC[i]}
+  for(let a=0;a<n;a++)for(let b=0;b<n;b++){const x=(a/(n-1)*2-1)*R,z=(b/(n-1)*2-1)*R,d=Math.hypot(x,z);if(d>TOWN+160&&d<R)hs.push(f(x,z))}
+  hs.sort((p,q)=>p-q);
+  return WLC[i]=Math.min(hs[Math.min(hs.length-1,Math.floor(.045*hs.length))]||0,-4)}
 const GLSL_HEAD=`
 varying vec3 vWP;varying vec3 vWN;
 uniform sampler2D uL0;uniform sampler2D uL1;uniform sampler2D uL2;uniform sampler2D uL3;uniform sampler2D uL4;

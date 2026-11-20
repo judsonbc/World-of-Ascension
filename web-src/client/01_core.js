@@ -489,7 +489,11 @@ let DG=new Map();
 let BG=new Map();
 function buildBldGrid(){BG=new Map();for(const b of bld){const x0=((b.x-b.hw-14)/256)|0,x1=((b.x+b.hw+14)/256)|0,y0=((b.y-b.hh-14)/256)|0,y1=((b.y+b.hh+14)/256)|0;
   for(let gx=x0;gx<=x1;gx++)for(let gy=y0;gy<=y1;gy++){const k=gx*512+gy;let a=BG.get(k);if(!a)BG.set(k,a=[]);a.push(b)}}}
-function bldWet(i,x,y){try{return WMAP[tIx(i)%12][0]==='isles'&&mkH(i)(x-C,y-C)<2}catch(e){return false}} /* no houses in the water of the island worlds (WMAP does not exist yet while World 1 is built at start-up: that world is dry) */
+function bldWet(i,x,y,r){ /* v5_272 NOTHING IN THE WATER: the footprint (centre + 2 rings of 8 points out to radius r) must stay on dry ground, a little above the real water level of the world (worldWL, the same level the water surface is drawn at). Before, only the centre of a building was checked, only on island worlds, against height 2. */
+  try{const f=mkH(i),wl=worldWL(i);if(wl<-1e4)return false;const lim=wl+10,cx=x-C,cy=y-C;r=r||0;
+    if(f(cx,cy)<lim)return true;
+    if(r>0)for(let q=0;q<8;q++){const a=q*.7854,ca=Math.cos(a),sa=Math.sin(a);for(const k of[.5,1])if(f(cx+ca*r*k,cy+sa*r*k)<lim)return true}
+    return false}catch(e){return false}} /* WMAP / GKIT do not exist yet while World 1 is built at start-up (it is rebuilt right after): no check then */
 /* v5_172 CULTURES: every world has its own architecture. Kinds: 0 cottage, 1 hall, 2 watchtower (flat top, standable), 3 pagoda, 4 skyscraper, 5 domed temple, 6 round tower, 7 yurt,
    8 obelisk, 9 ziggurat (3 standable tiers), 10 windmill, 11 crystal spire, 12 longhouse, 13 lighthouse, 14 well.
    home = [kind, weight] used for ordinary village buildings, land = tall / grand landmarks (lone, or the centre of a village, or a 'downtown' cluster).
@@ -523,7 +527,7 @@ function genVillages(i,R2){
   const relief=(x,y,r)=>{if(!hf)return 0;let lo2=1e9,hi2=-1e9;const s=(dx,dy)=>{const h=hf(x-C+dx,y-C+dy);if(h<lo2)lo2=h;if(h>hi2)hi2=h};s(0,0);for(let q=0;q<8;q++){const a=q*.7854;for(const f of[.5,1])s(Math.cos(a)*r*f,Math.sin(a)*r*f)}return hi2-lo2};
   const findSite=(r,fa,fd)=>{let best=null,bestR=1e9;const rr2=Math.min(r,230),lim=22+rr2*.12; /* allowed relief: ~35-50 units over the footprint */
     for(let t=0;t<110;t++){const a=fa!=null?fa+(R2()-.5)*.3:R2()*Math.PI*2,d=fa!=null?Math.max(lo,Math.min(hi,fd+(R2()-.5)*160)):lo+Math.sqrt(R2())*(hi-lo),x=C+Math.cos(a)*d,y=C+Math.sin(a)*d;
-      if(sites.some(q=>Math.hypot(q.x-x,q.y-y)<q.r+r+130)||bldWet(i,x,y))continue;
+      if(sites.some(q=>Math.hypot(q.x-x,q.y-y)<q.r+r+130)||bldWet(i,x,y,Math.min(r,230)))continue;
       const rl=relief(x,y,rr2);if(rl<bestR){bestR=rl;best={x,y}}if(rl>lim)continue;const q={x,y,r};sites.push(q);return q}
     if(best&&bestR<=lim*1.6){const q={x:best.x,y:best.y,r};sites.push(q);return q}return null};
   let placed=[];
@@ -558,7 +562,7 @@ function genVillages(i,R2){
     const d=dims(k),hw=d[0],hh=d[1],wh=d[2],rd=KROUND.includes(k),m=Math.max(hw,hh);
     if(Math.hypot(x-C,y-C)>RIM-70-m||Math.hypot(x-C,y-C)<TOWN+140+m)return null;
     for(const q of keepList)if(Math.abs(q.x-x)<q.hw+hw+(k===14?24:46)&&Math.abs(q.y-y)<q.hh+hh+(k===14?24:46))return null;
-    if(bldWet(i,x,y))return null;
+    if(bldWet(i,x,y,m+30))return null;
     const dx=tx-x,dy=ty-y,sd=Math.abs(dx)>Math.abs(dy)?[dx>0?1:-1,0]:[0,dy>0?1:-1],col=colors();
     const mk=(extra)=>{const b=Object.assign({x,y,hw,hh,sy:y+hh,k,rd,wh,H:Infinity,fx:sd[0],fy:sd[1],sd:Math.floor(R2()*1e6),v:0,n:d[3]||0},col,extra);bld.push(b);return b};
     let b;

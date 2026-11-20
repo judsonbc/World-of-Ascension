@@ -491,7 +491,11 @@ let DG=new Map();
 let BG=new Map();
 function buildBldGrid(){BG=new Map();for(const b of bld){const x0=((b.x-b.hw-14)/256)|0,x1=((b.x+b.hw+14)/256)|0,y0=((b.y-b.hh-14)/256)|0,y1=((b.y+b.hh+14)/256)|0;
   for(let gx=x0;gx<=x1;gx++)for(let gy=y0;gy<=y1;gy++){const k=gx*512+gy;let a=BG.get(k);if(!a)BG.set(k,a=[]);a.push(b)}}}
-function bldWet(i,x,y){try{return WMAP[tIx(i)%12][0]==='isles'&&mkH(i)(x-C,y-C)<2}catch(e){return false}} /* no houses in the water of the island worlds (WMAP does not exist yet while World 1 is built at start-up: that world is dry) */
+function bldWet(i,x,y,r){ /* v5_272 NOTHING IN THE WATER: the footprint (centre + 2 rings of 8 points out to radius r) must stay on dry ground, a little above the real water level of the world (worldWL, the same level the water surface is drawn at). Before, only the centre of a building was checked, only on island worlds, against height 2. */
+  try{const f=mkH(i),wl=worldWL(i);if(wl<-1e4)return false;const lim=wl+10,cx=x-C,cy=y-C;r=r||0;
+    if(f(cx,cy)<lim)return true;
+    if(r>0)for(let q=0;q<8;q++){const a=q*.7854,ca=Math.cos(a),sa=Math.sin(a);for(const k of[.5,1])if(f(cx+ca*r*k,cy+sa*r*k)<lim)return true}
+    return false}catch(e){return false}} /* WMAP / GKIT do not exist yet while World 1 is built at start-up (it is rebuilt right after): no check then */
 /* v5_172 CULTURES: every world has its own architecture. Kinds: 0 cottage, 1 hall, 2 watchtower (flat top, standable), 3 pagoda, 4 skyscraper, 5 domed temple, 6 round tower, 7 yurt,
    8 obelisk, 9 ziggurat (3 standable tiers), 10 windmill, 11 crystal spire, 12 longhouse, 13 lighthouse, 14 well.
    home = [kind, weight] used for ordinary village buildings, land = tall / grand landmarks (lone, or the centre of a village, or a 'downtown' cluster).
@@ -525,7 +529,7 @@ function genVillages(i,R2){
   const relief=(x,y,r)=>{if(!hf)return 0;let lo2=1e9,hi2=-1e9;const s=(dx,dy)=>{const h=hf(x-C+dx,y-C+dy);if(h<lo2)lo2=h;if(h>hi2)hi2=h};s(0,0);for(let q=0;q<8;q++){const a=q*.7854;for(const f of[.5,1])s(Math.cos(a)*r*f,Math.sin(a)*r*f)}return hi2-lo2};
   const findSite=(r,fa,fd)=>{let best=null,bestR=1e9;const rr2=Math.min(r,230),lim=22+rr2*.12; /* allowed relief: ~35-50 units over the footprint */
     for(let t=0;t<110;t++){const a=fa!=null?fa+(R2()-.5)*.3:R2()*Math.PI*2,d=fa!=null?Math.max(lo,Math.min(hi,fd+(R2()-.5)*160)):lo+Math.sqrt(R2())*(hi-lo),x=C+Math.cos(a)*d,y=C+Math.sin(a)*d;
-      if(sites.some(q=>Math.hypot(q.x-x,q.y-y)<q.r+r+130)||bldWet(i,x,y))continue;
+      if(sites.some(q=>Math.hypot(q.x-x,q.y-y)<q.r+r+130)||bldWet(i,x,y,Math.min(r,230)))continue;
       const rl=relief(x,y,rr2);if(rl<bestR){bestR=rl;best={x,y}}if(rl>lim)continue;const q={x,y,r};sites.push(q);return q}
     if(best&&bestR<=lim*1.6){const q={x:best.x,y:best.y,r};sites.push(q);return q}return null};
   let placed=[];
@@ -560,7 +564,7 @@ function genVillages(i,R2){
     const d=dims(k),hw=d[0],hh=d[1],wh=d[2],rd=KROUND.includes(k),m=Math.max(hw,hh);
     if(Math.hypot(x-C,y-C)>RIM-70-m||Math.hypot(x-C,y-C)<TOWN+140+m)return null;
     for(const q of keepList)if(Math.abs(q.x-x)<q.hw+hw+(k===14?24:46)&&Math.abs(q.y-y)<q.hh+hh+(k===14?24:46))return null;
-    if(bldWet(i,x,y))return null;
+    if(bldWet(i,x,y,m+30))return null;
     const dx=tx-x,dy=ty-y,sd=Math.abs(dx)>Math.abs(dy)?[dx>0?1:-1,0]:[0,dy>0?1:-1],col=colors();
     const mk=(extra)=>{const b=Object.assign({x,y,hw,hh,sy:y+hh,k,rd,wh,H:Infinity,fx:sd[0],fy:sd[1],sd:Math.floor(R2()*1e6),v:0,n:d[3]||0},col,extra);bld.push(b);return b};
     let b;
@@ -2632,6 +2636,7 @@ function nestRender(){
   const w=$('nest');if(!w||w.hidden)return;
   if(nestTab==='combine')nestValidate();
   w.classList.toggle('wide',nestTab==='combine');
+  w.classList.toggle('hatchtab',nestTab==='hatch');   /* v5_272: hook for the compact landscape-phone hatch layout */
   $('nTabH').classList.toggle('on',nestTab==='hatch');$('nTabC').classList.toggle('on',nestTab==='combine');
   $('nestCnt').textContent='Eggs: '+P.eggs;
   const b=$('nestBody');b.textContent='';
@@ -2639,9 +2644,18 @@ function nestRender(){
 }
 /* ---- hatch tab ---- */
 function nestHatchUi(b){
-  const st=nestEl('div','nstage'),eg=nestEl('div','negg'+(nestBusy?' shake':''));
-  eg.innerHTML=ICONS.egg();st.appendChild(eg);
-  st.appendChild(nestEl('b','ncount',P.eggs>0?'Pet Egg \u00d7'+P.eggs:'No Pet Eggs'));
+  /* v5_271: a special pet is shown IN the egg area: the egg glows gold while it shakes, then it bursts and the pet(s) pop out with rays + a pulsing glow */
+  const spk=(nestRes&&nestRes.kind==='hatch'&&nestRes.got)?Object.keys(nestRes.got).filter(k=>petParse(k).s>0).sort():[];
+  const rev=!nestBusy&&spk.length>0;
+  const st=nestEl('div','nstage'+(rev?' spk':'')),eg=nestEl('div','negg'+(nestBusy?' shake':'')+(nestBusy&&spk.length?' spec':'')+(rev?' nrev':''));
+  if(rev){
+    eg.appendChild(nestEl('i','nrays'));
+    for(const k of spk){const p=petParse(k),pe=nestEl('div','nrvp');pe.title=PET_SP[p.s].n;pe.innerHTML=petIcon(p.s,0);eg.appendChild(pe)}
+    for(let i=0;i<6;i++){const d=nestEl('u','nspk');d.style.setProperty('--a',(i*60+20)+'deg');eg.appendChild(d)}
+  }else eg.innerHTML=ICONS.egg();
+  st.appendChild(eg);
+  if(rev){const t=nestEl('b','ncount nspt','\u2605 '+spk.map(k=>PET_SP[petParse(k).s].n+(nestRes.got[k]>1?' \u00d7'+nestRes.got[k]:'')).join(', ')+' hatched! \u2605');st.appendChild(t)}
+  else st.appendChild(nestEl('b','ncount',P.eggs>0?'Pet Egg \u00d7'+P.eggs:'No Pet Eggs'));
   st.appendChild(nestEl('small','',P.eggs>0?EGG_SPECIAL_CHANCE+'% special pet (Dragon, Fairy, Phoenix, Tiger or Wolf, Class F) \u00b7 '+(100-EGG_SPECIAL_CHANCE)+'% Chicken':'World bosses drop Pet Eggs.'));
   b.appendChild(st);
   /* v5_250: one permanent slot per species (Chicken + 5 specials), each showing how many the last hatch gave (0 when none) */
@@ -2650,7 +2664,7 @@ function nestHatchUi(b){
   else r.appendChild(nestEl('div','nline',R?'Hatched '+R.done+' egg'+(R.done>1?'s':'')+':':'\u00a0'));
   const row=nestEl('div','nlist n6');
   for(let s=0;s<PET_SP.length;s++){
-    const n=R&&R.got?(R.got[petKey(s,0)]|0):0,it=nestEl('div','nit n6i'+(s>0?' sp':'')+(n?' on':'')),sl=nestEl('div','bslot nsl '+PET_CLS_SLOT[0]);
+    const n=R&&R.got?(R.got[petKey(s,0)]|0):0,it=nestEl('div','nit n6i'+(s>0?' sp':'')+(n?' on':'')+(n&&s>0?' hot':'')),sl=nestEl('div','bslot nsl '+PET_CLS_SLOT[0]);
     sl.innerHTML=petIcon(s,0);it.appendChild(sl);
     const nm=nestEl('span','nnm',s===0?'Chicken':PET_SP[s].n);nm.style.color=s===0?'#c4cdd2':'#ffe14a';it.appendChild(nm);
     it.appendChild(nestEl('b','ncn','\u00d7'+n));row.appendChild(it);
@@ -4488,6 +4502,15 @@ function gStats(i){
   for(let a=0;a<n;a++)for(let b=0;b<n;b++){const x=(a/(n-1)*2-1)*R,z=(b/(n-1)*2-1)*R,d=Math.hypot(x,z);if(d>TOWN+160&&d<R)hs.push(hfn(x,z))}
   hs.sort((p,q)=>p-q);const pc=f=>hs[Math.min(hs.length-1,Math.floor(f*hs.length))]||0;
   return{wl:!K.liq?-1e5:isl?-8:Math.min(pc(.045),-4),hi0:pc(.82),hi1:Math.max(pc(.82)+30,pc(.96)),K}}
+/* v5_272 water level of a world for the building placer (same formula as gStats, but from mkH(i) so it works while the world is being generated, before hfn is set; cached) */
+const WLC={};
+function worldWL(i){
+  if(i in WLC)return WLC[i];
+  const f=mkH(i),isl=WMAP[tIx(i)%12][0]==='isles',K=GKIT[i%16]||GKIT[1],hs=[],R=RIM-60,n=90;
+  if(!K.liq||isl){WLC[i]=!K.liq?-1e5:-8;return WLC[i]}
+  for(let a=0;a<n;a++)for(let b=0;b<n;b++){const x=(a/(n-1)*2-1)*R,z=(b/(n-1)*2-1)*R,d=Math.hypot(x,z);if(d>TOWN+160&&d<R)hs.push(f(x,z))}
+  hs.sort((p,q)=>p-q);
+  return WLC[i]=Math.min(hs[Math.min(hs.length-1,Math.floor(.045*hs.length))]||0,-4)}
 const GLSL_HEAD=`
 varying vec3 vWP;varying vec3 vWN;
 uniform sampler2D uL0;uniform sampler2D uL1;uniform sampler2D uL2;uniform sampler2D uL3;uniform sampler2D uL4;
