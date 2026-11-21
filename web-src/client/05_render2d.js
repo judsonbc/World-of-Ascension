@@ -312,10 +312,16 @@ function updatePlayer(dt){
   const speed=P.cast>0?0:moveSpd(); /* rooted while casting */
   let ix=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0)+joy.x;
   let iy=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)+joy.y;
+  /* v5_307 JOYSTICK RESPONSE: only a push very near the centre (JOY_WALK = 35% of its range, after the 12% dead zone) WALKS (slow, 30% -> 60% speed, small steps);
+     anything beyond that is the normal full speed at once (before: speed grew in step with the push, so full speed needed a full push). Keyboard / tap-to-move are not affected. */
+  const JOY_WALK=.35,kbHeld=!!(keys['d']||keys['arrowright']||keys['a']||keys['arrowleft']||keys['s']||keys['arrowdown']||keys['w']||keys['arrowup']),
+    jm=Math.hypot(joy.x,joy.y),joyOn=joy.id!==null&&!kbHeld&&jm>.12,joyWalk=joyOn&&jm<JOY_WALK,
+    sf=joyWalk?.3+.3*clamp((jm-.12)/(JOY_WALK-.12),0,1):1;
+  P.walkSm=(PHONE&&joyWalk)?1:0;   /* v5_302 the 3D avatar takes small steps while walking */
   if(Math.abs(ix)>.12||Math.abs(iy)>.12){
     {const r=camRot(ix,iy);ix=r[0];iy=r[1]}
-    const l=Math.max(1,Math.hypot(ix,iy));
-    P.x+=ix/l*speed*dt;P.y+=iy/l*speed*dt;P.face=Math.atan2(iy,ix);
+    const l=Math.max(.001,Math.hypot(ix,iy));   /* v5_307 unit direction: the speed no longer follows the push, only the walk zone slows it (sf) */
+    P.x+=ix/l*speed*sf*dt;P.y+=iy/l*speed*sf*dt;if(!(P.dashT>0&&P.dg===3))P.face=Math.atan2(iy,ix);   /* v5_304 a back dive keeps facing the front */
     P.mv=null;P.task=null;P.mine=0;P.fatk=false;stopMine('Auto-mine off.');
   }else if(P.task){
     const o=P.task;
@@ -371,10 +377,10 @@ function updatePlayer(dt){
   }
   if(P.cast>0)P.cast-=dt;
   P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);
-  if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1)-dashEase(e0));P.x+=P.dvx*st;P.y+=P.dvy*st;
+  if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1,P.dg)-dashEase(e0,P.dg));P.x+=P.dvx*st;P.y+=P.dvy*st;P.dgU=e1;
     /* v5_142 dash animation: ghost trail left along the path (fades behind you), streak sparks flung backwards, soft landing ring */
     spark(P.x,P.y,'#bfe9ff',3,18,.5,3.6);spark(P.x,P.y,'#ffffff',1,10,.35,2.4);spark(P.x-P.dvx*18,P.y-P.dvy*18,'#7fc4ff',2,70,.3,2.2);
-    if(P.dashT<=0){ring(P.x,P.y,58,'#bfe9ff');spark(P.x,P.y,'#e8f6ff',12,110,.4,3);}}
+    if(P.dashT<=0){ring(P.x,P.y,58,'#bfe9ff');spark(P.x,P.y,'#e8f6ff',12,110,.4,3);P.dg=0}}
   const d=dist(P.x,P.y,C,C);
   if(d>RIM-20){P.x=C+(P.x-C)/d*(RIM-20);P.y=C+(P.y-C)/d*(RIM-20)}
   autoRealmClamp(); /* v5_283 auto-hunt stays within 1 zone of where it was started */

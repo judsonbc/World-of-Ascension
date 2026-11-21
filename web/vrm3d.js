@@ -7,12 +7,12 @@
        for  class = Night Blade  (class bits = 1): He -> NightBlade_He.vrm, She -> NightBlade_She.vrm
        for  class = Iron Guardian  (class bits = 2): He -> IronGuardian_He.vrm, She -> IronGuardian_She.vrm
        for  class = Storm Archer  (class bits = 3): He -> StormArcher_He.vrm, She -> StormArcher_She.vrm
-       and for  class = Spirit Summoner  (class bits = 4): He -> SpiritSummoner_He.vrm, She -> SpiritSummoner_She.vrm; so all five classes are VRM avatars now (the built-in bodies stay as the fallback)
+       and for  class = Spirit Summoner  (class bits = 4): He -> SpiritSummoner_He.vrm, She -> SpiritSummoner_She.vrm; so all five classes are VRM avatars (v5_300: the old built-in bodies are deleted, there is no fallback body)
      - the existing rig keeps doing the animation (walk, attack swing, torso twist, head): pose() copies those angles onto the VRM bones,
        so every attack / move animation of the old avatar works unchanged
-     - the armor fire, the aura / halo / shield / ground ring stay the game's own objects; the old body meshes are only taken off the camera layer (not deleted)
+     - the armor fire, the aura / halo / shield / ground ring stay the game's own objects; the rig in models3d.js is now only joints (v5_300), so there is no old body mesh left to hide
      - the avatars hold nothing: the old weapons (sword, daggers, hammer, shield, bow, staff, soul orb) were deleted in v5_296, new ones will be added later
-     - if the file cannot be loaded the old procedural avatar simply stays (nothing breaks).   Off switch: add ?vrm=0 to the page address.
+     - if a file cannot be loaded the character is simply not drawn (v5_300: no built-in body to fall back to); aura, shadow, armor fire still show.   ?vrm=0 hides every avatar.
    Not used from the VRM: MToon outlines / toon shading (drawn as a lit texture), blend-shape expressions, spring bones, eye look-at. */
 (function(){
 'use strict';
@@ -166,7 +166,7 @@ function enable(R,key){
   const hid=procList(R);
   R.vrms=R.vrms||{};
   if(!R.vrms[key]){
-    const v=R.vrms[key]=instance(key);R.body.add(v.root);
+    const v=R.vrms[key]=instance(key);(R.rollG||R.body).add(v.root);   /* v5_304 rollG = dodge roll / dive tilt group */
     v.mats.forEach((m,i)=>{R.m['vrm'+key+i]=m});
     R.m['vrmSkel'+key]={dispose(){try{v.skels.forEach(s=>s.dispose&&s.dispose())}catch(e){}}};
   }
@@ -195,7 +195,7 @@ function sync(R,key){
   if(!key||!T||off||ST[key]===3){if(R.vrmOn)disable(R);return}
   if(ST[key]===2){try{enable(R,key)}catch(e){console.warn('VRM avatar: '+e.message);ST[key]=3;if(R.vrmOn)disable(R)}}
   else{
-    if(R.vrmOn)disable(R);                           /* show the built-in body until the model has been loaded */
+    if(R.vrmOn)disable(R);                           /* nothing is drawn for this rig until its model has been loaded */
     if(R.vrmPend!==key){R.vrmPend=key;PEND[key].push(R)}
     load(key);
   }
@@ -204,17 +204,20 @@ function sync(R,key){
 /* ------------------------------------------------------------------ animation: copy the old rig's angles onto the VRM bones */
 function setB(v,name,d){const b=v.bones[name];if(!b)return;const r=v.rest[name];b.quaternion.copy(r.pInv).multiply(d).multiply(r.w)}
 function pose(R,P){
-  const v=R.vrm,t=tmp,tr=R.torso.rotation,hd=R.head.rotation;
+  const v=R.vrm,t=tmp,tr=R.torso.rotation,hd=R.head.rotation,tk=R.dgTuck||0;   /* tk = dodge tuck 0..1: knees and elbows bend */
   t.eu.set(tr.x*.4,tr.y*.4,0);setB(v,'spine',t.q1.setFromEuler(t.eu));
   t.eu.set(tr.x*.3,tr.y*.3,0);t.q1.setFromEuler(t.eu);setB(v,'chest',t.q1);setB(v,'upperChest',t.q1);
+  {const mv=R.walk||0,ph=R.walkPh||0;   /* v5_301 walk: hips turn and roll a little with each small step */
+   t.eu.set(0,Math.sin(ph)*.1*mv,Math.cos(ph)*.05*mv);setB(v,'hips',t.q1.setFromEuler(t.eu));
+   t.eu.set(0,-Math.sin(ph)*.06*mv,0);setB(v,'neck',t.q1.setFromEuler(t.eu))}
   t.eu.set(hd.x,hd.y,0);setB(v,'head',t.q1.setFromEuler(t.eu));
   for(const [arm,sx,side] of [[R.armR,1,v.plus],[R.armL,-1,v.minus]]){
     t.q1.setFromEuler(arm.rotation);t.q2.setFromAxisAngle(t.Z,-sx*HANG);t.q1.multiply(t.q2);setB(v,side+'UpperArm',t.q1);
-    t.q3.setFromAxisAngle(t.Y,-sx*ELBOW);setB(v,side+'LowerArm',t.q3);
+    t.q3.setFromAxisAngle(t.Y,-sx*(ELBOW+tk*1.4));setB(v,side+'LowerArm',t.q3);
   }
   for(const [leg,side] of [[R.legR,v.plus],[R.legL,v.minus]]){
     const a=leg.rotation.x;t.q1.setFromAxisAngle(t.X,a);setB(v,side+'UpperLeg',t.q1);
-    t.q2.setFromAxisAngle(t.X,Math.max(0,a)*.9+Math.abs(a)*.15+.04);setB(v,side+'LowerLeg',t.q2);   /* knee bends on the back swing */
+    t.q2.setFromAxisAngle(t.X,Math.max(0,a)*.9+Math.abs(a)*.15+.04+tk*1.9);setB(v,side+'LowerLeg',t.q2);   /* knee bends on the back swing */
   }
   const k=P.hurt>0?2:P.bfT>0?1:0;                    /* hurt flash (red) / burning (amber), like the old body */
   if(k!==v.fk){v.fk=k;const c=k===2?[.62,.12,.12]:k===1?[.45,.28,.1]:[.22,.22,.22];v.mats.forEach(m=>m.emissive.setRGB(c[0],c[1],c[2]))}

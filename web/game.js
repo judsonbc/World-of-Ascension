@@ -1707,7 +1707,7 @@ function peerAt(wx,wy,ex){
   return best;
 }
 function respawn(){
-  P.dashT=0;
+  P.dashT=0;P.dg=0;
   P.x=C;P.y=C+110;P.hp=maxHp();P.qi=maxQi();P.dead=0;P.bfT=0;P.sh=0;
 }
 
@@ -1897,18 +1897,22 @@ function lootIcon(key,icon,n,col){
 function bagLog(t,c){P.recent.unshift({t,c});if(P.recent.length>20)P.recent.pop();saveSoon();if(!$('bag').hidden)renderBag()}
 function addPot(k,n){if(n<=0)return;lootIcon('p'+k,k==='tp'?'&#10162;':'&#9879;',n,POTS[k].c);P.pots[k]=Math.min(POT_MAX,P.pots[k]+n);pop(P.x-14,P.y-58,'+'+n+' '+POT_SH[k],POTS[k].c,12);bagLog('+'+n+' '+POTS[k].n+(n>1?'s':''),POTS[k].c)}
 /* ---------- dodge: quick dash with a brief invulnerable window, aimed by dragging the small pad ---------- */
-const DASH_DIST=210,DASH_T=.34,DASH_CD=5,DODGE_INV=.35; /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
+const DASH_DIST=210,DASH_T=.45,DASH_CD=5,DODGE_INV=.35; /* v5_304 DASH_T .34 -> .45 s (same distance) so the roll / dive animation has time; invulnerability stays .35 s */ /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
 function doDodge(dx,dy){
   if(!started||P.dead>0||P.dcd>0)return;
   P.cast=0; /* dodging cancels a cast */
   let l=Math.hypot(dx,dy);
-  if(l<.01){dx=Math.cos(P.face);dy=Math.sin(P.face);l=1}
-  P.dvx=dx/l;P.dvy=dy/l;P.dashT=DASH_T;P.dcd=DASH_CD;P.inv=Math.max(P.inv>0?P.inv:0,DODGE_INV);P.skLock=Math.max(P.skLock||0,DODGE_INV);P.atkCd=Math.max(P.atkCd||0,DODGE_INV);
-  P.face=Math.atan2(P.dvy,P.dvx);P.mv=null;P.task=null;P.mine=0;
+  if(l<.01){dx=-Math.cos(P.face);dy=-Math.sin(P.face);l=1}   /* v5_305 no direction held (Shift alone, dodge button tapped without a swipe) = BACK DIVE away from where the character looks */
+  P.dvx=dx/l;P.dvy=dy/l;
+  /* v5_304 DODGE TYPE, relative to where the character faces right now: 1 forward (+-45 deg) = roll and run, 2 left / right = turn to that side and roll, 3 back (more than 135 deg) = back dive AND ROLL (v5_308), the character keeps facing the front */
+  {let da=Math.atan2(P.dvy,P.dvx)-P.face;da=Math.atan2(Math.sin(da),Math.cos(da));const ad=Math.abs(da);P.dg=ad<.7854?1:ad>2.356?3:2;P.dgU=0}
+  P.dashT=DASH_T;P.dcd=DASH_CD;P.inv=Math.max(P.inv>0?P.inv:0,DODGE_INV);P.skLock=Math.max(P.skLock||0,DODGE_INV);P.atkCd=Math.max(P.atkCd||0,DODGE_INV);
+  if(P.dg!==3)P.face=Math.atan2(P.dvy,P.dvx);P.mv=null;P.task=null;P.mine=0;
+  fxs({k:'dg',d:P.dg,f:+P.face.toFixed(2),x:Math.round(P.x),y:Math.round(P.y)}); /* other players play the same dodge animation */
   ring(P.x,P.y,48,'#bfe9ff');ring(P.x,P.y,80,'#ffffff');
   spark(P.x,P.y,'#e8f6ff',14,150,.45,3.4);spark(P.x,P.y,'#9fd8ff',10,90,.55,4.2); /* v5_142 launch burst */
 }
-const dashEase=u=>1-Math.pow(1-Math.min(1,Math.max(0,u)),3);
+const dashEase=(u,g)=>1-Math.pow(1-Math.min(1,Math.max(0,u)),g===3?1.6:g===1?1.25:g?1.5:3); /* v5_304 g = dodge type: forward roll + run travels most evenly (1.25), side roll 1.5, the back dive + roll leaps first (1.6) */
 /* v5_99 ROTATABLE / TILTABLE CAMERA (3D mode). yaw rotates the view around the player, tilt is the camera pitch (radians above the ground; below CAM_TILT_MIN the camera looks up at the sky, v5_174).
    Controls: hold RIGHT or MIDDLE mouse and drag (left/right = rotate, up/down = tilt), or [ and ] to rotate, PageUp / PageDown to tilt, Home to reset;
    phone: drag with TWO fingers (sideways = rotate, up/down = tilt, pinch = zoom). Movement, joystick, dodge and the hub arrow follow the view. */
@@ -3772,10 +3776,16 @@ function updatePlayer(dt){
   const speed=P.cast>0?0:moveSpd(); /* rooted while casting */
   let ix=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0)+joy.x;
   let iy=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)+joy.y;
+  /* v5_307 JOYSTICK RESPONSE: only a push very near the centre (JOY_WALK = 35% of its range, after the 12% dead zone) WALKS (slow, 30% -> 60% speed, small steps);
+     anything beyond that is the normal full speed at once (before: speed grew in step with the push, so full speed needed a full push). Keyboard / tap-to-move are not affected. */
+  const JOY_WALK=.35,kbHeld=!!(keys['d']||keys['arrowright']||keys['a']||keys['arrowleft']||keys['s']||keys['arrowdown']||keys['w']||keys['arrowup']),
+    jm=Math.hypot(joy.x,joy.y),joyOn=joy.id!==null&&!kbHeld&&jm>.12,joyWalk=joyOn&&jm<JOY_WALK,
+    sf=joyWalk?.3+.3*clamp((jm-.12)/(JOY_WALK-.12),0,1):1;
+  P.walkSm=(PHONE&&joyWalk)?1:0;   /* v5_302 the 3D avatar takes small steps while walking */
   if(Math.abs(ix)>.12||Math.abs(iy)>.12){
     {const r=camRot(ix,iy);ix=r[0];iy=r[1]}
-    const l=Math.max(1,Math.hypot(ix,iy));
-    P.x+=ix/l*speed*dt;P.y+=iy/l*speed*dt;P.face=Math.atan2(iy,ix);
+    const l=Math.max(.001,Math.hypot(ix,iy));   /* v5_307 unit direction: the speed no longer follows the push, only the walk zone slows it (sf) */
+    P.x+=ix/l*speed*sf*dt;P.y+=iy/l*speed*sf*dt;if(!(P.dashT>0&&P.dg===3))P.face=Math.atan2(iy,ix);   /* v5_304 a back dive keeps facing the front */
     P.mv=null;P.task=null;P.mine=0;P.fatk=false;stopMine('Auto-mine off.');
   }else if(P.task){
     const o=P.task;
@@ -3831,10 +3841,10 @@ function updatePlayer(dt){
   }
   if(P.cast>0)P.cast-=dt;
   P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);
-  if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1)-dashEase(e0));P.x+=P.dvx*st;P.y+=P.dvy*st;
+  if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1,P.dg)-dashEase(e0,P.dg));P.x+=P.dvx*st;P.y+=P.dvy*st;P.dgU=e1;
     /* v5_142 dash animation: ghost trail left along the path (fades behind you), streak sparks flung backwards, soft landing ring */
     spark(P.x,P.y,'#bfe9ff',3,18,.5,3.6);spark(P.x,P.y,'#ffffff',1,10,.35,2.4);spark(P.x-P.dvx*18,P.y-P.dvy*18,'#7fc4ff',2,70,.3,2.2);
-    if(P.dashT<=0){ring(P.x,P.y,58,'#bfe9ff');spark(P.x,P.y,'#e8f6ff',12,110,.4,3);}}
+    if(P.dashT<=0){ring(P.x,P.y,58,'#bfe9ff');spark(P.x,P.y,'#e8f6ff',12,110,.4,3);P.dg=0}}
   const d=dist(P.x,P.y,C,C);
   if(d>RIM-20){P.x=C+(P.x-C)/d*(RIM-20);P.y=C+(P.y-C)/d*(RIM-20)}
   autoRealmClamp(); /* v5_283 auto-hunt stays within 1 zone of where it was started */
@@ -5906,6 +5916,7 @@ function updatePeers(dt){
       if(dx*dx+dy*dy>160000){q.x=q.tx;q.y=q.ty}else{q.x+=dx*k;q.y+=dy*k}}
     const mvd=Math.hypot(q.x-ox,q.y-oy);
     q.mvAmt+=((mvd>.05?1:0)-q.mvAmt)*Math.min(1,dt*10);q.anim+=mvd*.07;
+    if(q.dg){const u=(performance.now()/1000-q.dgS)/DASH_T;if(u>=1||q.dead)q.dg=0;else q.dgU=u}   /* v5_304 another player's dodge animation */
     q.swing-=dt;q.hurt-=dt;
     {if(q.jzAt&&performance.now()/1000-q.jzAt>5)q.jzT=0;q.jz=(q.jz||0)+((q.jzT||0)-(q.jz||0))*Math.min(1,dt*18)} /* v5_170 their height, from 'jz' messages */
     if(Math.cos(q.face)>.1)q.dir=1;else if(Math.cos(q.face)<-.1)q.dir=-1;
@@ -5940,6 +5951,7 @@ function playFx(m){
       }
       break}
     case 'sw':if(q){q.swing=.18;q.face=+m.f||0}break;
+    case 'dg':if(q){q.dg=clamp(m.d|0,1,3);q.dgS=performance.now()/1000;q.dgU=0;q.face=+m.f||0}break; /* v5_304 dodge: 1 forward roll, 2 side roll, 3 back dive */
     case 'jz':if(q){q.jzT=clamp(+m.z||0,0,400);q.jzAt=performance.now()/1000}break; /* v5_170 another player's height above the ground (jumping / standing on a structure) */
     case 'sp':{ /* v5_165 another player's spirits (visual only) */
       if(!q)break;const a=Array.isArray(m.a)?m.a:[],list=[];

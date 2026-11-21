@@ -829,7 +829,7 @@ function peerAt(wx,wy,ex){
   return best;
 }
 function respawn(){
-  P.dashT=0;
+  P.dashT=0;P.dg=0;
   P.x=C;P.y=C+110;P.hp=maxHp();P.qi=maxQi();P.dead=0;P.bfT=0;P.sh=0;
 }
 

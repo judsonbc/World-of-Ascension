@@ -184,18 +184,22 @@ function lootIcon(key,icon,n,col){
 function bagLog(t,c){P.recent.unshift({t,c});if(P.recent.length>20)P.recent.pop();saveSoon();if(!$('bag').hidden)renderBag()}
 function addPot(k,n){if(n<=0)return;lootIcon('p'+k,k==='tp'?'&#10162;':'&#9879;',n,POTS[k].c);P.pots[k]=Math.min(POT_MAX,P.pots[k]+n);pop(P.x-14,P.y-58,'+'+n+' '+POT_SH[k],POTS[k].c,12);bagLog('+'+n+' '+POTS[k].n+(n>1?'s':''),POTS[k].c)}
 /* ---------- dodge: quick dash with a brief invulnerable window, aimed by dragging the small pad ---------- */
-const DASH_DIST=210,DASH_T=.34,DASH_CD=5,DODGE_INV=.35; /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
+const DASH_DIST=210,DASH_T=.45,DASH_CD=5,DODGE_INV=.35; /* v5_304 DASH_T .34 -> .45 s (same distance) so the roll / dive animation has time; invulnerability stays .35 s */ /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
 function doDodge(dx,dy){
   if(!started||P.dead>0||P.dcd>0)return;
   P.cast=0; /* dodging cancels a cast */
   let l=Math.hypot(dx,dy);
-  if(l<.01){dx=Math.cos(P.face);dy=Math.sin(P.face);l=1}
-  P.dvx=dx/l;P.dvy=dy/l;P.dashT=DASH_T;P.dcd=DASH_CD;P.inv=Math.max(P.inv>0?P.inv:0,DODGE_INV);P.skLock=Math.max(P.skLock||0,DODGE_INV);P.atkCd=Math.max(P.atkCd||0,DODGE_INV);
-  P.face=Math.atan2(P.dvy,P.dvx);P.mv=null;P.task=null;P.mine=0;
+  if(l<.01){dx=-Math.cos(P.face);dy=-Math.sin(P.face);l=1}   /* v5_305 no direction held (Shift alone, dodge button tapped without a swipe) = BACK DIVE away from where the character looks */
+  P.dvx=dx/l;P.dvy=dy/l;
+  /* v5_304 DODGE TYPE, relative to where the character faces right now: 1 forward (+-45 deg) = roll and run, 2 left / right = turn to that side and roll, 3 back (more than 135 deg) = back dive AND ROLL (v5_308), the character keeps facing the front */
+  {let da=Math.atan2(P.dvy,P.dvx)-P.face;da=Math.atan2(Math.sin(da),Math.cos(da));const ad=Math.abs(da);P.dg=ad<.7854?1:ad>2.356?3:2;P.dgU=0}
+  P.dashT=DASH_T;P.dcd=DASH_CD;P.inv=Math.max(P.inv>0?P.inv:0,DODGE_INV);P.skLock=Math.max(P.skLock||0,DODGE_INV);P.atkCd=Math.max(P.atkCd||0,DODGE_INV);
+  if(P.dg!==3)P.face=Math.atan2(P.dvy,P.dvx);P.mv=null;P.task=null;P.mine=0;
+  fxs({k:'dg',d:P.dg,f:+P.face.toFixed(2),x:Math.round(P.x),y:Math.round(P.y)}); /* other players play the same dodge animation */
   ring(P.x,P.y,48,'#bfe9ff');ring(P.x,P.y,80,'#ffffff');
   spark(P.x,P.y,'#e8f6ff',14,150,.45,3.4);spark(P.x,P.y,'#9fd8ff',10,90,.55,4.2); /* v5_142 launch burst */
 }
-const dashEase=u=>1-Math.pow(1-Math.min(1,Math.max(0,u)),3);
+const dashEase=(u,g)=>1-Math.pow(1-Math.min(1,Math.max(0,u)),g===3?1.6:g===1?1.25:g?1.5:3); /* v5_304 g = dodge type: forward roll + run travels most evenly (1.25), side roll 1.5, the back dive + roll leaps first (1.6) */
 /* v5_99 ROTATABLE / TILTABLE CAMERA (3D mode). yaw rotates the view around the player, tilt is the camera pitch (radians above the ground; below CAM_TILT_MIN the camera looks up at the sky, v5_174).
    Controls: hold RIGHT or MIDDLE mouse and drag (left/right = rotate, up/down = tilt), or [ and ] to rotate, PageUp / PageDown to tilt, Home to reset;
    phone: drag with TWO fingers (sideways = rotate, up/down = tilt, pinch = zoom). Movement, joystick, dodge and the hub arrow follow the view. */

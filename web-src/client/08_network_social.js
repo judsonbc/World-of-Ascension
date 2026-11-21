@@ -527,6 +527,7 @@ function updatePeers(dt){
       if(dx*dx+dy*dy>160000){q.x=q.tx;q.y=q.ty}else{q.x+=dx*k;q.y+=dy*k}}
     const mvd=Math.hypot(q.x-ox,q.y-oy);
     q.mvAmt+=((mvd>.05?1:0)-q.mvAmt)*Math.min(1,dt*10);q.anim+=mvd*.07;
+    if(q.dg){const u=(performance.now()/1000-q.dgS)/DASH_T;if(u>=1||q.dead)q.dg=0;else q.dgU=u}   /* v5_304 another player's dodge animation */
     q.swing-=dt;q.hurt-=dt;
     {if(q.jzAt&&performance.now()/1000-q.jzAt>5)q.jzT=0;q.jz=(q.jz||0)+((q.jzT||0)-(q.jz||0))*Math.min(1,dt*18)} /* v5_170 their height, from 'jz' messages */
     if(Math.cos(q.face)>.1)q.dir=1;else if(Math.cos(q.face)<-.1)q.dir=-1;
@@ -561,6 +562,7 @@ function playFx(m){
       }
       break}
     case 'sw':if(q){q.swing=.18;q.face=+m.f||0}break;
+    case 'dg':if(q){q.dg=clamp(m.d|0,1,3);q.dgS=performance.now()/1000;q.dgU=0;q.face=+m.f||0}break; /* v5_304 dodge: 1 forward roll, 2 side roll, 3 back dive */
     case 'jz':if(q){q.jzT=clamp(+m.z||0,0,400);q.jzAt=performance.now()/1000}break; /* v5_170 another player's height above the ground (jumping / standing on a structure) */
     case 'sp':{ /* v5_165 another player's spirits (visual only) */
       if(!q)break;const a=Array.isArray(m.a)?m.a:[],list=[];

@@ -237,273 +237,39 @@ const bladeTier=w=>w>=75?4:w>=50?3:w>=25?2:w>=10?1:0; /* (old steel-tint tiers, 
    cold white-blue > aqua > jade > lime > gold > orange > red > magenta > violet > white-gold. Weapon glow follows P.wlv, outfit glow follows P.alv. */
 const FORGE_GLOW=[null,'#bfeaff','#5fe8ff','#5fffb0','#c8ff5a','#ffd24a','#ff9a3a','#ff5a4a','#ff5ac8','#a86bff','#fff4c8'];
 /* v5_194 REALISTIC CHARACTER: the head is drawn smaller (adult proportions) and has a real face (eyes with iris, brows, nose, lips, chin, ears) */
-const HEAD_K=.84,SKIN_EMI=0x1a0b07;
 const forgeTier=l=>l>=10?Math.min(10,Math.floor(l/10)):0;
 
 function makePlayer(skinIdx){
+  /* v5_300 the OLD BUILT-IN AVATAR IS DELETED: no body, head, hair, outfit, headwear, class kit, cape or scarf meshes any more.
+     What is left is the bare rig that animPlayer drives and VRM3D copies onto the VRM bones (root > body > torso / legs, torso > head / arms),
+     plus the things that are not part of the body: level aura ring, shadow, shield bubble, armor fire, aura particles,
+     Night Blade wisps, Storm Archer sparks and the Spirit Summoner's wolf. The visible character is the VRM model (web/vrm3d.js). */
   const root=new T.Group(),body=G(root),torso=G(body);
-  const R={root,body,torso,skin:-1,gear:'',lt:0,aR:-.5,aL:0};
-  const mSkin=new T.MeshPhongMaterial({color:'#f0d2b4',specular:'#2c2119',shininess:16,emissive:SKIN_EMI}),
-        mHair=new T.MeshPhongMaterial({color:'#1b1d22',specular:'#4a4a54',shininess:38}),
-        mRobe=new T.MeshLambertMaterial({color:'#d8d2bf',map:tex('robe'),side:T.DoubleSide}),
-        mRobe2=new T.MeshLambertMaterial({color:'#d8d2bf',map:tex('cloth'),side:T.DoubleSide}),
-        mTrim=new T.MeshLambertMaterial({color:'#e3b559',emissive:'#3a2a08',side:T.DoubleSide}),
-        mSash=new T.MeshLambertMaterial({color:'#a8483c',side:T.DoubleSide}),
-        mBoot=new T.MeshLambertMaterial({color:'#1d2830'}),
-        mDark=new T.MeshBasicMaterial({color:'#14181c'}),
-        mMouth=new T.MeshBasicMaterial({color:'#9a4a44'}),
-        mEyeW=new T.MeshBasicMaterial({color:'#f3f0ea'}),mIris=new T.MeshBasicMaterial({color:'#4a3022'}),mPupil=new T.MeshBasicMaterial({color:'#0c0a0a'}),mSpark=new T.MeshBasicMaterial({color:'#ffffff'}),
-        mEar=new T.MeshLambertMaterial({color:'#d9a98c'}),mNostril=new T.MeshBasicMaterial({color:'#a8705c'}),
-        mEmb=new T.MeshBasicMaterial({color:'#e3b559',map:tex('lotus'),transparent:true,depthWrite:false}),
-        mSteel=new T.MeshLambertMaterial({color:'#cfe8ff',emissive:'#4a6a80'}),
-        mGlow=new T.MeshBasicMaterial(addMat({color:'#cfe8ff',opacity:.35}));
-  R.m={iris:mIris,earIn:mEar,nostril:mNostril,skin:mSkin,hair:mHair,robe:mRobe,robe2:mRobe2,trim:mTrim,sash:mSash,boot:mBoot,steel:mSteel,glow:mGlow,emb:mEmb};
-
-  /* legs (pivot at the hip) */
-  const mkLeg=sx=>{const L=G(body,[sx*3.6,15,0]);
-    A(L,'taper',mBoot,[0,-6.5,0],[5,13,5],[PI,0,0]);A(L,'tube',mTrim,[0,-7.4,0],[5.5,1.1,5.5]);              /* shin tapers to the ankle, trim cuff */
-    A(L,'sphL',mBoot,[0,-12.8,1.4],[5,3.8,9.2]);A(L,'sphL',mBoot,[0,-13.4,5.4],[4.6,2.8,4.4]);A(L,'sph',mBoot,[0,-12.6,-2.6],[4.4,4.2,4]); /* foot, toe cap, heel */
-    A(L,'box',mDark,[0,-14.8,1.8],[5.2,1,10]);return L};
-  R.legL=mkLeg(-1);R.legR=mkLeg(1);
-
-  /* robe, hem, collar, sash */
-  R.robeMesh=A(torso,'robe',mRobe,[0,0,0],1);
-  A(torso,'tube',mTrim,[0,9.7,0],[23.6,2.2,23.6]);
-  A(torso,'tor',mTrim,[0,38.2,0],[11.2,11.2,11.2],[PI/2,0,0]);
-  A(torso,'tube',mSash,[0,24,0],[17,4.6,17]);
-  A(torso,'box',mTrim,[3.4,24,8.6],[2.8,3.2,1.4]);
-  R.embMesh=A(torso,'plane',mEmb,[0,31.5,8.6],[6.2,6.2,1]);
-  R.sashTails=[];
-  for(const sx of [1,-1]){const t=G(torso,[sx*3.6,23,-8.2]);A(t,'box',mSash,[0,-4.5,0],[2.6,9,.7]);R.sashTails.push(t)}
-
-  /* head */
-  A(torso,'cyl',mSkin,[0,40.6,0],[5.2,7.6,5.2]);                  /* neck */
-  A(torso,'sph',mSkin,[0,38.2,0],[6.6,3.2,6.0]);                  /* trapezius, so the neck does not float */
-  const head=G(torso,[0,44.6,0]);R.head=head;
-  A(head,'sph',mSkin,[0,0,0],14.4);
-  A(head,'sph',mSkin,[0,-6.2,3.7],[5.6,3.8,4.8]);                         /* chin / jaw */
-  for(const sx of [-1,1]){
-    /* eye: white, iris, pupil, glint, upper lid line; brow; ear (all placed on the head sphere, radius 7.2) */
-    A(head,'sph',mEyeW,[sx*2.9,.8,6.0],[3.3,2.3,1.3],[0,sx*.35,sx*.1]);
-    A(head,'sph',mIris,[sx*2.9,.8,6.5],[2,2,.7]);
-    A(head,'sph',mPupil,[sx*2.9,.8,6.78],[.95,.95,.35]);
-    A(head,'sphL',mSpark,[sx*2.5,1.3,6.95],[.55,.55,.25]);
-    A(head,'box',mDark,[sx*2.9,2.0,6.1],[3.6,.42,.5],[0,sx*.35,sx*.1]);
-    A(head,'box',mHair,[sx*3.2,3.3,5.5],[3.8,.72,.7],[0,sx*.3,sx*.14]);
-    A(head,'sph',mSkin,[sx*7.0,-.4,-.2],[1.2,3.6,2.4],[0,sx*.3,0]);A(head,'sphL',mEar,[sx*7.3,-.4,.1],[.5,2.2,1.2],[0,sx*.3,0]);
-    A(head,'sphL',mSkin,[sx*.95,-1.9,6.8],[1.2,1.3,1.4]);A(head,'sphL',mNostril,[sx*.8,-2.35,7.35],[.55,.4,.45]);
-  }
-  A(head,'sphL',mSkin,[0,-.1,6.9],[1.7,4,1.6]);A(head,'sph',mSkin,[0,-1.7,7.0],[2.1,1.7,2.0]); /* nose bridge + tip */
-  A(head,'sphL',mMouth,[0,-3.3,6.0],[3.2,.95,1.2]);A(head,'sphL',mMouth,[0,-4.3,5.5],[2.8,1.1,1.3]);  /* lips (colour set by setSkin) */
-  A(head,'box',mDark,[0,-3.75,6.2],[2.7,.2,.4]);R.m.mouth=mMouth;
-  R.lashes=G(head);for(const sx of [-1,1]){A(R.lashes,'box',mDark,[sx*2.9,2.1,6.7],[3.6,.55,.6],[0,0,sx*.4]);A(R.lashes,'box',mDark,[sx*4.6,.9,5.6],[1.4,.5,.6],[0,0,sx*.9])}R.lashes.visible=false;
-  const HS={};R.hs=HS;
-  const cap=A(head,'hemi',mHair,[0,.6,-.9],15.4,[-.6,0,0]);cap.material=new T.MeshPhongMaterial({color:'#1b1d22',specular:'#4a4a54',shininess:38,side:T.DoubleSide});R.m.hairCap=cap.material;HS.cap=cap;
-  HS.back=A(head,'sph',mHair,[0,-2.2,-3.6],[13.6,14,10.5]);
-  /* v5_194 bangs across the forehead + two side locks in front of the ears (shown with most hair styles) */
-  HS.fringe=G(head);for(const [fx,fl,fr] of [[-4.7,2.6,.5],[-2.4,3.2,.2],[0,3.4,0],[2.4,3.2,-.2],[4.7,2.6,-.5]]){const fy=5.1,fz=Math.sqrt(Math.max(0,51.84-fx*fx-fy*fy))+.2;
-    A(HS.fringe,'cone',mHair,[fx,fy,fz],[3.4,fl,1.7],[PI-.35,Math.asin(fx/7.4),fr])}
-  for(const sx of [-1,1])A(HS.fringe,'cone',mHair,[sx*7.0,-.2,2.2],[2.6,8,2.2],[PI,0,sx*.08]);
-  HS.knot=A(head,'sph',mHair,[0,8.4,-2.6],7.2);
-  HS.knotBand=A(head,'box',mTrim,[0,8.6,-2.6],[11,.9,.9]);
-  {const hb=G(head,[0,.6,-.9]);hb.rotation.x=-.6;R.headband=A(hb,'tor',mTrim,[0,0,0],[15.8,15.8,15.8],[PI/2,0,0]);R.headband.userData.grp=hb} /* v5_194 follows the tilted hairline of the hair cap */
-  R.pony=G(head,[0,2,-7.2]);A(R.pony,'taper',mHair,[0,-8.5,-1.2],[3.4,18,3.4],[.18,0,0]);A(R.pony,'sphL',mHair,[0,-17.8,-2],3.4);HS.pony=R.pony;
-  R.ties=[];for(const sx of [-1,1]){const t=G(head,[sx*1.2,-3.6,-7.4]);A(t,'box',mTrim,[0,-3.2,0],[1.6,6.4,.5]);R.ties.push(t)}
-  HS.ties=R.ties;
-  /* extra hair styles (hidden until chosen) */
-  HS.long=G(head,[0,2,-7.2]);A(HS.long,'taper',mHair,[0,-14,-1.4],[12,30,5],[.08,0,0]);A(HS.long,'sphL',mHair,[0,-29,-1.6],[11,4,5]);
-  HS.buns=G(head);for(const sx of [-1,1]){A(HS.buns,'sph',mHair,[sx*6.8,8.4,-1.6],6.4);A(HS.buns,'box',mTrim,[sx*6.8,5.6,-1.6],[3.4,.8,3.4])}
-  HS.spikes=G(head);for(let i=0;i<9;i++){const a=i/9*PI*2,cx=Math.cos(a),sz=Math.sin(a),r=i===8?0:1;
-    A(HS.spikes,'cone6',mHair,[cx*5.2*r,8+(i%2)*1.6,sz*5.2*r-1.6],[3.6,9+(i%3)*2.4,3.6],[sz*.7*r,0,-cx*.7*r])}
-  HS.braid=G(head,[0,0,-7.4]);for(let k=0;k<5;k++)A(HS.braid,'sph',mHair,[0,-3-k*4.6,-1.4-k*.3],[4.8-k*.35,6,4.8-k*.35]);A(HS.braid,'box',mTrim,[0,-26.5,-3],[3.2,1.6,3.2]);
-
-  /* ---- headwear (one group per option, shown by setSkin) ---- */
-  const mStraw=new T.MeshLambertMaterial({color:'#caa45c',side:T.DoubleSide}),mMetal=new T.MeshLambertMaterial({color:'#59606e',emissive:'#14161a'}),
-        mWhite=new T.MeshLambertMaterial({color:'#f2eee2',side:T.DoubleSide}),mPink=new T.MeshBasicMaterial({color:'#f2a5b8',side:T.DoubleSide}),
-        mBoneH=new T.MeshLambertMaterial({color:'#e8dfc6'}),mMask=new T.MeshLambertMaterial({color:'#1d1d27'}),mDkc=new T.MeshLambertMaterial({color:'#23232d',side:T.DoubleSide}),
-        mGem=new T.MeshBasicMaterial({color:'#8ff0ff'}),mPlate=new T.MeshLambertMaterial({color:'#8d96a4',emissive:'#101216',side:T.DoubleSide});
-  R.m.gem=mGem;R.m.plate=mPlate;
-  const hw=R.hwv=[null];
-  const H=()=>{const g=G(head);g.visible=false;hw.push(g);return g};
-  let g=H();/*1 circlet*/A(g,'tube',mTrim,[0,4.6,0],[15.2,2.4,15.2]);A(g,'oct',mGem,[0,4.8,7.9],[2.8,3.8,2.2]);A(g,'cone4',mTrim,[0,7.6,7],[2.4,3.6,1],[0,0,0]);
-  g=H();/*2 bamboo hat*/A(g,'cyl',mStraw,[0,5.8,0],[34,.8,34]);A(g,'cone',mStraw,[0,9.6,0],[17,8,17]);A(g,'tube',mDkc,[0,5.2,0],[15.4,1.4,15.4]);
-  g=H();/*3 crown*/A(g,'tube',mTrim,[0,6.8,0],[14.8,3.2,14.8]);for(let i=0;i<6;i++){const a=i/6*PI*2;A(g,'cone4',mTrim,[Math.cos(a)*7,10.6,Math.sin(a)*7],[2.8,5.4,2.8])}A(g,'oct',mGem,[0,7,7.6],[2.6,3.2,2])
-  g=H();/*4 horns*/for(const sx of [-1,1]){A(g,'cone',mBoneH,[sx*5.6,8.6,.6],[3.8,11,3.8],[0,0,-sx*.5]);A(g,'cone',mBoneH,[sx*9.6,14.6,.6],[2.2,6,2.2],[0,0,-sx*1.1])}
-  g=H();/*5 fox ears*/for(const sx of [-1,1]){A(g,'cone4',mHair,[sx*5,10.6,-.6],[5.4,9.6,3.4],[-.15,0,-sx*.22]);A(g,'cone4',mWhite,[sx*5,10.2,.4],[3,6.2,1.6],[-.15,0,-sx*.22])}
-  g=H();/*6 bunny ears*/for(const sx of [-1,1]){A(g,'taper',mWhite,[sx*3.6,16,-1],[3.8,17,2.4],[-.08,0,-sx*.16]);A(g,'taper',mPink,[sx*3.6,16,-.1],[1.8,13,1],[-.08,0,-sx*.16])}
-  g=H();/*7 scholar cap*/A(g,'cyl',mDkc,[0,7.4,0],[12.4,4.4,12.4]);A(g,'box',mDkc,[0,11.6,-4.2],[10.6,8,2.6],[-.1,0,0]);A(g,'tube',mTrim,[0,5.6,0],[12.6,.8,12.6]);A(g,'box',mTrim,[0,12,-5.6],[7,.8,.5]);
-  g=H();/*8 lotus crown*/for(let i=0;i<8;i++){const pg=G(g,[0,6,0]);pg.rotation.y=i/8*PI*2;A(pg,'cone4',mSash,[0,4.6,5.6],[3.6,9,1.4],[.35,0,0])}A(g,'oct',mGem,[0,8.2,0],[2.8,3.4,2.8]);
-  g=H();/*9 shadow mask*/A(g,'sph',mMask,[0,-3.6,1.6],[13.2,8.4,13.4]);A(g,'box',mTrim,[0,-.2,7],[10,.5,1]);
-  g=H();/*10 warlord helm*/A(g,'hemi',mMetal,[0,.8,-.4],[16.8,16.8,16.8],[-.12,0,0]);A(g,'box',mMetal,[0,4.6,7.2],[13,1.8,3]);A(g,'box',mMetal,[0,-1.8,-8],[14.6,8,2]);
-    for(const sx of [-1,1])A(g,'cone4',mTrim,[sx*8,10.4,2],[3,12,1.2],[0,0,-sx*.85]);A(g,'box',mTrim,[0,11.5,0],[1.4,5,10]);
-  g=H();/*11 antlers*/for(const sx of [-1,1]){const a=G(g,[sx*3.8,6.6,-.6]);a.rotation.z=-sx*.38;A(a,'taper',mBoneH,[0,6.4,0],[2.2,13,2.2]);
-    A(a,'taper',mBoneH,[sx*2.8,8,0],[1.6,8,1.6],[0,0,-sx*.9]);A(a,'taper',mBoneH,[sx*-2.4,11.2,0],[1.4,6,1.4],[0,0,sx*.8]);A(a,'taper',mBoneH,[sx*2.6,13.6,0],[1.4,6,1.4],[0,0,-sx*.8])}
-  g=H();/*12 lotus pin*/for(let i=0;i<6;i++){const a=i/6*PI*2;A(g,'sphL',mPink,[7.2+Math.cos(a)*2.4,6.4+Math.sin(a)*2.4,1.4],[3,3,1.6])}A(g,'sph',mTrim,[7.2,6.4,1.9],2.2);A(g,'box',mTrim,[3,5.4,1.2],[8,.6,.6],[0,0,.3]);
-  g=H();/*13 spirit gem*/A(g,'oct',mGem,[0,3.9,7.3],[2.4,4,1.4]);A(g,'tor',mGem,[0,3.9,7.2],[5,5,5]);
-
-  /* arms (pivot at the shoulder). +x is the sword arm. */
-  const mkArm=sx=>{const a=G(torso,[sx*8.4,34.5,0]);
-    A(a,'sph',mRobe2,[0,0,0],6.6);A(a,'taper',mRobe2,[0,-7.5,0],[9,15,9]);A(a,'tube',mTrim,[0,-14.8,0],[9.2,1.6,9.2]);const hd=G(a,[0,-16.8,0]);A(hd,'cyl',mSkin,[0,2.4,0],[2.8,2.6,2.8]);A(hd,'sph',mSkin,[0,-.4,0],[4.2,4.6,4]);  /* wrist + palm */
-    for(let f=0;f<4;f++)A(hd,'sphL',mSkin,[(f-1.5)*1.05,-1.2,1.6],[1.15,1.9+(f===1||f===2?.3:0),1.3]);      /* fingers */
-    A(hd,'sphL',mSkin,[-sx*2.0,.2,.9],[1.3,2.6,1.3],[0,0,-sx*.3]);return a};                                  /* thumb */
-  R.armR=mkArm(1);R.armL=mkArm(-1);
-
-  /* forge-level extras */
-  R.paul=G(torso);for(const sx of [-1,1])A(R.paul,'hemi',mTrim,[sx*10.4,36,0],[8,6,8],[0,0,-sx*.45]);
-  R.cape=G(torso,[0,36,-8.4]);A(R.cape,'box',mSash,[0,-11,-.6],[15,24,.9],[.08,0,0]);A(R.cape,'box',mTrim,[0,-22.6,-.6],[15,1.4,1],[.08,0,0]);
+  const R={root,body,torso,skin:-1,gear:'',lt:0,aR:-.5,aL:0,m:{},sm:0,pa:0};
+  R.rollG=G(body);   /* v5_304 the VRM avatar is added to this group: dodge rolls / dives tilt it around the hips (armor fire, aura and shadow stay upright) */
+  R.legL=G(body,[-3.6,15,0]);R.legR=G(body,[3.6,15,0]);       /* hip pivots */
+  R.head=G(torso,[0,44.6,0]);
+  R.armR=G(torso,[8.4,34.5,0]);R.armL=G(torso,[-8.4,34.5,0]);  /* shoulder pivots, +x is the right arm */
   /* status effects */
   R.shield=A(root,'sph',new T.MeshBasicMaterial(addMat({color:'#8ff0c4',opacity:.18})),[0,26,0],[50,56,50]);
   R.aura=A(root,'fplane',softMat('aura','#5fd3a5',.4),[0,1.2,0],[60,1,60]);R.aura.renderOrder=1; /* level ring: soft fade on both the inner and outer edge */
   R.shadow=A(root,'disc',new T.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.32,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}),[0,.5,0],[30,1,30]);
-  /* ---- outfit styles (index = OUTFITS) ---- */
-  const ov=R.ov=[null];const O=p=>{const g=G(p||torso);g.visible=false;ov.push(g);return g};
-  let o=O();/*1 battle plate*/A(o,'box',mPlate,[0,29.6,8.5],[15.4,12,3.2]);A(o,'box',mTrim,[0,35.5,8.4],[15.8,1.4,3.4]);
-    for(const sx of [-1,1]){A(o,'hemi',mPlate,[sx*11,36.6,0],[12,9,12],[0,0,-sx*.5]);A(o,'box',mPlate,[sx*5.2,12.2,11.8],[5.4,10,1.2]);A(o,'box',mPlate,[sx*5.4,12.6,-11.6],[5.4,10,1.2])}
-    A(o,'box',mPlate,[0,12.6,12.2],[5,10.4,1.2]);A(o,'box',mTrim,[0,24,8.9],[6,3,1.2]);
-  o=O(head);/*2 hood*/{const hd=A(o,'hemi',R.m.robe,[0,.2,-.9],[18.6,18.6,18.6],[-.95,0,0]);A(o,'sph',R.m.robe,[0,-6.6,-4.8],[15,10,10]);A(o,'tor',mTrim,[0,.2,0],[1,1,1]).visible=false}
-  o=O();/*3 shoulder mantle*/A(o,'cloak',R.m.robe2,[0,25.2,0],[13.2,5.2,13.2]);
-    for(const sx of [-1,1])A(o,'sph',mTrim,[sx*6,34.4,5.6],1.8);A(o,'tube',mTrim,[0,35.2,0],[10.6,1,10.6]);
-  o=O(torso);/*4 wide sleeves*/for(const a of [R.armR,R.armL]){const sl=G(a);sl.userData.sleeve=1;A(sl,'taper',R.m.robe2,[0,-13.2,0],[16,22,16]);A(sl,'tube',mTrim,[0,-24,0],[16.6,1.8,16.6]);sl.visible=false;(R.sleeves=R.sleeves||[]).push(sl)}
-  o=O();/*5 dragon scale*/for(const sx of [-1,1]){A(o,'cone6',mTrim,[sx*12,40,0],[4.4,11,4.4],[0,0,-sx*.55]);A(o,'cone6',mTrim,[sx*13.6,35.4,0],[3.2,8,3.2],[0,0,-sx*1.05])}
-    for(let i=0;i<4;i++)A(o,'cone6',mTrim,[0,26+i*4.4,-9.2],[3.2,7-i,3.2],[-1.2,0,0]);
-  o=O();/*6 royal court*/A(o,'box',mSash,[0,18,10.5],[7.6,21,.9]);A(o,'box',mTrim,[0,7.6,10.7],[7.8,1.2,1.1]);A(o,'box',mTrim,[0,18,10.9],[1.2,19,.4]);
-    A(o,'tube',mTrim,[0,15,0],[22.4,1.2,22.4]);A(o,'tube',mTrim,[0,21,0],[19.6,1,19.6]);
-    A(o,'box',mSash,[0,42,-5.4],[15,9,1.2],[-.22,0,0]);A(o,'box',mTrim,[0,46.6,-6.2],[15,.9,1.3],[-.22,0,0]);
 
-  /* ---- CLASS KITS: Night Blade (1) and Iron Guardian (2) get their own silhouette, gear and weapons ---- */
-  R.cv=[[],[],[]];R.cls=0;
-  const mk=(c,e)=>new T.MeshLambertMaterial({color:c,emissive:e||'#000000',side:T.DoubleSide});
-  const KN=(par,g,m,p,sc,r)=>{const q=A(par,g,m,p,sc,r);q.visible=false;R.cv[1].push(q);return q};
-  const KG=(par,p)=>{const q=G(par,p);q.visible=false;R.cv[1].push(q);return q};
-  const KI=(par,g,m,p,sc,r)=>{const q=A(par,g,m,p,sc,r);q.visible=false;R.cv[2].push(q);return q};
-  const KJ=(par,p)=>{const q=G(par,p);q.visible=false;R.cv[2].push(q);return q};
-
-  /* NIGHT BLADE: slim hooded shadow, masked face, glowing eyes, scarf, tattered cloak, twin curved daggers, wisps */
-  const nCl=mk('#17151f','#08060e'),nCl2=mk('#2c2a3a','#0c0a14'),nSt=new T.MeshLambertMaterial({color:'#3a3a4c',emissive:'#14102a'}),
-        nEdge=new T.MeshBasicMaterial(addMat({color:'#a070ff',opacity:.9})),nEye=new T.MeshBasicMaterial({color:'#e0b0ff'}),
-        nRed=mk('#5b1678','#16041f'),nWisp=new T.MeshBasicMaterial(addMat({color:'#8a5cff',opacity:.32}));
-  R.m.nbEdge=nEdge;R.m.nbWisp=nWisp;
-  KN(head,'hemi',nCl,[0,.2,-.9],[18.6,18.6,18.6],[-.95,0,0]);
-  KN(head,'sph',nCl,[0,-6.6,-4.8],[15,10,10]);
-  KN(head,'cone',nCl,[0,7.6,-8.4],[6.4,15,6.4],[-1.15,0,0]);          /* pointed hood tail */
-  KN(head,'sph',nCl2,[0,-3.5,1.5],[13.6,8,13.2]);                      /* face wrap */
-  KN(head,'box',nCl,[0,2.8,6.9],[12.8,2.4,1.6]);                       /* brow shadow */
-  for(const sx of [-1,1])KN(head,'box',nEye,[sx*2.8,.7,7.2],[2.8,.9,.5],[0,0,sx*.28]);
-  KN(torso,'tube',nRed,[0,37.4,0],[11.6,3.6,11.6]);
-  R.nbScarf=[];[1,-1].forEach((sx,k)=>{const t=KG(torso,[sx*2.6,37,-6.4]);A(t,'box',nRed,[0,-9.5-k*2,-.4],[3.8,19+k*5,.7]);A(t,'box',nEdge,[0,-18.4-k*4.6,-.4],[3.9,.7,.8]);R.nbScarf.push(t)});
-  KN(torso,'box',nCl2,[0,29,8.7],[2.8,24,1.1],[0,0,.62]);KN(torso,'box',nCl2,[0,29,8.7],[2.8,24,1.1],[0,0,-.62]);
-  KN(torso,'oct',nEdge,[0,29,9.4],[3,3.8,1.6]);
-  KN(torso,'tube',nCl2,[0,22.2,0],[17.4,3.4,17.4]);
-  for(const sx of [-1,1])KN(torso,'box',nSt,[sx*6.4,21.4,8.8],[3.6,4.2,2.2]);
-  KN(torso,'hemi',nSt,[10.8,36.6,0],[10.5,7.5,10.5],[0,0,-.5]);        /* asymmetric spiked pauldron */
-  for(let i=0;i<3;i++)KN(torso,'cone4',nSt,[10.6+i*.5,40.6-i*.4,-3.6+i*3.6],[2.2,6.8-i,2.2],[0,0,-.5]);
-  KN(torso,'hemi',nCl2,[-10.4,36,0],[7,5,7],[0,0,.45]);
-  KN(torso,'box',nCl,[0,12,10.2],[9,21,.9],[.12,0,0]);KN(torso,'box',nEdge,[0,2.2,10.9],[9,.5,.8]);
-  for(const sx of [-1,1])KN(torso,'box',nCl,[sx*3.8,10,-10.4],[6,20,.9],[-.1,0,0]);
-  R.nbCape=KG(torso,[0,36,-8.8]);
-  [[-5,26,.06],[0,31,0],[5,22,-.06]].forEach(a=>A(R.nbCape,'box',nCl,[a[0],-a[1]*.42,-.6],[5.2,a[1],.8],[.08,0,a[2]]));
-  R.nbWispG=KG(root,[0,0,0]);R.nbWp=[];for(let i=0;i<6;i++)R.nbWp.push(A(R.nbWispG,'sph',nWisp,[0,0,0],[4,6,4]));
-
-  /* IRON GUARDIAN: broad full plate, great helm with plume, layered pauldrons, tower shield, war hammer, heavy cape */
-  const iSt=new T.MeshLambertMaterial({color:'#a9b3c2',emissive:'#12161c'}),iDk=new T.MeshLambertMaterial({color:'#59616f',emissive:'#0c0e12'}),
-        iGd=new T.MeshLambertMaterial({color:'#e0b852',emissive:'#3a2a08'}),iRd=mk('#8f1d2c','#240508'),iWd=new T.MeshLambertMaterial({color:'#6a4426'}),
-        iVis=new T.MeshBasicMaterial({color:'#ffae4a'}),iGl=new T.MeshBasicMaterial(addMat({color:'#ffb35a',opacity:.0}));
-  R.m.igVis=iVis;R.m.igGlow=iGl;
-  KI(head,'cyl',iSt,[0,-.6,0],[16.6,13.6,16.6]);KI(head,'hemi',iSt,[0,6,0],[16.6,16.6,16.6]);
-  KI(head,'box',iVis,[0,1.4,8.35],[11.4,1.3,.7]);KI(head,'box',iDk,[0,-2,8.5],[1.8,10.4,1.1]);
-  for(const sx of [-1,1])for(let k=0;k<2;k++)KI(head,'box',iDk,[sx*(3+k*1.8),-3.6,8.4],[.8,3.6,.6]);
-  KI(head,'tube',iDk,[0,-7.2,0],[15.8,2.6,15.8]);KI(head,'tube',iGd,[0,6.1,0],[17.2,1.2,17.2]);KI(head,'tube',iGd,[0,-6.2,0],[17,1,17]);
-  KI(head,'box',iDk,[0,14.8,-.5],[1.8,2,15]);
-  for(let i=0;i<7;i++)KI(head,'sph',iRd,[0,15.8-i*.55,6.4-i*2.3],[3.2,5.8-i*.3,4.2]);
-  for(const sx of [-1,1])KI(head,'cone4',iGd,[sx*9.2,5,-.5],[2.6,10,1.4],[0,0,-sx*1.15]);
-  KI(torso,'sph',iSt,[0,29.4,1.6],[18.4,15.5,14.5]);KI(torso,'box',iGd,[0,29.4,9.8],[1.3,13,1]);KI(torso,'oct',iGd,[0,31,10.2],[5,5.4,1.6]);
-  KI(torso,'tube',iDk,[0,21,0],[17.2,5,17.2]);KI(torso,'tube',iGd,[0,23.6,0],[17.8,1.6,17.8]);KI(torso,'tube',iSt,[0,37.6,0],[13.4,4.4,13.4]);
-  for(let i=0;i<8;i++){const a=i/8*PI*2,sn=Math.sin(a),cs=Math.cos(a);
-    KI(torso,'box',iSt,[sn*10.4,11.8,cs*10.4],[6.4,12.5,1.1],[0,a,0]);KI(torso,'box',iGd,[sn*10.5,5.8,cs*10.5],[6.5,1,1.3],[0,a,0])}
-  for(const sx of [-1,1]){
-    KI(torso,'hemi',iSt,[sx*9.6,37.4,0],[15,10.5,15],[0,0,-sx*.3]);KI(torso,'hemi',iSt,[sx*10.4,34.8,0],[13.4,9,13.4],[0,0,-sx*.4]);
-    KI(torso,'tube',iGd,[sx*9.6,36.8,0],[14,1,14],[0,0,-sx*.3]);KI(torso,'cone6',iGd,[sx*10,43,0],[3.4,7,3.4],[0,0,-sx*.3])}
-  for(const a of [R.armR,R.armL]){KI(a,'taper',iSt,[0,-4.6,0],[9.8,7,9.8]);KI(a,'cyl',iSt,[0,-12.2,0],[10.4,8,10.4]);KI(a,'tube',iGd,[0,-8.4,0],[10.8,1,10.8]);KI(a,'sph',iSt,[0,-16.8,0],6.2)}
-  for(const L of [R.legL,R.legR]){KI(L,'cyl',iSt,[0,-7.4,0],[6.4,10.6,6.4]);KI(L,'sph',iSt,[0,-1.2,1.6],5.4);KI(L,'box',iDk,[0,-13.2,1.6],[6.4,4.2,9]);KI(L,'tube',iGd,[0,-11,0],[6.6,.8,6.6])}
-  R.igCape=KJ(torso,[0,37,-9.2]);A(R.igCape,'box',iRd,[0,-15,-.6],[19,32,1.2],[.06,0,0]);A(R.igCape,'box',iGd,[0,-30.6,-.6],[19.4,1.4,1.4],[.06,0,0]);
-  /* STORM ARCHER (3): windswept ranger cap with feather plume and storm goggles, slate-teal coat, lightning chest harness,
-     feathered half-cape, back quiver of cyan-fletched arrows, glowing recurve bow with a nocked lightning arrow, crackling sparks */
-  R.cv[3]=[];
-  const KA=(par,g,m,p,sc,r)=>{const q=A(par,g,m,p,sc,r);q.visible=false;R.cv[3].push(q);return q};
-  const KB=(par,p)=>{const q=G(par,p);q.visible=false;R.cv[3].push(q);return q};
-  const aLe=mk('#4a3626','#120c08'),aGd=new T.MeshLambertMaterial({color:'#e0c04a',emissive:'#3a2c08'}),aFl=mk('#eef8ff','#2a3a44'),
-        aWd=new T.MeshLambertMaterial({color:'#2f5a58',emissive:'#0a1a1a'}),aSt=new T.MeshLambertMaterial({color:'#aab6c4',emissive:'#10161c'}),
-        aGlow=new T.MeshBasicMaterial({color:'#6af0ff'}),aSpk=new T.MeshBasicMaterial(addMat({color:'#bff8ff',opacity:.9}));
-  R.m.saGlow=aGlow;
-  /* head: leather cap, brim, goggles pushed up, tall double feather */
-  KA(head,'hemi',aLe,[0,.8,-.6],[18.2,12.6,18.2],[-.25,0,0]);
-  KA(head,'tube',aGd,[0,5.4,0],[17.6,1,17.6]);
-  KA(head,'box',aLe,[0,4.4,8.2],[14,1.4,5],[.45,0,0]);
-  for(const sx of [-1,1]){KA(head,'tor',aSt,[sx*3.7,6.4,8.6],[4.8,4.8,4.8]);KA(head,'circle',aGlow,[sx*3.7,6.4,8.5],[3.8,3.8,3.8])}
-  R.saFeather=KB(head,[8,7,-3]);R.saFeather.rotation.z=-.5;
-  A(R.saFeather,'cone4',aFl,[0,8,0],[3.2,17,.9],[0,PI/4,0]);A(R.saFeather,'cone4',aGlow,[1.2,6,-.4],[2.2,12,.7],[0,PI/4,-.18]);A(R.saFeather,'cyl',aGd,[0,-.5,0],[1.8,2.4,1.8]);
-  /* torso: coat, harness, lightning emblem, belt, pouches */
-  KA(torso,'tube',aLe,[0,22.2,0],[17.4,3.2,17.4]);KA(torso,'box',aGd,[0,22.2,8.8],[3.2,3.4,1]);
-  KA(torso,'box',aLe,[0,29,8.8],[2.6,27,1],[0,0,.55]);KA(torso,'box',aLe,[0,29,-8.8],[2.6,27,1],[0,0,.55]);
-  KA(torso,'oct',aGd,[0,30,9.6],[5.2,6.8,2]);KA(torso,'oct',aGlow,[0,30,10.3],[2.4,3.8,1]);
-  KA(torso,'box',R.m.robe,[0,11.4,10.2],[8.4,20,.9]);KA(torso,'box',aGlow,[0,1.4,10.8],[8.6,.6,.8]);
-  for(const sx of [-1,1]){KA(torso,'box',R.m.robe,[sx*9.4,12,0],[1,18,12],[0,0,sx*.12]);KA(torso,'box',aLe,[sx*8,22,5.6],[3.6,4.6,3],[0,sx*.4,0])}
-  KA(torso,'box',R.m.robe,[0,11,-10.4],[10,21,.9],[-.1,0,0]);
-  /* left (bow) shoulder: layered feather mantle; right: small leather pad */
-  KA(torso,'hemi',R.m.robe,[-10.4,36.4,0],[11,7.6,11],[0,0,.4]);
-  for(let i=0;i<4;i++)KA(torso,'cone4',aFl,[-11.6-i*.3,35.4-i*2.6,-2+i*1.6],[3,9+i,.8],[0,PI/4,.5+i*.12]);
-  KA(torso,'hemi',aLe,[10.4,36,0],[8,5.6,8],[0,0,-.4]);KA(torso,'tube',aGd,[10.2,35.6,0],[8.4,.8,8.4],[0,0,-.4]);
-  KA(torso,'tube',R.m.robe,[0,37.4,0],[11.6,3.4,11.6]);
-  R.saCape=KB(torso,[0,36,-8.8]);
-  [[-5.5,22,.08],[0,27,0],[5.5,19,-.08]].forEach(a=>{A(R.saCape,'box',R.m.robe,[a[0],-a[1]*.42,-.6],[5.4,a[1],.8],[.08,0,a[2]]);A(R.saCape,'box',aGlow,[a[0],-a[1]*.84,-.7],[5.5,.6,.9],[.08,0,a[2]])});
-  /* quiver */
-  const Q=KB(torso,[-4.6,28,-10.8]);Q.rotation.z=.4;
-  A(Q,'cyl',aLe,[0,0,0],[6.2,22,6.2]);A(Q,'tube',aGd,[0,10.6,0],[6.6,1.2,6.6]);A(Q,'tube',aGd,[0,-10.4,0],[6.4,1,6.4]);
-  for(let i=0;i<5;i++){const x=(i-2)*1.1,z=(i%2)*1.6-.8;A(Q,'cyl',aWd,[x,15,z],[.5,10,.5]);A(Q,'cone4',i%2?aGlow:aFl,[x,19.8,z],[1.7,4,.4],[0,PI/4,0])}
-  /* bracers and boot cuffs */
-  for(const a of [R.armR,R.armL]){KA(a,'cyl',aLe,[0,-12.6,0],[6.4,7.4,6.4]);KA(a,'tube',aGlow,[0,-9.2,0],[6.8,.8,6.8])}
-  for(const L of [R.legL,R.legR]){KA(L,'cyl',aLe,[0,-9.6,0],[6.4,6.4,6.4]);KA(L,'tube',aGlow,[0,-6.6,0],[6.8,.7,6.8])}
-  R.saSpk=KB(root,[0,0,0]);R.saSp=[];for(let i=0;i<6;i++)R.saSp.push(A(R.saSpk,'oct',aSpk,[0,0,0],[2,5,2]));
-
-  /* SPIRIT SUMMONER (4): wolf-skull headdress, indigo shaman robe, bone-rib chest, skull pauldron, ghost sash ribbons,
-     soul-lantern staff, floating soul orb in the off hand, and a translucent spirit wolf companion */
-  R.cv[4]=[];
-  const KS=(par,g,m,p,sc,r)=>{const q=A(par,g,m,p,sc,r);q.visible=false;R.cv[4].push(q);return q};
-  const KT=(par,p)=>{const q=G(par,p);q.visible=false;R.cv[4].push(q);return q};
-  const sBn=new T.MeshLambertMaterial({color:'#e8e2cc',emissive:'#2a2820'}),sFr=mk('#d8dce8','#20242c'),sWd=new T.MeshLambertMaterial({color:'#4a3a30',emissive:'#100c0a'}),
-        sGl=new T.MeshBasicMaterial({color:'#7ff5d0'}),sRb=new T.MeshBasicMaterial(addMat({color:'#7ff5d0',opacity:.5})),
-        sGh=new T.MeshBasicMaterial(addMat({color:'#8af0ff',opacity:.38})),sOr=new T.MeshBasicMaterial(addMat({color:'#aaffe8',opacity:.8}));
-  R.m.suGlow=sGl;R.m.suOrb=sOr;R.m.suGh=sGh;
-  /* head: hood under a wolf skull, horns, glowing sockets, fang row */
-  KS(head,'hemi',R.m.robe,[0,.4,-.8],[18.6,17,18.6],[-.5,0,0]);KS(head,'sph',R.m.robe,[0,-6.4,-4.8],[15,10,10]);
-  KS(head,'sph',sBn,[0,8.6,1.4],[12.6,7,12],[-.2,0,0]);KS(head,'box',sBn,[0,8.2,9.6],[6,3.4,8],[.12,0,0]);
-  for(const sx of [-1,1]){KS(head,'cone4',sBn,[sx*5.2,13,-1.4],[3.6,7,2.4],[.2,0,-sx*.3]);KS(head,'cone',sBn,[sx*9.2,8.6,.6],[2.4,9,2.4],[0,0,-sx*1.1]);
-    KS(head,'sph',sGl,[sx*3,9.6,6.8],[2.4,2.4,1.4]);KS(head,'cone4',sBn,[sx*2.2,5.8,12.4],[1,2.6,1],[PI,0,0])}
-  KS(head,'tube',sRb,[0,5,0],[17.2,1,17.2]);
-  /* chest: bone ribs, bead necklace, belt, talismans */
-  for(let i=0;i<4;i++)KS(torso,'box',sBn,[0,33.6-i*2.8,9],[11-i*1.4,1.1,1.2]);
-  KS(torso,'tube',sBn,[0,37.4,0],[11.8,3.2,11.8]);
-  for(let i=0;i<9;i++){const a=PI*(.2+i*.075);KS(torso,'sph',i%3?sBn:sGl,[Math.cos(a)*7.8,33.2-Math.sin(a)*4.4+4,8.4+Math.sin(a)*.4],i%3?1.8:2.2)}
-  KS(torso,'tube',sWd,[0,22.2,0],[17.4,3.4,17.4]);KS(torso,'oct',sGl,[0,22.2,9],[3.6,4.4,1.4]);
-  for(const sx of [-1,1])for(let k=0;k<2;k++)KS(torso,'box',sFr,[sx*(5+k*3.4),17-k*1.6,9.4],[2.6,7.6,.5],[0,0,sx*(.1+k*.1)]);
-  /* left pauldron: skull and spikes; right: pale fur mantle */
-  KS(torso,'hemi',sBn,[-10.8,36.6,0],[11,7.6,11],[0,0,.45]);KS(torso,'sph',sBn,[-12.6,39.6,1.6],[5.4,5,5.6]);
-  KS(torso,'sph',sGl,[-14.6,40,3.6],[1.5,1.5,1]);KS(torso,'sph',sGl,[-11.6,40.4,4.4],[1.5,1.5,1]);
-  for(let i=0;i<3;i++)KS(torso,'cone4',sBn,[-12.4+i*.4,37+i*1.6,-3.2+i*3.2],[2.2,6.4,2.2],[0,0,.5]);
-  KS(torso,'hemi',sFr,[10.6,36.4,0],[12.4,8.6,12.4],[0,0,-.45]);KS(torso,'hemi',sFr,[10.8,34.4,0],[13.4,7.6,13.4],[0,0,-.45]);
-  /* ghost ribbons off the belt */
-  R.suRib=[];[[-1,24],[0,30],[1,22]].forEach((a,k)=>{const t=KT(torso,[a[0]*5.6,22,-8.6]);A(t,'box',sGh,[0,-a[1]*.5,0],[3.8,a[1],.4]);A(t,'box',sGl,[0,-a[1],0],[4,.6,.6]);R.suRib.push(t)});
-  /* spirit-ward bracers */
-  for(const a of [R.armR,R.armL]){KS(a,'cyl',sWd,[0,-12.6,0],[6.3,7,6.3]);KS(a,'tube',sGl,[0,-9.4,0],[6.7,.8,6.7])}
-  /* spirit wolf companion: ghostly body, head, ears, tail, glowing eyes, wisp trail */
-  const wf=R.suWolf=KT(root,[-26,14,6]);
+  /* NIGHT BLADE shadow wisps, STORM ARCHER crackling sparks, SPIRIT SUMMONER spirit wolf (shown by setSkin for that class only) */
+  const nWisp=new T.MeshBasicMaterial(addMat({color:'#8a5cff',opacity:.32}));
+  R.nbWispG=G(root);R.nbWispG.visible=false;R.nbWp=[];for(let i=0;i<6;i++)R.nbWp.push(A(R.nbWispG,'sph',nWisp,[0,0,0],[4,6,4]));
+  const aSpk=new T.MeshBasicMaterial(addMat({color:'#bff8ff',opacity:.9}));
+  R.saSpk=G(root);R.saSpk.visible=false;R.saSp=[];for(let i=0;i<6;i++)R.saSp.push(A(R.saSpk,'oct',aSpk,[0,0,0],[2,5,2]));
+  const sGl=new T.MeshBasicMaterial({color:'#7ff5d0'}),sRb=new T.MeshBasicMaterial(addMat({color:'#7ff5d0',opacity:.5})),
+        sGh=new T.MeshBasicMaterial(addMat({color:'#8af0ff',opacity:.38}));
+  R.m.suGlow=sGl;R.m.suGh=sGh;
+  const wf=R.suWolf=G(root,[-26,14,6]);wf.visible=false;
   A(wf,'sph',sGh,[0,0,0],[8,7,17]);A(wf,'sph',sGh,[0,2,10.5],[7,6.4,7]);A(wf,'box',sGh,[0,.6,15.4],[3.4,3,5]);
   for(const sx of [-1,1]){A(wf,'cone4',sGh,[sx*2.4,6.4,9.6],[2.2,4.4,1.4]);A(wf,'sph',sGl,[sx*1.8,3.2,13],[1.1,1.1,.8])}
   A(wf,'cone',sGh,[0,1.4,-12],[3.4,13,3.4],[-1.15,0,0]);A(wf,'cone',sGh,[0,-4.6,-3],[5,9,5],[PI,0,0]);
   R.suWp=[];for(let i=0;i<5;i++)R.suWp.push(A(wf,'sph',sRb,[0,0,-12-i*3.4],[3,3,3]));
 
   /* ---- forge glow meshes: outer weapon glow per class + a glow shell around the outfit/body (shown by setGear) ---- */
-  R.m.glow2=softMat('halo','#cfe8ff',.3);
   R.m.oglow=softMat('ring','#cfe8ff',.3);   /* ring glow on the ground around the character */
   R.m.oband=softMat('band','#cfe8ff',.3);   /* thin ring of light that rises up the body and fades out */
   R.ogl=A(body,'fplane',R.m.oglow,[0,1.9,0],[44,1,44]);R.ogl.visible=false;R.ogl.renderOrder=2;
@@ -525,116 +291,65 @@ function makePlayer(skinIdx){
   return R;
 }
 function setSkin(R,sk){
-  const l=look(sk),cls=clsOf(sk),s=SKINS[l.p%SKINS.length],m=R.m,HS=R.hs;
-  l.w=0;   /* v5_289 no headwear for anyone (also other players' looks) */
-  m.skin.color.set(s.skin);m.hair.color.set(s.hair);m.hairCap.color.set(s.hair);
-  m.earIn.color.copy(tn(s.skin,.88));m.nostril.color.copy(tn(s.skin,.72));
-  m.robe.color.set(s.robe);m.robe2.color.set(s.robe);m.trim.color.set(s.trim);m.sash.color.set(s.sash);m.boot.color.set(s.boot);
-  m.emb.color.set(s.trim);
-  {const kc=cls>=1&&cls<=4,
-     sc=l.r>0?ARMOR_POOL[(l.r-1)%ARMOR_POOL.length]:(kc?CLS_SCHEMES[cls][0]:null),
-     ac=l.x>0?ACCENTS[l.x%ACCENTS.length].c:(kc?CLS_TRIM[cls]:null);
-    if(sc){m.robe.color.copy(lc(sc.r,s.robe,kc?CLS_MIX[cls]:.12));m.robe2.color.copy(m.robe.color);m.sash.color.set(sc.s);m.boot.color.set(sc.b)}
-    if(ac){m.trim.color.set(ac);m.emb.color.copy(m.trim.color)}}
-  m.gem.color.copy(lc(s.robe,'#ffffff',.55));m.plate.color.copy(lc(s.trim,'#8d96a4',.6));
-  /* outfit */
-  const scale=l.o===5&&!cls;m.robe.map=tex(scale?'scale':'robe');m.robe2.map=tex(scale?'scale':'cloth');m.robe.needsUpdate=m.robe2.needsUpdate=true;
-  for(let i=1;i<R.ov.length;i++)R.ov[i].visible=(l.o===i&&i!==4);
-  if(R.sleeves)for(const sl of R.sleeves)sl.visible=(l.o===4);
-  /* hair: which parts show for the style, then hats / hood hide what they cover */
-  const hs=l.h,hood=l.o===2,flat=l.w===2||l.w===7||l.w===10;
-  HS.cap.visible=!hood&&hs!==7;HS.fringe.visible=!hood&&!flat&&[0,1,2,3,4,6].includes(hs);
-  HS.back.visible=!hood&&[0,1,2,3,4,6].includes(hs);
-  HS.knot.visible=HS.knotBand.visible=!hood&&!flat&&(hs===0||hs===1);
-  HS.pony.visible=!hood&&hs===0;HS.ties.forEach(t=>t.visible=!hood&&hs===0);
-  HS.long.visible=!hood&&hs===2;HS.buns.visible=!hood&&!flat&&hs===4;HS.spikes.visible=!hood&&!flat&&hs===5;HS.braid.visible=!hood&&hs===6;
-  R.headband.visible=!hood&&!flat;
-  for(let i=1;i<R.hwv.length;i++)R.hwv[i].visible=(l.w===i);
-  /* aura */
+  const l=look(sk),cls=clsOf(sk),fem=l.g===1;
+  /* v5_300 the look (skin, hair, outfit, armor colours) no longer dresses a built-in body; only the aura and the class extras remain here */
   const ac=AURA_CFG[l.a]||AURA_CFG[0];R.aura.material.color.set(ac.ring);
   R.orb.visible=l.a>0;
   if(l.a>0){R.orbM.color.set(ac.col);R.orbM.opacity=ac.op||.85;R.orbG=ac;
     R.orbP.forEach(q=>{q.geometry=geo(ac.g);q.scale.set(ac.sc[0],ac.sc[1],ac.sc[2])})}
-  const fem=l.g===1;R.lashes.visible=fem;m.mouth.color.set(fem?'#c8566a':'#9a4a44');
-  R.robeMesh.scale.set(fem?.95:1,1,fem?.95:1);
-  /* class kits replace hair, headwear and outfit pieces */
   R.cls=cls;R.gear='';
-  for(let c=1;c<R.cv.length;c++)for(const o of R.cv[c])o.visible=(cls===c);
-  R.embMesh.visible=!cls;
-  /* hair, outfit and headwear now work on every class (drawn with the class kit); Shaven (the class default) keeps the original class silhouette */
-  if(cls){if(hs===7)R.headband.visible=false;R.lashes.visible=fem&&(cls===1||cls===3||cls===4)}
-  const ts=cls===1?.9:cls===2?1.18:cls===3?.96:1,ls=cls===1?.92:cls===2?1.15:1;
-  R.torso.scale.set(ts,1,ts);R.legL.scale.set(ls,1,ls);R.legR.scale.set(ls,1,ls);
-  {const hk=(fem?.94:1)*HEAD_K;R.head.scale.set(hk/ts,hk,hk/ts)}
+  R.nbWispG.visible=cls===1;R.saSpk.visible=cls===3;R.suWolf.visible=cls===4;
   R.lk=l;R.skin=sk;
-  /* v5_286 / v5_287 the Cultivator is a VRM avatar (web/vrm3d.js): He -> Cultivator_He.vrm, She -> Cultivator_She.vrm; v5_291 the Night Blade too: NightBlade_He.vrm / NightBlade_She.vrm; v5_292 the Iron Guardian: IronGuardian_He.vrm / IronGuardian_She.vrm; v5_293 the Storm Archer: StormArcher_He.vrm / StormArcher_She.vrm; v5_294 the Spirit Summoner: SpiritSummoner_He.vrm / SpiritSummoner_She.vrm; the other classes keep the built-in body */
+  /* v5_286 / v5_287 the Cultivator is a VRM avatar (web/vrm3d.js): He -> Cultivator_He.vrm, She -> Cultivator_She.vrm; v5_291 the Night Blade too: NightBlade_He.vrm / NightBlade_She.vrm; v5_292 the Iron Guardian: IronGuardian_He.vrm / IronGuardian_She.vrm; v5_293 the Storm Archer: StormArcher_He.vrm / StormArcher_She.vrm; v5_294 the Spirit Summoner: SpiritSummoner_He.vrm / SpiritSummoner_She.vrm;  */
   if(window.VRM3D)VRM3D.sync(R,cls===0?(fem?'she':'he'):cls===1?(fem?'nbshe':'nbhe'):cls===2?(fem?'igshe':'ighe'):cls===3?(fem?'sashe':'sahe'):cls===4?(fem?'sushe':'suhe'):null);
 }
 function setGear(R,wlv,alv,ft){
   const k=wlv+','+alv+','+ft;if(R.gear===k)return;R.gear=k;
   const gt=forgeTier(wlv),at=ft===undefined?forgeTier(alv):ft|0,gc=gt>0?FORGE_GLOW[gt]:null,ac=at>0?(at>=10?'#ff6aa0':FORGE_GLOW[at]):null,L=30+Math.min(wlv,40)*.35,w=gt>0?1+(gt-1)*.16:1;
   R.gt=gt;R.at=at;
-  const cl=R.cls|0;
-  /* outfit: glow shell around the body, emissive trim and sash, colour and size by forge tier */
+  /* armor fire + ground glow: colour and size by forge tier */
   R.ogl.visible=at>0;R.ogb.visible=false;R.ofire.visible=at>0;
   if(at>0){const FE=at+2,rad=11+.5*FE,S=2*rad/.6,   /* v5_228 FE = 'fire size step': every tier looks like the tier two above it (tier 1 = the old tier 3 ...) so low tiers are clearly visible */
     bd=2*(12+.4*at);R.m.oglow.color.set(ac);R.m.oband.color.set(ac);R.ogl.scale.set(S,1,S);R.ogb.scale.set(bd,7,bd);for(const f of R.ofl)f.m.color.set(f.core?lc(ac,'#ffffff',.6):ac);R.frad=rad;R.fh=24+FE*4.5;R.fn=FE}
-  R.m.trim.emissive.set(ac?tn(ac,.18+.02*at):'#3a2a08');R.m.sash.emissive.set(ac?tn(ac,.12+.015*at):'#000000');
-  R.paul.visible=alv>=5&&!cl;R.cape.visible=alv>=20&&!cl;
-  R.m.nbEdge.color.set(gc||'#a070ff');
   R.m.suGlow.color.set(gc||'#7ff5d0');
-  R.m.saGlow.color.set(gc||'#6af0ff');
-  R.m.igGlow.color.set(gc||'#ffb35a');R.m.igVis.color.set(gc||'#ffae4a');
 }
 /* P = game player state, ri = realm index */
 function animPlayer(R,P,time,ri){
   const dt=clamp(time-R.lt,0,.05);R.lt=time;
-  const mv=P.mvAmt,ph=P.anim*.9,st=Math.sin(ph);
+  const mv=P.mvAmt;
+  /* v5_302 two walk paces. Normal (PC, tap-to-move, joystick fully pushed) = the old pace. Small steps only while P.walkSm is set (phone joystick pushed part way):
+     shorter stride, a little arm swing, hip sway; R.sm blends between the two so nothing jumps, and the step phase is accumulated so it never jumps either. */
+  R.sm+=((P.walkSm?1:0)-R.sm)*Math.min(1,dt*8);const sm=R.sm;
+  R.pa+=(P.anim-(R.la===undefined?P.anim:R.la))*(.9+.3*sm);R.la=P.anim;   /* v5_303 small steps are stepped a little faster (animation only, the move speed is unchanged) */
+  const ph=R.pa,st=Math.sin(ph),legK=.9-.48*sm,armK=.8-.25*sm,bobK=1.7-.8*sm;
   setGear(R,P.wlv|0,P.alv|0,P.ft);   /* v5_227 P.ft = the armor fire tier computed from ALL gear slots (see armorFireTier in the game code) */
-  R.body.position.y=Math.abs(Math.cos(ph))*1.7*mv+Math.sin(time*2.2)*.5*(1-mv);
+  R.body.position.y=Math.abs(Math.cos(ph))*bobK*mv+Math.sin(time*2.2)*.5*(1-mv);
   R.torso.rotation.x=.07*mv;
   const cl=R.cls|0,lk=cl===2?.72:cl===1?1.1:1;
-  R.legL.rotation.x=st*.9*mv*lk;R.legR.rotation.x=-st*.9*mv*lk;
+  R.legL.rotation.x=st*legK*mv*lk;R.legR.rotation.x=-st*legK*mv*lk;
   const sw=P.swing>0?1-clamp(P.swing/.2,0,1):-1,sl=sw>=0;
   const eo=1-(1-clamp(sw,0,1))*(1-clamp(sw,0,1));
-  const tR=sl?-2.7+3*eo:-.15-st*.8*mv,tL=-.15+st*.8*mv;   /* v5_297 both arms swing freely (the right arm used to hang nearly still for the sword) */
+  const tR=sl?-2.7+3*eo:-.15+st*armK*mv,tL=-.15-st*armK*mv;   /* v5_303 each arm swings OPPOSITE to the leg on its own side (right leg back = right arm forward); before they moved the same way */   /* v5_297 both arms swing freely (the right arm used to hang nearly still for the sword) */
   R.aR+=(tR-R.aR)*Math.min(1,dt*(sl?45:14));R.aL+=(tL-R.aL)*Math.min(1,dt*14);
   R.armR.rotation.x=R.aR;R.armR.rotation.z=.1;R.armL.rotation.x=R.aL;R.armL.rotation.z=-.1;
-  R.torso.rotation.y=sl?Math.sin(sw*PI)*.55:0;
-  R.pony.rotation.x=.3+Math.sin(time*3)*.12+mv*.45;R.pony.rotation.z=Math.sin(time*2.1)*.12;
-  if(R.hs.long.visible){R.hs.long.rotation.x=.12+Math.sin(time*2.4)*.06+mv*.3;R.hs.long.rotation.z=Math.sin(time*1.7)*.07}
-  if(R.hs.braid.visible){R.hs.braid.rotation.x=.1+mv*.35+Math.sin(time*3)*.1;R.hs.braid.rotation.z=Math.sin(time*2.3)*.1}
-  R.ties.forEach((t,i)=>{t.rotation.x=.5+mv*.6+Math.sin(time*5+i)*.2});
-  R.sashTails.forEach((t,i)=>{t.rotation.x=.25+mv*.5+Math.sin(time*4+i*2)*.12});
-  if(R.cape.visible)R.cape.rotation.x=.12+mv*.5+Math.sin(time*3)*.06;
+  R.torso.rotation.y=sl?Math.sin(sw*PI)*.55:-st*.1*mv*sm;   /* shoulders counter-twist against the small steps */
+  R.walk=mv*sm;R.walkPh=ph;
   if(!cl)R.head.rotation.x=0;
   if(cl===1){
     R.torso.rotation.x=.16*mv+.05;R.head.rotation.x=-.1*mv;
-    R.nbScarf.forEach((t,i)=>{t.rotation.x=.45+mv*.9+Math.sin(time*5+i*1.7)*.2;t.rotation.z=Math.sin(time*3+i)*.18});
-    R.nbCape.rotation.x=.2+mv*.75+Math.sin(time*3.4)*.09;
     const W=R.nbWp;for(let i=0;i<W.length;i++){const f=((time*.5+i/W.length)%1),a=time*1.6+i*1.05,r=13+f*5;
       W[i].position.set(Math.cos(a)*r,3+f*38,Math.sin(a)*r);const sc=Math.sin(f*PI)*(.6+mv*.5);W[i].scale.set(4*sc+.1,7*sc+.1,4*sc+.1)}
   }else if(cl===2){
     R.torso.rotation.x=.02*mv;R.body.position.y*=.6;R.head.rotation.x=0;
-    R.igCape.rotation.x=.06+mv*.28+Math.sin(time*2.2)*.03;
-    R.m.igVis.opacity=1;R.m.igGlow.opacity=0;
   }else if(cl===3){
     R.torso.rotation.x=.05*mv;R.head.rotation.x=0;   /* v5_297 no bow stance any more: arms swing like the other classes */
-    R.saFeather.rotation.x=.2+mv*.55+Math.sin(time*4)*.1;R.saFeather.rotation.y=Math.sin(time*2.6)*.15;
-    R.saCape.rotation.x=.18+mv*.7+Math.sin(time*3.1)*.08;
-    R.m.saGlow.opacity=1;
     const W=R.saSp;for(let i=0;i<W.length;i++){const f=((time*.7+i/W.length)%1),a=time*2.2+i*1.05,r=15+Math.sin(time*9+i*3)*3,k=Math.sin(time*14+i*5)>.2?1:.2;
       W[i].position.set(Math.cos(a)*r,6+f*44,Math.sin(a)*r);W[i].rotation.set(time*3+i,i,time*2);const sc=Math.sin(f*PI)*k;W[i].scale.set(2*sc+.1,5*sc+.1,2*sc+.1)}
   }else if(cl===4){
     R.torso.rotation.x=.04*mv;R.head.rotation.x=0;
-    R.suRib.forEach((t,i)=>{t.rotation.x=.4+mv*.8+Math.sin(time*4+i*1.9)*.18;t.rotation.z=Math.sin(time*2.6+i)*.15});
-    
     R.suWolf.position.set(-26+Math.sin(time*1.4)*3,14+Math.sin(time*2.2)*2.4,6+Math.cos(time*1.1)*3);R.suWolf.rotation.y=.4+Math.sin(time*1.4)*.2;
     R.suWp.forEach((q,i)=>{const k=.5+.5*Math.sin(time*5-i*.9);q.scale.set(3*k+.4,3*k+.4,3*k+.4)})
   }
-  const h=P.hurt>0,b=P.bfT>0;
-  const em=h?0x882222:b?0x4a2a0e:0;
-  R.m.robe.emissive.setHex(em);R.m.robe2.emissive.setHex(em);R.m.skin.emissive.setHex(h?0x662222:SKIN_EMI);
   R.shield.visible=P.sh>0;if(R.shield.visible)R.shield.material.opacity=.14+.06*Math.sin(time*6);
   const ao=R.lk&&R.lk.a>0;
   if(ao){const c=R.orbG,N=R.orbP.length;R.orbP.forEach((q,i)=>{const ang=time*c.sp+i*6.2832/N,rad=19+Math.sin(time*1.3+i*1.7)*3;
@@ -642,15 +357,13 @@ function animPlayer(R,P,time,ri){
       q.position.set(Math.cos(ang)*rad,y,Math.sin(ang)*rad);q.rotation.y=time*2+i;q.rotation.z=c.g==='cone4'?Math.sin(time*7+i)*.6:0;
       const fade=c.rise?Math.sin(f*3.1416):1;q.scale.set(c.sc[0]*(.35+.65*fade),c.sc[1]*(.35+.65*fade),c.sc[2]*(.35+.65*fade))})}
   R.aura.visible=ri>0||ao;if(R.aura.visible){const s=26+Math.min(ri,12)*3;R.aura.scale.set(s*2,1,s*2);R.aura.material.opacity=.5+.12*Math.sin(time*2)}
-  R.m.glow.opacity=.28+.1*Math.sin(time*5)+(sl?.3:0);
   {const gt=R.gt|0,at=R.at|0; /* forge glow pulse: faster and stronger every tier */
-   R.m.glow2.opacity=gt?(.22+.02*gt+.06*Math.sin(time*(3+gt*.6))+(sl?.12:0)):0;
    R.m.oglow.opacity=at?(.2+.02*at+.06*Math.sin(time*(2+at*.5))):0;   /* the ground glow stays as a dimmer base under the fire */
    if(at){   /* v5_225 armor fire: 6 + 1.2 x tier tongues (max all), tier 3+ adds hot cores; each flickers (two sine layers) and sways, the ring turns slowly */
      for(const f of R.ofl){f.m.opacity=f.core?.4:.42+.03*(at+2)+(at<=2?.1:0)}   /* v5_228 tiers 1-2 a little brighter */
      if(at>=10){   /* v5_227 tier 10 = RAINBOW: every flame has its own hue running around the colour wheel, the ground glow and the trim / sash glow follow */
        const h=(time*.2)%1;R.ofl.forEach((f,i)=>f.m.color.setHSL((h+i*.043)%1,.95,f.core?.82:.58));
-       R.m.oglow.color.setHSL(h,.9,.6);R.m.trim.emissive.setHSL(h,.8,.2);R.m.sash.emissive.setHSL((h+.5)%1,.8,.16)}
+       R.m.oglow.color.setHSL(h,.9,.6)}
      const rad=R.frad||14,H=R.fh||30,FE=at+2,no=Math.min(R.ofl.length-(LITE?3:6),6+Math.round(FE*1.2)),nc=LITE?3:Math.min(6,FE-1);
      let oi=0,ci=0;
      for(const f of R.ofl){
@@ -663,7 +376,39 @@ function animPlayer(R,P,time,ri){
   if(P.cast>0){const cm=P.castMax||.6,k=clamp(1-P.cast/cm,0,1),up=Math.sin(Math.min(1,k*3.2)*PI/2),pu=1-clamp((k-.8)/.2,0,1)*.5;
     R.armR.rotation.x=-2.55*up-.12*Math.sin(time*20)*up;R.armL.rotation.x=-2.55*up+.12*Math.sin(time*20)*up;
     R.armR.rotation.z=.5*up;R.armL.rotation.z=-.5*up;R.torso.rotation.x=-.2*up;R.torso.rotation.y=0;
-    R.body.position.y+=2.5*up*pu;R.m.glow.opacity=Math.min(1,.28+.1*Math.sin(time*5)+.6*up);R.aR=R.armR.rotation.x;R.aL=R.armL.rotation.x}
+    R.body.position.y+=2.5*up*pu;R.aR=R.armR.rotation.x;R.aL=R.armL.rotation.x}
+  /* v5_304 DODGE ANIMATION. P.dg: 1 = forward (a forward roll, then a run), 2 = left / right (the character already faces the way it goes: short crouch, then a roll),
+     3 = back (back dive, then a backward roll; keeps facing the front). P.dgU = progress 0..1 of the dash (the game sets it; other players' come from the 'dg' fx message).
+     Roll / dive = R.rollG turned around the hips; R.dgTuck bends knees and elbows on the VRM bones (vrm3d.js pose). Everything resets when P.dg is 0. */
+  if(P.dg>0&&P.dgU>=0){
+    const u=clamp(P.dgU,0,1),dg=P.dg|0,SS=(a,b,x)=>{const q=clamp((x-a)/(b-a),0,1);return q*q*(3-2*q)};
+    let ang=0,tuck=0,lift=0,lean=0;
+    if(dg===3){   /* v5_308 BACK DIVE AND ROLL: dive back first (leap, lean back, arms up), then a full backward roll, then stand up; keeps facing the front */
+      const d1=.35,a1=.9;
+      if(u<d1){const p=Math.sin(u/d1*PI/2);
+        ang=-1.1*p;lift=9*p;tuck=.2*p;lean=-.2*p;
+        R.legL.rotation.x=R.legR.rotation.x=-.5*p;R.armR.rotation.x=R.armL.rotation.x=-2.3*p;R.armR.rotation.z=.45*p;R.armL.rotation.z=-.45*p;R.head.rotation.x=.4*p}
+      else if(u<a1){const rk=(u-d1)/(a1-d1),w=SS(0,.25,rk),e=rk<.5?2*rk*rk:1-2*(1-rk)*(1-rk),tk2=Math.min(1,Math.sin(rk*PI)*2.4);
+        ang=-1.1-(2*PI-1.1)*e;tuck=Math.max(.2*(1-w),tk2);lift=9*(1-w)+13*Math.sin(rk*PI)*w;lean=-.2*(1-w)+tk2*w;   /* from the dive pose into the tucked roll */
+        R.legL.rotation.x=R.legR.rotation.x=-.5*(1-w)-1.4*tk2*w;R.armR.rotation.x=R.armL.rotation.x=-2.3*(1-w)-1.7*tk2*w;
+        R.armR.rotation.z=.45*(1-w);R.armL.rotation.z=-.45*(1-w);R.head.rotation.x=.4*(1-w)+.5*tk2*w}
+      else{const e=1-SS(a1,1,u);tuck=.7*e;lean=.3*e;R.legL.rotation.x=R.legR.rotation.x=-.4*e}   /* stand up (the roll has turned a full -2 PI = upright again) */
+    }else{
+      const a0=dg===1?0:.1,a1=dg===1?.54:.9;   /* forward: ROLL first (0 - .54), then RUN; side: crouch (0 - .1), roll (.1 - .9), stand up */
+      if(u<a0){const w=SS(0,a0,u);tuck=.6*w;lean=.35*w;R.legL.rotation.x=R.legR.rotation.x=-.45*w}   /* side dodge: crouch before the roll */
+      else if(u<a1){
+        const rk=(u-a0)/(a1-a0);ang=(rk<.5?2*rk*rk:1-2*(1-rk)*(1-rk))*2*PI;   /* one full forward turn */
+        tuck=Math.min(1,Math.sin(rk*PI)*2.4);lift=13*Math.sin(rk*PI);lean=tuck;
+        R.legL.rotation.x=R.legR.rotation.x=-1.4*tuck;R.armR.rotation.x=R.armL.rotation.x=-1.7*tuck;R.head.rotation.x=.5*tuck;
+      }else if(dg===1){const c=Math.sin((u-a1)*PI*2*3.2),w=SS(a1,a1+.1,u);   /* forward: after the roll, RUN with fast opposite arm / leg swing, leaning forward */
+        R.legL.rotation.x=c*1.15*w;R.legR.rotation.x=-c*1.15*w;R.armR.rotation.x=-.15+c*.95*w;R.armL.rotation.x=-.15-c*.95*w;lean=.4*w;lift=Math.abs(c)*1.2*w}
+      else{const e=1-SS(a1,1,u);tuck=.7*e;lean=.3*e;R.legL.rotation.x=R.legR.rotation.x=-.4*e}   /* side dodge: stand up */
+    }
+    R.torso.rotation.x=lean;R.torso.rotation.y=0;
+    {const py=24,c=Math.cos(ang),s=Math.sin(ang);R.rollG.rotation.x=ang;R.rollG.position.set(0,py-py*c,-py*s)}   /* turn around the hips */
+    R.body.position.y+=lift;R.dgTuck=tuck;R.walk=0;R.dgOn=true;
+    R.aR=R.armR.rotation.x;R.aL=R.armL.rotation.x;
+  }else if(R.dgOn){R.dgOn=false;R.dgTuck=0;R.rollG.rotation.x=0;R.rollG.position.set(0,0,0)}
   if(R.vrmOn)VRM3D.pose(R,P);   /* v5_286 VRM avatar: copy this rig's arm / leg / torso / head angles onto the VRM bones */
 }
 

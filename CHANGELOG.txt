@@ -1,3 +1,57 @@
+v5_308 BACK DIVE AND ROLL  (web/models3d.js, web-src/client/03_items_forge_bag.js -> rebuilt web/game.js)
+  - The back dodge (and the no-direction dodge) is now: BACK DIVE (leap, lean back about 63 degrees, arms thrown up; first 35%) -> full BACKWARD ROLL (tucked, one turn; 35% - 90%) -> stand up. Before it only dived and landed, without rolling. The character still keeps facing the front.
+  - The distance curve of this dodge is less front-loaded (exponent 2.2 -> 1.6) so the character keeps travelling through the roll.
+  - Tune: d1 = .35 and a1 = .9 (dive / roll split), the dive lean -1.1 rad, lift 9 / 13 in the back-dive branch of the 'v5_304 DODGE ANIMATION' block (animPlayer).
+
+v5_307 MORE SENSITIVE JOYSTICK: WALK ONLY NEAR THE CENTRE  (web-src/client/05_render2d.js -> rebuilt web/game.js)
+  - Phone joystick: a push very near the centre (12% dead zone up to 35% of the range) is a WALK: 30% -> 60% of the normal speed, with the small-step animation. Any push beyond 35% is the NORMAL full speed straight away (before, speed grew with the push, so full speed needed a nearly full push and everything below 95% used the small steps).
+  - Keyboard, tap-to-move and click-to-move are unchanged. Direction is unchanged (the joystick still sets the heading).
+  - Tune: JOY_WALK (.35) = size of the walk zone, the .3 -> .6 walk speed range, and the .12 dead zone (all in the movement block of 05_render2d.js).
+
+v5_306 FORWARD DODGE = ROLL, THEN RUN  (web/models3d.js, web-src/client/03_items_forge_bag.js -> rebuilt web/game.js)
+  - The forward dodge now starts with the forward ROLL (first 54% of the dodge) and ends in the RUN (fast opposite arm / leg swing, leaning forward). Before it was run first, then roll. Side dodge and back dive are unchanged.
+  - The dash distance curve for the forward dodge is a little more even (exponent 1.25) so the character still has speed during the run at the end.
+  - Tune: a1 = .54 (roll / run split) and the run cadence 3.2 in the 'v5_304 DODGE ANIMATION' block of animPlayer.
+
+v5_305 NO DIRECTION = BACK DIVE  (web-src/client/03_items_forge_bag.js -> rebuilt web/game.js)
+  - A dodge with no direction (Shift with no movement key / joystick held, or the dodge button tapped without a swipe) is now the BACK DIVE, away from where the character faces (before: a forward dash). With a direction held the dodge types of v5_304 apply unchanged (forward = run + roll, side = turn + roll, back = back dive).
+
+v5_304 DODGE ANIMATIONS: RUN + ROLL, TURN + ROLL, BACK DIVE  (web-src/client/03_items_forge_bag.js 05_render2d.js 02_combat.js 08_network_social.js -> rebuilt web/game.js, web/models3d.js, web/vrm3d.js; server untouched)
+  - The dodge now has a type, decided by the dodge direction relative to where the character FACES at that moment (P.dg, set in doDodge):
+      1 forward (within 45 deg)   = RUN, then a forward ROLL (sprint with fast opposite arm / leg swing, then one full tucked forward turn, then stand up)
+      2 left / right (45-135 deg) = the character turns to that side (as before) and does a short crouch, then the same ROLL
+      3 back (more than 135 deg)  = BACK DIVE: leaps and leans back with arms thrown up, lands with a small crouch; the character keeps FACING the front (P.face is not turned, and held joystick / keys do not turn it during the dive)
+    No direction held = forward (as before).
+  - Timing: DASH_T .34 -> .45 s, same distance (DASH_DIST 210). Invulnerability is unchanged (DODGE_INV .35 s). The dash easing depends on the type (dashEase(u,g)): rolls travel more evenly, the dive leaps first and lands.
+  - Animation: the VRM avatar now sits in R.rollG (models3d.js makePlayer, vrm3d.js enable); the roll / dive tilts that group around the hips (pivot 24 units up) while armor fire, aura and shadow stay upright. R.dgTuck bends knees (x1.9) and elbows (x1.4) on the VRM bones, the spine hunches through torso.rotation.x. Numbers live in the 'v5_304 DODGE ANIMATION' block of animPlayer (run cadence 3.2 cycles, run / roll split .38 / .92 for forward and .1 / .9 for side, roll lift 13, dive lean -1.25 rad, dive lift 9).
+  - Other players see it: doDodge sends the existing cosmetic 'fx' message {k:'dg',d:type,f:face,x,y} (no server change needed, the server already relays 'fx' to nearby players); playFx stores it on the peer (q.dg, q.dgS) and the peer loop turns it into q.dgU over DASH_T seconds.
+  - Not changed: the 2D (flat) view has no dodge animation, only the 3D avatars do.
+  - Rebuild with build.bat (game.js is regenerated from web-src/client/, web/ is embedded).
+
+v5_303 ARMS SWING OPPOSITE TO THE LEGS, QUICKER SMALL STEPS  (web/models3d.js only)
+  - Arm swing direction fixed for BOTH paces: the right arm now goes forward while the right leg goes back (and the left the same), as in a real walk. Before, each arm moved in the same direction as the leg on its own side.
+  - Small steps (phone joystick pushed part way) step a little faster: step cadence 1.05 -> 1.2. This is animation speed only; the walking speed (distance per second) is not changed. The normal pace (PC / tap-to-move / full joystick) keeps cadence .9.
+  - Tune: the .3 in  .9+.3*sm  (cadence of small steps) in animPlayer.
+
+v5_302 SMALL STEPS ONLY ON THE PHONE JOYSTICK  (web-src/client/05_render2d.js -> rebuilt web/game.js, web/models3d.js)
+  - The small-step walk of v5_301 now shows only while the phone joystick is pushed part way (less than 95% of its range). PC (keyboard), tap-to-move and a fully pushed joystick use the old pace again (cadence .9, leg swing .9, arm swing .8, bounce 1.7, no hip sway).
+  - The small steps are a little slower than v5_301 (cadence 1.25 -> 1.05) and the arms swing a little more (.4 -> .55 rad). The two paces blend smoothly (about 0.15 s) and the step phase keeps running, so crossing the 95% mark does not make the legs jump.
+  - How: game.js sets P.walkSm each frame (PHONE && joystick held && magnitude < .95); animPlayer reads it. Other players' avatars always use the normal pace (the flag is not sent over the network).
+  - Tune: the .95 in 05_render2d.js; legK / armK / bobK and the .15 cadence term in animPlayer (models3d.js).
+  - Rebuild with build.bat (game.js is regenerated from web-src/client/).
+
+v5_301 WALK = SMALL STEPS WITH HIP SWAY  (web/models3d.js, web/vrm3d.js; game.js untouched)
+  - Walk cycle runs 40% faster but with a much shorter stride: leg swing .9 -> .42 rad, arm swing .8 -> .4 rad, body bounce 1.7 -> .9. Knees still bend on the back swing.
+  - New on the VRM bones: the hips turn (+-.1 rad) and roll (+-.05 rad) with every step, the shoulders counter-twist against them, the neck leans slightly the other way so the head stays steady. Standing, attack swing and casting poses are unchanged.
+  - Tune: ph=P.anim*1.25 (cadence) and the .42 / .4 numbers in animPlayer (models3d.js); the .1 / .05 / .06 in pose() (vrm3d.js).
+
+v5_300 OLD BUILT-IN AVATAR DELETED  (web/models3d.js, web/vrm3d.js comments; game.js untouched)
+  - Every character is the VRM model now; the old procedural 3D body is gone from models3d.js (makePlayer 280 lines -> about 50): body, head, face, hair styles, headwear, outfit styles, arms / legs meshes, forge cape and pauldrons, and all class kits (Night Blade hood / scarf / cloak, Iron Guardian plate / helm / cape, Storm Archer cap / coat / quiver / cape, Spirit Summoner headdress / ribs / ribbons), with their materials and animation (ponytail, long hair, braid, ties, sash tails, capes, scarves, feather, ribbons, hurt / burn tint of the old body).
+  - Kept: the bare rig (root > body > torso, legs, head, arms) because animPlayer drives it and VRM3D copies its angles onto the VRM bones; the level aura ring, shadow, shield bubble, armor fire, aura particles, Night Blade wisps, Storm Archer sparks, Spirit Summoner wolf (shown per class by setSkin). The hurt / burning tint is still done on the VRM materials in vrm3d.js.
+  - setSkin now only handles aura, class extras and the VRM choice; Skin / Hair / Outfit / Armor looks no longer dress anything in 3D (they did not on the VRMs before either). The look number layout and the Wardrobe UI are unchanged. The 2D painted avatar (flat view, 2D previews) is NOT touched.
+  - Consequence: if a .vrm cannot be loaded, or the page has ?vrm=0, no body is drawn any more (before: the built-in body appeared). models3d.js 130 KB -> 103 KB.
+  - Rebuild: only web/models3d.js changed (web/ is embedded, run build.bat).
+
 v5_299 SMALL VRM FILES: 104 MB -> 13 MB  (all 10 web/*.vrm, new tools/slim_vrm.py; no code change)
   - Every avatar file is now 1.0 - 1.6 MB (was 9 - 14 MB): the ten models together shrink from 104.5 MB to 12.9 MB, so the exe and the first download of a player are about 91 MB smaller.
   - What was removed: (1) the textures vrm3d.js never draws (the shade, matcap, rim, outline and similar MToon maps, plus any normal / emissive maps: only the 2 base-colour maps per model are used), (2) the blend-shape / face-expression data (342 morph-target arrays per model; the game does not use expressions), (3) the base-colour maps were scaled from 2048 px to 512 px (the game never zooms in close enough to see more; PNG with alpha kept, so hair / lash cut-outs look the same).
