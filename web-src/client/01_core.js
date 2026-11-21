@@ -256,6 +256,9 @@ const NSLOT=14,AUTO_SLOTS=12, /* slots 1-12 can auto-cast; R and T (13, 14) neve
 const AUTOSK=new Array(NSLOT).fill(true);
 /* slot hotkeys: 12 round slots, then the two large ones */
 const SLOTKEYS=['1','2','3','4','5','6','7','8','9','0','-','=','r','t'];
+/* v5_277 UNIQUE (signature) skills live ONLY in the large R and T slots (12, 13). Anything of that kind found in a round slot is moved to a free R / T slot, or unequipped. */
+const isSigSlot=i=>i>=AUTO_SLOTS;
+function fixSig(){for(let i=0;i<AUTO_SLOTS;i++){const q=SKILLS[EQ[i]];if(!q||!q.sig)continue;const e=EQ.findIndex((v,j)=>isSigSlot(j)&&v<0);if(e>=0){EQ[e]=EQ[i];AUTOSK[e]=true}EQ[i]=-1}}
 /* potion cooldowns (5s) */
 const pot={hp:0,qi:0,tp:0,ck:0};
 
@@ -333,7 +336,7 @@ const P={x:C,y:C+110,r:14,lvl:1,exp:0,hp:100,qi:60,coins:0,gold:0,ore:0,wlv:0,al
   face:0,anim:0,mvAmt:0,dir:1,atkCd:0,bf:0,bfT:0,sh:0,shT:0,inv:0,hurt:0,dead:0,swing:0,target:null,mv:null,task:null,mine:0,qiT:0,pvpT:0,pvpKills:0};
 let PVPLVL=0,PVPMODE=false; /* v5_158 PvP mode 0 Peaceful / 1 Lawful / 2 Hostile / 3 Carnal (saved, sent to the server), and the 'ATK Players Only' toggle */
 P.gear={};for(const g of GEAR){P.gear[g.k]={g:0,lv:0,r:0,st:{}};if(g.core)Object.defineProperty(P.gear[g.k],'lv',{enumerable:true,get:()=>P[g.core],set:v=>{P[g.core]=v}})}
-P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0,ck:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.recent=[];
+P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0,ck:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.joySmall=false;P.recent=[];
 /* the core slots (weapon / robe) already add their ATK / DEF / HP forge bonus in atkVal / defVal / maxHp; every other stat gets it here */
 const CORE_FORGED={atk:1,def:1,hp:1};
 /* v5_148 PERCENT FORGE (replaces the v5_143 exponential flat forge). The forge no longer adds a flat amount of ATK / HP / DEF: that was huge at level 1 (+100 gave x200 power)
@@ -359,7 +362,10 @@ function gearStat(key){let v=0;for(const q of GEAR){const o=P.gear[q.k],a=q.st[k
 const gearName=(q,o)=>RAR[o.r|0].n+' '+TIER[o.g-1]+' '+q.n;
 const critChance=()=>Math.min(.75,.15+P.lvl*.0001+gearStat('crit')/100+(CLB[P.cls].crit||0)+(P.ceT>0?.25:0));
 const atkCd=()=>.55/(1+Math.min(60,gearStat('aspd'))/100);
-const moveSpd=()=>200*(1+Math.min(25,gearStat('spd'))/100)*(P.spdMul||1)*(P.vlT>0?1.35:1)*(CLB[P.cls].spd||1);
+const moveSpd=()=>200*(1+Math.min(25,gearStat('spd'))/100)*(P.spdMul||1)*(P.vlT>0?1.35:1)*(CLB[P.cls].spd||1)*(P.slowT>0?SLOW_HIT_MUL:1)*(P.sprT>0?SPRINT_MUL:1);
+/* v5_277 getting hit (monster or player) slows you 10% for SLOW_HIT_T s (refreshed, never stacks); the Sprint button gives +30% while you keep tapping it (each tap = SPRINT_T s) */
+const SLOW_HIT_MUL=.9,SLOW_HIT_T=2,SPRINT_MUL=1.3,SPRINT_T=3,SPRINT_SHOW_T=3; /* v5_279 the Sprint button appears after SPRINT_SHOW_T s of running (was 5); getting hit hides it and slows you 10% */
+const SPRINT_ICO='data:image/png;base64,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';
 const realmIdx=()=>Math.floor((P.lvl-1)/10);
 const realmName=i=>i<REALMS.length?REALMS[i]:'Sovereign Tier '+(i-REALMS.length+1);
 const maxHp=()=>Math.round((100+P.lvl*32+gearStat('hp'))*(1+forgeP('hp'))*(1+realmIdx()*.1)*(CLB[P.cls].hp||1)*(1+petPct('hp')));
@@ -445,7 +451,7 @@ function skinOf(i){
   i=i|0;if(!window.AL3D)return DEFSKIN;
   let r=_skc.get(i);
   if(!r){const A=AL3D,l=A.look(i),pal=A.SKINS[l.p%A.SKINS.length];
-    r=Object.assign({},pal,{pi:l.p%A.SKINS.length,hs:l.h%A.HAIRS.length,ot:l.o%A.OUTFITS.length,hw:l.w%A.HEADS.length,au:l.a%A.AURAS.length,ge:l.g&1,ar:l.r%A.ARMORS.length,ax:l.x%A.ACCENTS.length});_skc.set(i,r)}
+    r=Object.assign({},pal,{pi:l.p%A.SKINS.length,hs:l.h%A.HAIRS.length,ot:l.o%A.OUTFITS.length,hw:0,au:l.a%A.AURAS.length,ge:l.g&1,ar:l.r%A.ARMORS.length,ax:0});_skc.set(i,r)}
   return r;
 }
 const SK=()=>skinOf(SKIN);
@@ -454,7 +460,8 @@ const SKW=()=>(SKIN|((P.cls&7)<<21))>>>0;
 function mixc(a,b,f){const A=parseInt(a.slice(1),16),B=parseInt(b.slice(1),16),m=(x,y)=>Math.round(x+(y-x)*f);return '#'+((1<<24)|(m(A>>16,B>>16)<<16)|(m((A>>8)&255,(B>>8)&255)<<8)|m(A&255,B&255)).toString(16).slice(1)}
 function normLook(v){
   v=v|0;if(!window.AL3D)return v>>>0;
-  const A=AL3D,l=A.look(v);l.p%=A.SKINS.length;l.h%=A.HAIRS.length;l.o%=A.OUTFITS.length;l.w%=A.HEADS.length;l.a%=A.AURAS.length;l.g&=1;l.r%=A.ARMORS.length;l.x%=A.ACCENTS.length;return A.packLook(l);
+  const A=AL3D,l=A.look(v);l.p%=A.SKINS.length;l.h%=A.HAIRS.length;l.o%=A.OUTFITS.length;l.w=0;l.a%=A.AURAS.length;l.g&=1;l.r%=A.ARMORS.length;l.x=0;   /* v5_298 no Accent option any more: saved / other players' accents are ignored */
+  return A.packLook(l);
 }
 const lookKey=()=>'al_look_'+(AUTH.email||'');
 function applyLook(sk){
@@ -680,6 +687,22 @@ function spawnBossWave(){
   announceBosses(out);
 }
 /* v5_231 worldGen counts every buildWorld(): the 3D scene is rebuilt whenever it changes (not only when the world number changes), so what is drawn always matches the solids you collide with */
+/* v5_281 PACKS: every normal monster belongs to a pack of PACK_SIZE (3). Hit one and the whole pack attacks you. Spawn spots are not changed, only grouped.
+   A monster takes the 2 nearest monsters that have no pack yet; a ring whose count is not a multiple of 3 ends with one pack of 1 or 2. Same rule as groupMons() in game.go (the server does it in shared worlds). */
+const PACK_SIZE=3;
+function groupMonsters(list){
+  const free=list.slice();
+  while(free.length){
+    const a=free.shift(),pack=[a];
+    for(let k=0;k<PACK_SIZE-1&&free.length;k++){
+      let bi=0,bd=Infinity;
+      for(let i=0;i<free.length;i++){const o=free[i],d=(o.hx-a.hx)*(o.hx-a.hx)+(o.hy-a.hy)*(o.hy-a.hy);if(d<bd){bd=d;bi=i}}
+      pack.push(free[bi]);free[bi]=free[free.length-1];free.pop();
+    }
+    for(const m of pack)m.grp=pack;
+  }
+}
+function pullPack(m){for(const o of (m.grp||[]))if(o!==m&&!o.dead&&o.state==='idle')o.state='chase'}
 let worldGen=0;
 function buildWorld(i,spawn){
   worldGen++;P.sel=null;
@@ -688,10 +711,12 @@ function buildWorld(i,spawn){
   const R2=rngSeed(20261101+i*7919);
   for(let k=0;k<9;k++){ /* fixed monster count per ring, even per AREA inside each ring (keep equal to ringMons in game.go) */
     const lo=k?ZD[k-1]:500,hi=k<8?ZD[k]:RIM-40;
+    const ringFirst=mons.length;
     for(let n=0;n<RING_MONS[k];n++){
       const a=R2()*Math.PI*2,d=Math.sqrt(lo*lo+R2()*Math.max(0,hi*hi-lo*lo));
       if(!spawn&&i!==ARENA)mons.push(monsterAt(C+Math.cos(a)*d,C+Math.sin(a)*d,null)); /* still draws the same random numbers so ore and scenery stay identical */
     }
+    if(!spawn&&i!==ARENA)groupMonsters(mons.slice(ringFirst)); /* v5_281 packs of 3 (spawn spots are not touched) */
   }
   if(spawn){
     /* shared world: the server owns every monster. [id, x, y, bossIdx, maxHp, def, radius, hp, dead] */
@@ -820,7 +845,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow()})
 window.addEventListener('pagehide',saveNow);window.addEventListener('beforeunload',saveNow);
 function save(){
   if(!AUTH.ok)return;
-  const str=JSON.stringify({v:2,pm:PVPLVL,ts:Date.now(),gv:GEAR_VER,sv:AUTH.ver===null?undefined:AUTH.ver,lvl:P.lvl,exp:P.exp,coins:P.coins,ore:P.ore,wlv:P.wlv,alv:P.alv,wv:2,wi:curWorld===ARENA?1:curWorld,eq:EQ,as:AUTOSK.map(x=>x?1:0),sk:SKIN,lkv:2,lk:LOOKS.map((v,i)=>i===P.cls?SKIN:v),gear:P.gear,bag:bagArr(),pots:P.pots,wh:whArr(),eg:P.eggs|0,pt:P.pets,sp:P.pet||'',fb:P.fightBack?1:0,tm:P.tapMove?1:0,mk:1,sg:1,cl:P.cls,cs:CLS_STORE.map(x=>x?{e:x.e,a:x.a.map(y=>y?1:0)}:null),ap:P.autoPot?1:0,ah:P.apHp,aq:P.apQi});
+  const str=JSON.stringify({v:2,pm:PVPLVL,ts:Date.now(),gv:GEAR_VER,sv:AUTH.ver===null?undefined:AUTH.ver,lvl:P.lvl,exp:P.exp,coins:P.coins,ore:P.ore,wlv:P.wlv,alv:P.alv,wv:2,wi:curWorld===ARENA?1:curWorld,eq:EQ,as:AUTOSK.map(x=>x?1:0),sk:SKIN,lkv:2,lk:LOOKS.map((v,i)=>i===P.cls?SKIN:v),gear:P.gear,bag:bagArr(),pots:P.pots,wh:whArr(),eg:P.eggs|0,pt:P.pets,sp:P.pet||'',fb:P.fightBack?1:0,tm:P.tapMove?1:0,js:P.joySmall?1:0,mk:1,sg:1,cl:P.cls,cs:CLS_STORE.map(x=>x?{e:x.e,a:x.a.map(y=>y?1:0)}:null),ap:P.autoPot?1:0,ah:P.apHp,aq:P.apQi});
   try{localStorage.setItem(saveKey(),str)}catch(e){}
   cloudPush(str);
   netInfo();
@@ -835,7 +860,7 @@ function load(){
     const parseGear=(arr,cap)=>{const out=[];if(Array.isArray(arr))for(const o of arr.slice(0,cap)){const q=o&&GEAR.find(z=>z.k===o.slot);if(!q)continue;const it={slot:q.k,g:clamp(o.g|0,1,NW),r:clamp(o.r|0,0,RAR.length-1),st:{}};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE||k in SPECIAL){const v=+o.st[k];if(v>=0&&v<1e6)it.st[k]=r2(v*gm(k))}addQrg(it,q);it.col=RAR[it.r].c;it.u=bagUid++;out.push(it)}return out};
     P.bag=parseGear(s.bag,200);P.wh=parseGear(s.wh,WH_CAP);P.eggs=clamp(s.eg|0,0,99999);P.pets=parsePets(s.pt);P.pet=petLoad(s.sp);P.pf=null;
     PVPLVL=clamp(s.pm|0,0,3);
-    if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999),ck:clamp(s.pots.ck|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;
+    if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999),ck:clamp(s.pots.ck|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;P.joySmall=s.js===1;applyJoySize();
     let wi=s.wi|0;if(s.wv!==2&&wi<=10)wi++; /* older saves: world numbers started at 0 for Ashen Reach */
     wi=clamp(wi,0,NW-1);if(wi===ARENA)wi=1;if(wi!==curWorld)buildWorld(wi);
     P.cls=clamp(s.cl|0,0,CLASSES.length-1);loadLooks(s);CLS_STORE.fill(null);
@@ -843,7 +868,7 @@ function load(){
     if(s.v===2&&Array.isArray(s.eq)&&s.eq.length<=NSLOT){for(let i=0;i<NSLOT;i++){const q=SKILLS[s.eq[i]];EQ[i]=q&&P.lvl>=q.lv&&(q.c||0)===P.cls?s.eq[i]:-1}}else autoArrange();
     for(let i=0;i<NSLOT;i++)AUTOSK[i]=!Array.isArray(s.as)||s.as[i]!==0;
     if(s.mk!==1&&P.cls===0)giveMelee();
-    if(s.sg!==1)giveSig();
+    fixSig();if(s.sg!==1)giveSig();
     buildBar();
     P.hp=maxHp();P.qi=maxQi();return true;
   }catch(e){return false}

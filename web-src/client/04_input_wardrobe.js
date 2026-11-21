@@ -8,7 +8,7 @@ window.addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();
   keys[k]=true;
   if(e.repeat)return;
-  if(SLOTKEYS.includes(k))manualSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='y')usePot('ck');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='c')cycleSkin();
+  if(SLOTKEYS.includes(k))manualSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='y')usePot('ck');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='l')cycleSkin(); /* v5_280 Look moved from C to L */ else if(k==='c'){if(P.runT>=SPRINT_SHOW_T||P.sprT>0)P.sprT=SPRINT_T} /* v5_280 C = Sprint (only while the button is showing) */
   else if(k===' ')doJump(); /* v5_169 Space = jump (attack nearest is F) */
   else if(k==='e')startMine();
   else if(k==='f'){const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null;P.fatk=true}} /* F = attack nearest */
@@ -42,11 +42,11 @@ window.addEventListener('pointermove',e=>{
 });
 /* v5_110 CONTROLS. PC: left click = move (marker shows where) / select / attack, right-drag or middle-drag = rotate + tilt, wheel = zoom, plain right click on a player = PvP.
    Phone: one tap = move (or select a monster / player / ore), touch and drag = rotate + tilt, pinch = zoom, double tap on a monster or player = attack. */
-const lc={id:null,x:0,y:0,moved:0,ev:null};
+const lc={id:null,x:0,y:0,sx:0,sy:0,moved:0,ev:null};
 cv.addEventListener('pointerdown',e=>{
   if(e.pointerType==='mouse'&&e.button!==0){lc.id=null;return}
   if(e.pointerType==='touch'&&camTouch.size>=2){lc.id=null;return} /* second finger: two-finger camera takes over */
-  lc.id=e.pointerId;lc.x=e.clientX;lc.y=e.clientY;lc.moved=0;lc.ev={clientX:e.clientX,clientY:e.clientY,pointerType:e.pointerType,button:0};
+  lc.id=e.pointerId;lc.x=e.clientX;lc.y=e.clientY;lc.sx=e.clientX;lc.sy=e.clientY;lc.moved=0;lc.ev={clientX:e.clientX,clientY:e.clientY,pointerType:e.pointerType,button:0};
 });
 window.addEventListener('pointermove',e=>{
   if(lc.id===null||e.pointerId!==lc.id)return;
@@ -54,7 +54,7 @@ window.addEventListener('pointermove',e=>{
   const dx=e.clientX-lc.x,dy=e.clientY-lc.y;lc.x=e.clientX;lc.y=e.clientY;lc.moved+=Math.abs(dx)+Math.abs(dy);
   if(lc.moved>10&&e.pointerType!=='mouse'){camAdj(-dx*.006,dy*.004)}
 });
-const lcEnd=e=>{if(lc.id===null||e.pointerId!==lc.id)return;const was=e.type==='pointerup'&&lc.moved<=(e.pointerType==='mouse'?8:10);lc.id=null;if(was)cvClick(lc.ev)};
+const lcEnd=e=>{if(lc.id===null||e.pointerId!==lc.id)return;const was=e.type==='pointerup'&&(e.pointerType==='mouse'?Math.hypot(e.clientX-lc.sx,e.clientY-lc.sy)<=22:lc.moved<=10); /* v5_276 mouse: a click counts when the pointer ends within 22 px of where it went down (before: total path <= 8 px, so a slightly shaky click did nothing) */lc.id=null;if(was)cvClick(lc.ev)};
 window.addEventListener('pointerup',lcEnd);window.addEventListener('pointercancel',lcEnd);
 const camTouchEnd=e=>{if(e.pointerType!=='touch')return;camTouch.delete(e.pointerId);camMid=null};
 window.addEventListener('pointerup',camTouchEnd);window.addEventListener('pointercancel',camTouchEnd);
@@ -91,7 +91,7 @@ function cvClick(e){
   /* monsters: 1st left click SELECTS (nothing attacks yet), 2nd left click on the same monster ATTACKS it */
   if(!pvpOnly()){
     let m=scrPick(e,mons.filter(o=>!o.dead&&!o.pend));
-    if(!m){let bd=1e9;for(const o of mons){if(o.dead)continue;const d=dist(o.x,o.y,wx,wy);if(d<o.r+50+ex&&d<bd){bd=d;m=o}}} /* v5_109 bigger click area */
+    if(!m){let bd=1e9;for(const o of mons){if(o.dead)continue;const d=dist(o.x,o.y,wx,wy);if(d<o.r+(e.pointerType==='mouse'?32:50)+ex&&d<bd){bd=d;m=o}}} /* v5_109 bigger click area; v5_276 smaller for the mouse (a click NEAR a monster used to select it instead of walking) */
     if(m){
       const now=performance.now(),touch=e.pointerType==='touch'||e.pointerType==='pen';
       /* mouse: 2nd click on the selected monster attacks; touch: DOUBLE TAP (within 0.45 s) attacks, a single tap only selects */
@@ -104,12 +104,13 @@ function cvClick(e){
     if(o.cd<=0&&dist(o.x,o.y,wx,wy)<50+ex){P.sel=null;P.task=o;P.target=null;P.mv=null;P.mine=0;return}
   }
   /* v5_110 left click / single tap on the ground = move there. A ripple + a marker on the ground show the destination. */
-  if(MODE3D&&T3.r&&!w3)return; /* clicked the sky / above the horizon: no ground point */
+  let gx=wx,gy=wy;if(MODE3D&&T3.r&&!w3){const h=skyHeading(e);if(!h)return;gx=P.x+h.x*600;gy=P.y+h.y*600;{const dc=dist(gx,gy,C,C);if(dc>RIM-60){gx=C+(gx-C)/dc*(RIM-60);gy=C+(gy-C)/dc*(RIM-60)}}} /* v5_276 clicked the sky / above the horizon: walk 600 units toward that direction */
   if(PHONE&&P.tapMove===false)return; /* v5_134 phone option 'Tap to move' is off: the joystick is the only way to walk (monsters, ore and the shop can still be tapped) */
-  P.sel=null;P.mv={x:wx,y:wy};P.target=null;P.task=null;stopMine('Auto-mine off.');
-  ring(wx,wy,46,'#8ff0c4');ring(wx,wy,26,'#ffffff');
+  P.sel=null;P.mv={x:gx,y:gy};P.target=null;P.task=null;stopMine('Auto-mine off.');
+  ring(gx,gy,46,'#8ff0c4');ring(gx,gy,26,'#ffffff');
 }
 
+function applyJoySize(){document.documentElement.classList.toggle('joysm',!!P.joySmall)} /* v5_279 */
 const joy={x:0,y:0,id:null};
 const joyEl=$('joy'),joyKnob=joyEl.firstElementChild;
 function joyMove(e){
@@ -194,7 +195,7 @@ setInterval(()=>{
   if(SV.on){if(!act&&!SV.manual)saverOff();else saverUpdate();return}
   if(act&&performance.now()-SV.last>SAVER_IDLE*1000)saverOn();
 },1000);
-function toggleAuto(){auto=!auto;if(auto)stopMine();$('bAuto').classList.toggle('on',auto);say(auto?'Auto-hunt on.':'Auto-hunt off.','#8d9aa2')}
+function toggleAuto(){auto=!auto;if(auto){stopMine();autoAnchorNow()}else autoAnc=null; /* v5_283 the zone you start in is the anchor */ $('bAuto').classList.toggle('on',auto);say(auto?'Auto-hunt on.':'Auto-hunt off.','#8d9aa2')}
 let amine=false,amT=0,amWait=false;
 function nearestOre(){let best=null,bd=1e9;for(const o of ores){if(o.cd>0)continue;const d=dist(o.x,o.y,P.x,P.y);if(d<bd){bd=d;best=o}}return best}
 function stopMine(msg){if(!amine)return;amine=false;amWait=false;$('bMine').classList.remove('on');if(msg)say(msg,'#8d9aa2')}
@@ -210,7 +211,7 @@ $('bAuto').addEventListener('click',()=>{if(started)toggleAuto()});
 $('bMine').addEventListener('click',()=>{if(started)startMine()});
 $('bForge').addEventListener('click',openForge);
 
-const skWrap=$('skills');let skBtns=[],armed=3,rsvEl=null,rsvKey='';
+const skWrap=$('skills');let skBtns=[],armed=3,rsvEl=null,rsvKey='',sprEl=null;
 const GLYPH={pierce:'\u2197',fan:'\u224b',nova:'\u2738',meteor:'\u2604',chain:'\u26a1',drain:'\u263e',might:'\u25b2',mend:'\u271a',heal:'\u271a',strike:'\u2694',cleave:'\u263d',leap:'\u27a4',flurry:'\u2736',kunai:'\u2734',shadowstep:'\u21af',venom:'\u2623',bladestorm:'\u274b',smoke:'\u2601',execute:'\u2620',siphon:'\u2665',rush:'\u21d2',bash:'\u25a3',charge:'\u27a4',quake:'\u2301',bulwark:'\u26e8',roar:'\u2742',counter:'\u21ba',hammer:'\u2692',ironskin:'\u25c6',shockwave:'\u224b',arrow:'\u27b6',volley:'\u2917',rain:'\u2602',blast:'\u2739',eagle:'\u25ce',gale:'\u21e0',trap:'\u26a1',stormarrow:'\u21af',wolves:'\u2658',soulburst:'\u2735',wail:'\u224b',chains:'\u26d3',soulheal:'\u271a',harvest:'\u2766',guardian:'\u2656',spiritbomb:'\u2600'};
 for(const c of SIGD)for(const y of c)GLYPH[y[0]]=y[6]; /* v5_160 signature skill icons */
 /* [right, bottom] of each button's centre, in HUD units, measured from the bottom-right corner (round slots 1-12, then the two large ones) */
@@ -223,6 +224,11 @@ function buildBar(){
   atk.addEventListener('pointerdown',e=>{e.preventDefault();if(!started)return;if(P.sel&&!P.sel.dead&&P.sel.isPl){startPvp(P.sel);return}const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null}});
   skWrap.appendChild(atk);
   rsvEl=document.createElement('div');rsvEl.className='rsv';rsvEl.hidden=true;rsvKey='';skWrap.appendChild(rsvEl);
+  /* v5_277 SPRINT: sits right above the "=" slot. Every tap = +30% move speed for 3 s; keep tapping for non-stop sprinting. */
+  sprEl=document.createElement('button');sprEl.type='button';sprEl.className='sk spr';sprEl.title='Sprint: +30% move speed. Appears after 3 s of running. Keep tapping to keep sprinting (ends 3 s after the last tap). Hotkey: C';
+  sprEl.innerHTML='<img alt="" draggable="false"><span class="kn"></span><em class="cdn"></em>';sprEl.firstChild.src=SPRINT_ICO;sprEl.style.display='none';place(sprEl,SLOTPOS[11][0],SLOTPOS[11][1]+57,40);
+  sprEl.addEventListener('pointerdown',e=>{e.preventDefault();if(!started)return;P.sprT=SPRINT_T});
+  skWrap.appendChild(sprEl);
   for(let i=0;i<NSLOT;i++){const s=SKILLS[EQ[i]],b=document.createElement('button');b.type='button';b.className='sk'+(i>=12?' big':'');
     if(i<12)place(b,SLOTPOS[i][0],SLOTPOS[i][1],40); /* R (12) and T (13) are positioned in CSS, left of the dodge pad */
     if(s)b.style.borderColor=s.col;b.title=(s?s.n:'Empty slot (K to equip)')+' ['+SLOTKEYS[i].toUpperCase()+']';
@@ -243,18 +249,21 @@ function toggleAutoSkill(i){
   AUTOSK[i]=!AUTOSK[i];say(SKILLS[id].n+': auto-cast '+(AUTOSK[i]?'ON':'OFF'),AUTOSK[i]?'#5fd3a5':'#8d9aa2');save();
 }
 buildBar();
-function equip(id){if((SKILLS[id].c||0)!==P.cls)return;const j=EQ.indexOf(id),o=EQ[armed];if(j>=0)EQ[j]=o;EQ[armed]=id;buildBar();renderBook();save()}
+function equip(id){if((SKILLS[id].c||0)!==P.cls)return;
+  /* v5_277 unique skills only fit R / T: if a round slot is selected, use the first free (else the first) of R / T */
+  let a=armed;if(SKILLS[id].sig&&!isSigSlot(a)){const free=EQ.findIndex((v,j)=>isSigSlot(j)&&v<0);a=free>=0?free:AUTO_SLOTS;armed=a;say('Unique skills can only be used in the R and T slots.','#e3b559')}
+  const j=EQ.indexOf(id);let o=EQ[a];if(j>=0){if(o>=0&&SKILLS[o].sig&&!isSigSlot(j))o=-1;EQ[j]=o}EQ[a]=id;buildBar();renderBook();save()}
 function renderBook(){
   const cb=$('bookCls');cb.innerHTML='';
   CLASSES.forEach((c,i)=>{const b=document.createElement('button');b.type='button';b.className='btn'+(i===P.cls?' on':'');b.textContent=c.n;b.addEventListener('click',()=>switchClass(i));cb.appendChild(b)});
   $('bookClsD').textContent=CLASSES[P.cls].d;
   const sl=$('bookSlots');sl.innerHTML='';
-  EQ.forEach((id,i)=>{const b=document.createElement('button');b.type='button';b.className='btn bk'+(i===armed?' on':'');b.textContent=(i+1)+(id>=0?' '+SKILLS[id].n:' -');b.title=id>=0?SKILLS[id].n:'empty';b.addEventListener('click',()=>{armed=i;renderBook()});sl.appendChild(b)});
+  EQ.forEach((id,i)=>{const b=document.createElement('button');b.type='button';b.className='btn bk'+(i===armed?' on':'');b.textContent=SLOTKEYS[i].toUpperCase()+(id>=0?' '+SKILLS[id].n:' -');b.title=id>=0?SKILLS[id].n:'empty';b.addEventListener('click',()=>{armed=i;renderBook()});sl.appendChild(b)});
   const rows=$('bookRows');rows.innerHTML='';
   SKILLS.map((s,id)=>[s,id]).filter(x=>(x[0].c||0)===P.cls).sort((a,b)=>(P.lvl>=b[0].lv)-(P.lvl>=a[0].lv)||a[1]-b[1]).forEach(([s,id])=>{const ok=P.lvl>=s.lv,row=document.createElement('div');row.className='row'+(ok?'':' lock');
     if(s.sig)row.classList.add('sig');
     const nm=document.createElement('b');nm.style.color=s.col;const ic=document.createElement('span');ic.className='sic';ic.textContent=GLYPH[s.t]||'\u2726';ic.style.color=s.col;ic.style.borderColor=s.col;nm.appendChild(ic);nm.appendChild(document.createTextNode(s.n));if(s.sig){const u=document.createElement('i');u.className='uq';u.textContent='\u2605 UNIQUE';nm.appendChild(u);row.title=(SIGD[s.c].find(y=>y[0]===s.t)||[])[5]||s.n}row.appendChild(nm);
-    const b=document.createElement('button');b.type='button';const sl=EQ.indexOf(id);b.className='btn'+(sl>=0?' on':'');b.textContent=!ok?'Lv '+s.lv:(sl>=0?String(sl+1):'Equip');if(sl>=0)b.title='Equipped in slot '+(sl+1)+' (click to move to the selected slot)';b.disabled=!ok;b.addEventListener('click',()=>equip(id));row.appendChild(b);
+    const b=document.createElement('button');b.type='button';const sl=EQ.indexOf(id);b.className='btn'+(sl>=0?' on':'');b.textContent=!ok?'Lv '+s.lv:(sl>=0?SLOTKEYS[sl].toUpperCase():'Equip');if(sl>=0)b.title='Equipped in slot '+SLOTKEYS[sl].toUpperCase()+' (click to move to the selected slot)';b.disabled=!ok;b.addEventListener('click',()=>equip(id));row.appendChild(b);
     const sm=document.createElement('small');sm.textContent=TL[s.t]+(s.m?' · '+s.m.toFixed(1)+'x ATK':'')+' · '+skCostLbl(s)+' · '+s.cd+'s cooldown';row.appendChild(sm);rows.appendChild(row)});
 }
 function toggleBook(){if(!started)return;const b=$('book');b.hidden=!b.hidden;if(!b.hidden)renderBook()}
@@ -266,7 +275,7 @@ const WD={tab:0,cls:0,raf:0,t:0};
 /* tab = [label, option names, look field]. v5_53: every class (Cultivator included) has the SAME tabs and the SAME options. Armor = all class colour schemes pooled. */
 function wdTabs(cl){
   if(!window.AL3D)return [];const A=AL3D;
-  return [['Gender',A.GENDERS,'g'],['Skin',A.SKINS.map(x=>x.n),'p'],['Hair',A.HAIRS,'h'],['Outfit',A.OUTFITS,'o'],['Headwear',A.HEADS,'w'],['Armor',A.ARMORS,'r'],['Accent',A.ACCENTS.map(x=>x.n),'x'],['Aura',A.AURAS,'a']];
+  return [['Gender',A.GENDERS,'g'],['Skin',A.SKINS.map(x=>x.n),'p'],['Hair',A.HAIRS,'h'],['Outfit',A.OUTFITS,'o'],['Headwear',A.HEADS,'w'],['Armor',A.ARMORS,'r'],['Aura',A.AURAS,'a']];
 }
 /* the class tab being edited (WD.cls) is independent of the class you are playing (P.cls); each class has its own saved look */
 const wdLookOf=c=>c===P.cls?SKIN:normLook(LOOKS[c]|0);
@@ -286,20 +295,21 @@ function wdRender(){
   T.innerHTML='';tabs.forEach((t,i)=>{const b=document.createElement('button');b.type='button';b.className='btn'+(i===WD.tab?' on':'');b.textContent=t[0];b.addEventListener('click',()=>{WD.tab=i;wdRender()});T.appendChild(b)});
   G.innerHTML='';const names=tabs[WD.tab][1],fk=tabs[WD.tab][2],cur=l[fk];
   names.forEach((n,i)=>{
-    const b=document.createElement('button');b.type='button';if(i===cur)b.className='on';
+    const only=fk==='w'?0:cur;   /* v5_289 every class: Hair / Outfit / Armor list only the worn option, Headwear only "None" (new avatars are coming) */
+    if('howr'.indexOf(fk)>=0&&i!==only)return;   /* v5_288 Cultivator = fixed VRM avatar: Hair / Outfit / Headwear / Armor show only the one it is wearing */
+    const b=document.createElement('button');b.type='button';if(i===only)b.className='on';
     if(fk==='p'){const p=AL3D.SKINS[i],sw=document.createElement('span');sw.className='sw';
       for(const c of (cl>0?[p.skin,p.hair]:[p.robe,p.trim,p.sash])){const e=document.createElement('i');e.style.background=c;sw.appendChild(e)}
       const u=document.createElement('u');u.style.background=p.skin;sw.appendChild(u);b.appendChild(sw)}
     if(fk==='r'){const p=i>0?AL3D.ARMOR_POOL[i-1]:cl>0?AL3D.CLS_SCHEMES[cl][0]:null,sw=document.createElement('span');sw.className='sw';
       const q=AL3D.SKINS[l.p%AL3D.SKINS.length];
       for(const c of (p?[p.r,p.s,p.b]:[q.robe,q.sash,q.boot])){const e=document.createElement('i');e.style.background=c;sw.appendChild(e)}b.appendChild(sw)}
-    if(fk==='x'){const sw=document.createElement('span');sw.className='sw';sw.style.background=AL3D.ACCENTS[i].c||'#9aa5ab';b.appendChild(sw)}
     if(fk==='a'){const sw=document.createElement('span');sw.className='sw';const c=AL3D.AURA_CFG[i];sw.style.background='radial-gradient(circle,'+(c.col||c.ring)+','+c.ring+' 55%,#10161a)';b.appendChild(sw)}
     b.appendChild(document.createTextNode(n));
     b.addEventListener('click',()=>wdSet(fk,i));G.appendChild(b)});
   const cur2=G.querySelector('.on');if(cur2&&cur2.scrollIntoView)try{cur2.scrollIntoView({block:'nearest'})}catch(e){}
   const S=skinOf(lk);
-  $('wdName').innerHTML='<b>'+AL3D.SKINS[S.pi].n+'</b> ('+AL3D.GENDERS[S.ge]+')<br>'+AL3D.HAIRS[S.hs]+' / '+AL3D.OUTFITS[S.ot]+' / '+AL3D.HEADS[S.hw]+'<br>'+AL3D.ARMORS[S.ar]+' / '+AL3D.ACCENTS[S.ax].n+' / '+AL3D.AURAS[S.au];
+  $('wdName').innerHTML='<b>'+AL3D.SKINS[S.pi].n+'</b> ('+AL3D.GENDERS[S.ge]+')<br>'+AL3D.HAIRS[S.hs]+' / '+AL3D.OUTFITS[S.ot]+' / '+'None<br>'+AL3D.ARMORS[S.ar]+' / '+AL3D.AURAS[S.au];
 }
 /* wardrobe preview: the same rotatable Three.js character the bag shows (drag to spin, double-click to face front), for the class tab being edited.
    It has its own WebGL view; if 3D is off or unavailable the flat 2D avatar is painted instead. */
@@ -503,6 +513,6 @@ function toggleWardrobe(){
 }
 $('wdClose').addEventListener('click',()=>{$('wardrobe').hidden=true});
 $('wdReset').addEventListener('click',()=>wdApply(AL3D.packLook({p:0,h:WD.cls>0?7:0,o:0,w:0,a:0,g:AL3D.look(wdLookOf(WD.cls)).g,r:0,x:0})));
-$('wdRand').addEventListener('click',()=>{const A=AL3D,c=WD.cls,R=n=>Math.random()*n|0,l={p:R(A.SKINS.length),h:R(A.HAIRS.length),o:R(A.OUTFITS.length),w:R(A.HEADS.length),a:R(A.AURAS.length),g:A.look(wdLookOf(c)).g,r:R(A.ARMORS.length),x:R(A.ACCENTS.length)};wdApply(A.packLook(l))});
+$('wdRand').addEventListener('click',()=>{const A=AL3D,c=WD.cls,R=n=>Math.random()*n|0,l={p:R(A.SKINS.length),h:R(A.HAIRS.length),o:R(A.OUTFITS.length),w:R(A.HEADS.length),a:R(A.AURAS.length),g:A.look(wdLookOf(c)).g,r:R(A.ARMORS.length),x:0};wdApply(A.packLook(l))});
 $('wardrobe').addEventListener('mousedown',e=>{if(e.target.id==='wardrobe')$('wardrobe').hidden=true});
 

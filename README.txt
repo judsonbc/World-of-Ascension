@@ -21,6 +21,7 @@ FILES
   web/fx3d.js                3D sky (clouds, auroras, stars, per-world celestial bodies), fog + ground mist, glow sprites, level-up light pillars (off switch: ?fx3=0)
   web/three-compat.js        keeps a newer Three.js looking like r128 (see THREE_UPGRADE.txt)
   web/pets3d.js              3D pet models (PET3D.make(species, class)): chicken, dragon, fairy, phoenix, tiger, wolf + class effects
+  web/vrm3d.js              VRM 1.0 loader + rig for the Cultivator avatars (web/Cultivator_He.vrm, web/Cultivator_She.vrm) and the Night Blade avatars (web/NightBlade_He.vrm, web/NightBlade_She.vrm) and the Iron Guardian avatars (web/IronGuardian_He.vrm, web/IronGuardian_She.vrm) and the Storm Archer avatars (web/StormArcher_He.vrm, web/StormArcher_She.vrm) and the Spirit Summoner avatars (web/SpiritSummoner_He.vrm, web/SpiritSummoner_She.vrm); ?vrm=0 turns it off
   web/models3d.js audio.js tutorial.js sw.js manifest.json
 
 CLASSES (passives; skills are in web/game.js: CLB, CLS_GEN, NB_T, SKILLS)
@@ -51,5 +52,5 @@ BUILDINGS (v5_172)  15 building kinds (cottages, halls, pagodas, skyscrapers, do
 
 KNOWN LIMITS
   - The client decides its own damage, loot and stats; the server caps and range-checks but does not recompute damage. A modified client can cheat within those caps.
-  - Slow / root effects do not exist yet (Iron Charge is the only anti-kiting tool).
+  - Root effects do not exist yet. Slow exists only as the 10% 'got hit' slow (v5_277).
   - Skills 9-200 of a class repeat the same 8 skill types with scaling numbers (the 8 signature skills per class are the exception).

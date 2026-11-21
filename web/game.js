@@ -258,6 +258,9 @@ const NSLOT=14,AUTO_SLOTS=12, /* slots 1-12 can auto-cast; R and T (13, 14) neve
 const AUTOSK=new Array(NSLOT).fill(true);
 /* slot hotkeys: 12 round slots, then the two large ones */
 const SLOTKEYS=['1','2','3','4','5','6','7','8','9','0','-','=','r','t'];
+/* v5_277 UNIQUE (signature) skills live ONLY in the large R and T slots (12, 13). Anything of that kind found in a round slot is moved to a free R / T slot, or unequipped. */
+const isSigSlot=i=>i>=AUTO_SLOTS;
+function fixSig(){for(let i=0;i<AUTO_SLOTS;i++){const q=SKILLS[EQ[i]];if(!q||!q.sig)continue;const e=EQ.findIndex((v,j)=>isSigSlot(j)&&v<0);if(e>=0){EQ[e]=EQ[i];AUTOSK[e]=true}EQ[i]=-1}}
 /* potion cooldowns (5s) */
 const pot={hp:0,qi:0,tp:0,ck:0};
 
@@ -335,7 +338,7 @@ const P={x:C,y:C+110,r:14,lvl:1,exp:0,hp:100,qi:60,coins:0,gold:0,ore:0,wlv:0,al
   face:0,anim:0,mvAmt:0,dir:1,atkCd:0,bf:0,bfT:0,sh:0,shT:0,inv:0,hurt:0,dead:0,swing:0,target:null,mv:null,task:null,mine:0,qiT:0,pvpT:0,pvpKills:0};
 let PVPLVL=0,PVPMODE=false; /* v5_158 PvP mode 0 Peaceful / 1 Lawful / 2 Hostile / 3 Carnal (saved, sent to the server), and the 'ATK Players Only' toggle */
 P.gear={};for(const g of GEAR){P.gear[g.k]={g:0,lv:0,r:0,st:{}};if(g.core)Object.defineProperty(P.gear[g.k],'lv',{enumerable:true,get:()=>P[g.core],set:v=>{P[g.core]=v}})}
-P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0,ck:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.recent=[];
+P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0,ck:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.joySmall=false;P.recent=[];
 /* the core slots (weapon / robe) already add their ATK / DEF / HP forge bonus in atkVal / defVal / maxHp; every other stat gets it here */
 const CORE_FORGED={atk:1,def:1,hp:1};
 /* v5_148 PERCENT FORGE (replaces the v5_143 exponential flat forge). The forge no longer adds a flat amount of ATK / HP / DEF: that was huge at level 1 (+100 gave x200 power)
@@ -361,7 +364,10 @@ function gearStat(key){let v=0;for(const q of GEAR){const o=P.gear[q.k],a=q.st[k
 const gearName=(q,o)=>RAR[o.r|0].n+' '+TIER[o.g-1]+' '+q.n;
 const critChance=()=>Math.min(.75,.15+P.lvl*.0001+gearStat('crit')/100+(CLB[P.cls].crit||0)+(P.ceT>0?.25:0));
 const atkCd=()=>.55/(1+Math.min(60,gearStat('aspd'))/100);
-const moveSpd=()=>200*(1+Math.min(25,gearStat('spd'))/100)*(P.spdMul||1)*(P.vlT>0?1.35:1)*(CLB[P.cls].spd||1);
+const moveSpd=()=>200*(1+Math.min(25,gearStat('spd'))/100)*(P.spdMul||1)*(P.vlT>0?1.35:1)*(CLB[P.cls].spd||1)*(P.slowT>0?SLOW_HIT_MUL:1)*(P.sprT>0?SPRINT_MUL:1);
+/* v5_277 getting hit (monster or player) slows you 10% for SLOW_HIT_T s (refreshed, never stacks); the Sprint button gives +30% while you keep tapping it (each tap = SPRINT_T s) */
+const SLOW_HIT_MUL=.9,SLOW_HIT_T=2,SPRINT_MUL=1.3,SPRINT_T=3,SPRINT_SHOW_T=3; /* v5_279 the Sprint button appears after SPRINT_SHOW_T s of running (was 5); getting hit hides it and slows you 10% */
+const SPRINT_ICO='data:image/png;base64,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';
 const realmIdx=()=>Math.floor((P.lvl-1)/10);
 const realmName=i=>i<REALMS.length?REALMS[i]:'Sovereign Tier '+(i-REALMS.length+1);
 const maxHp=()=>Math.round((100+P.lvl*32+gearStat('hp'))*(1+forgeP('hp'))*(1+realmIdx()*.1)*(CLB[P.cls].hp||1)*(1+petPct('hp')));
@@ -447,7 +453,7 @@ function skinOf(i){
   i=i|0;if(!window.AL3D)return DEFSKIN;
   let r=_skc.get(i);
   if(!r){const A=AL3D,l=A.look(i),pal=A.SKINS[l.p%A.SKINS.length];
-    r=Object.assign({},pal,{pi:l.p%A.SKINS.length,hs:l.h%A.HAIRS.length,ot:l.o%A.OUTFITS.length,hw:l.w%A.HEADS.length,au:l.a%A.AURAS.length,ge:l.g&1,ar:l.r%A.ARMORS.length,ax:l.x%A.ACCENTS.length});_skc.set(i,r)}
+    r=Object.assign({},pal,{pi:l.p%A.SKINS.length,hs:l.h%A.HAIRS.length,ot:l.o%A.OUTFITS.length,hw:0,au:l.a%A.AURAS.length,ge:l.g&1,ar:l.r%A.ARMORS.length,ax:0});_skc.set(i,r)}
   return r;
 }
 const SK=()=>skinOf(SKIN);
@@ -456,7 +462,8 @@ const SKW=()=>(SKIN|((P.cls&7)<<21))>>>0;
 function mixc(a,b,f){const A=parseInt(a.slice(1),16),B=parseInt(b.slice(1),16),m=(x,y)=>Math.round(x+(y-x)*f);return '#'+((1<<24)|(m(A>>16,B>>16)<<16)|(m((A>>8)&255,(B>>8)&255)<<8)|m(A&255,B&255)).toString(16).slice(1)}
 function normLook(v){
   v=v|0;if(!window.AL3D)return v>>>0;
-  const A=AL3D,l=A.look(v);l.p%=A.SKINS.length;l.h%=A.HAIRS.length;l.o%=A.OUTFITS.length;l.w%=A.HEADS.length;l.a%=A.AURAS.length;l.g&=1;l.r%=A.ARMORS.length;l.x%=A.ACCENTS.length;return A.packLook(l);
+  const A=AL3D,l=A.look(v);l.p%=A.SKINS.length;l.h%=A.HAIRS.length;l.o%=A.OUTFITS.length;l.w=0;l.a%=A.AURAS.length;l.g&=1;l.r%=A.ARMORS.length;l.x=0;   /* v5_298 no Accent option any more: saved / other players' accents are ignored */
+  return A.packLook(l);
 }
 const lookKey=()=>'al_look_'+(AUTH.email||'');
 function applyLook(sk){
@@ -682,6 +689,22 @@ function spawnBossWave(){
   announceBosses(out);
 }
 /* v5_231 worldGen counts every buildWorld(): the 3D scene is rebuilt whenever it changes (not only when the world number changes), so what is drawn always matches the solids you collide with */
+/* v5_281 PACKS: every normal monster belongs to a pack of PACK_SIZE (3). Hit one and the whole pack attacks you. Spawn spots are not changed, only grouped.
+   A monster takes the 2 nearest monsters that have no pack yet; a ring whose count is not a multiple of 3 ends with one pack of 1 or 2. Same rule as groupMons() in game.go (the server does it in shared worlds). */
+const PACK_SIZE=3;
+function groupMonsters(list){
+  const free=list.slice();
+  while(free.length){
+    const a=free.shift(),pack=[a];
+    for(let k=0;k<PACK_SIZE-1&&free.length;k++){
+      let bi=0,bd=Infinity;
+      for(let i=0;i<free.length;i++){const o=free[i],d=(o.hx-a.hx)*(o.hx-a.hx)+(o.hy-a.hy)*(o.hy-a.hy);if(d<bd){bd=d;bi=i}}
+      pack.push(free[bi]);free[bi]=free[free.length-1];free.pop();
+    }
+    for(const m of pack)m.grp=pack;
+  }
+}
+function pullPack(m){for(const o of (m.grp||[]))if(o!==m&&!o.dead&&o.state==='idle')o.state='chase'}
 let worldGen=0;
 function buildWorld(i,spawn){
   worldGen++;P.sel=null;
@@ -690,10 +713,12 @@ function buildWorld(i,spawn){
   const R2=rngSeed(20261101+i*7919);
   for(let k=0;k<9;k++){ /* fixed monster count per ring, even per AREA inside each ring (keep equal to ringMons in game.go) */
     const lo=k?ZD[k-1]:500,hi=k<8?ZD[k]:RIM-40;
+    const ringFirst=mons.length;
     for(let n=0;n<RING_MONS[k];n++){
       const a=R2()*Math.PI*2,d=Math.sqrt(lo*lo+R2()*Math.max(0,hi*hi-lo*lo));
       if(!spawn&&i!==ARENA)mons.push(monsterAt(C+Math.cos(a)*d,C+Math.sin(a)*d,null)); /* still draws the same random numbers so ore and scenery stay identical */
     }
+    if(!spawn&&i!==ARENA)groupMonsters(mons.slice(ringFirst)); /* v5_281 packs of 3 (spawn spots are not touched) */
   }
   if(spawn){
     /* shared world: the server owns every monster. [id, x, y, bossIdx, maxHp, def, radius, hp, dead] */
@@ -822,7 +847,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow()})
 window.addEventListener('pagehide',saveNow);window.addEventListener('beforeunload',saveNow);
 function save(){
   if(!AUTH.ok)return;
-  const str=JSON.stringify({v:2,pm:PVPLVL,ts:Date.now(),gv:GEAR_VER,sv:AUTH.ver===null?undefined:AUTH.ver,lvl:P.lvl,exp:P.exp,coins:P.coins,ore:P.ore,wlv:P.wlv,alv:P.alv,wv:2,wi:curWorld===ARENA?1:curWorld,eq:EQ,as:AUTOSK.map(x=>x?1:0),sk:SKIN,lkv:2,lk:LOOKS.map((v,i)=>i===P.cls?SKIN:v),gear:P.gear,bag:bagArr(),pots:P.pots,wh:whArr(),eg:P.eggs|0,pt:P.pets,sp:P.pet||'',fb:P.fightBack?1:0,tm:P.tapMove?1:0,mk:1,sg:1,cl:P.cls,cs:CLS_STORE.map(x=>x?{e:x.e,a:x.a.map(y=>y?1:0)}:null),ap:P.autoPot?1:0,ah:P.apHp,aq:P.apQi});
+  const str=JSON.stringify({v:2,pm:PVPLVL,ts:Date.now(),gv:GEAR_VER,sv:AUTH.ver===null?undefined:AUTH.ver,lvl:P.lvl,exp:P.exp,coins:P.coins,ore:P.ore,wlv:P.wlv,alv:P.alv,wv:2,wi:curWorld===ARENA?1:curWorld,eq:EQ,as:AUTOSK.map(x=>x?1:0),sk:SKIN,lkv:2,lk:LOOKS.map((v,i)=>i===P.cls?SKIN:v),gear:P.gear,bag:bagArr(),pots:P.pots,wh:whArr(),eg:P.eggs|0,pt:P.pets,sp:P.pet||'',fb:P.fightBack?1:0,tm:P.tapMove?1:0,js:P.joySmall?1:0,mk:1,sg:1,cl:P.cls,cs:CLS_STORE.map(x=>x?{e:x.e,a:x.a.map(y=>y?1:0)}:null),ap:P.autoPot?1:0,ah:P.apHp,aq:P.apQi});
   try{localStorage.setItem(saveKey(),str)}catch(e){}
   cloudPush(str);
   netInfo();
@@ -837,7 +862,7 @@ function load(){
     const parseGear=(arr,cap)=>{const out=[];if(Array.isArray(arr))for(const o of arr.slice(0,cap)){const q=o&&GEAR.find(z=>z.k===o.slot);if(!q)continue;const it={slot:q.k,g:clamp(o.g|0,1,NW),r:clamp(o.r|0,0,RAR.length-1),st:{}};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE||k in SPECIAL){const v=+o.st[k];if(v>=0&&v<1e6)it.st[k]=r2(v*gm(k))}addQrg(it,q);it.col=RAR[it.r].c;it.u=bagUid++;out.push(it)}return out};
     P.bag=parseGear(s.bag,200);P.wh=parseGear(s.wh,WH_CAP);P.eggs=clamp(s.eg|0,0,99999);P.pets=parsePets(s.pt);P.pet=petLoad(s.sp);P.pf=null;
     PVPLVL=clamp(s.pm|0,0,3);
-    if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999),ck:clamp(s.pots.ck|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;
+    if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999),ck:clamp(s.pots.ck|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;P.joySmall=s.js===1;applyJoySize();
     let wi=s.wi|0;if(s.wv!==2&&wi<=10)wi++; /* older saves: world numbers started at 0 for Ashen Reach */
     wi=clamp(wi,0,NW-1);if(wi===ARENA)wi=1;if(wi!==curWorld)buildWorld(wi);
     P.cls=clamp(s.cl|0,0,CLASSES.length-1);loadLooks(s);CLS_STORE.fill(null);
@@ -845,7 +870,7 @@ function load(){
     if(s.v===2&&Array.isArray(s.eq)&&s.eq.length<=NSLOT){for(let i=0;i<NSLOT;i++){const q=SKILLS[s.eq[i]];EQ[i]=q&&P.lvl>=q.lv&&(q.c||0)===P.cls?s.eq[i]:-1}}else autoArrange();
     for(let i=0;i<NSLOT;i++)AUTOSK[i]=!Array.isArray(s.as)||s.as[i]!==0;
     if(s.mk!==1&&P.cls===0)giveMelee();
-    if(s.sg!==1)giveSig();
+    fixSig();if(s.sg!==1)giveSig();
     buildBar();
     P.hp=maxHp();P.qi=maxQi();return true;
   }catch(e){return false}
@@ -882,6 +907,7 @@ function hitMonster(m,dmg,crit,sure){ /* sure (v5_219): skip the accuracy roll, 
   if(m.dead||m.pend||pvpOnly()||inTown())return 0; /* v5_90 no attacking inside the safe hub */
   if(!sure&&rnd()>hitChance(m)){ /* missed: no damage, but the monster still notices you */
     if(m.state==='idle'&&!inTown())m.state='chase';
+    if(!MP&&!inTown())pullPack(m);
     pop(m.x,m.y-m.r-8,'MISS','#9aa7ad',12);SFX('miss');combatPing();return 0;
   }
   dmg=Math.max(1,Math.round(dmg*(1-monRed(m))*atkGap(m.lvl,P.lvl)*(1+(m.boss?bsaVal():mabVal())/100)));
@@ -889,6 +915,7 @@ function hitMonster(m,dmg,crit,sure){ /* sure (v5_219): skip the accuracy roll, 
   if(P.lsT>0||P.markT>0||P.linkT>0)sigOnHit(m,dmg); /* v5_160 lifesteal / death mark / soul web */
   spark(m.x,m.y,crit?'#ffd36b':'#ffd9a0',crit?12:6,170,.35,2.6);if(crit)shake=Math.max(shake,.5);
   if(m.state==='idle'&&!inTown())m.state='chase';
+  if(!MP&&!inTown())pullPack(m); /* v5_281 solo: the whole pack joins in (shared worlds: the server does it) */
   pop(m.x,m.y-m.r-8,String(dmg)+(crit?'!':''),crit?'#ffd36b':'#fff',crit?17:13);SFX(crit?'crit':'hit');combatPing();
   if(MP){
     /* the server applies the damage and decides the kill; we only predict the health bar */
@@ -1411,10 +1438,10 @@ for(const c of SIGD)for(const y of c)SKFAM[y[0]]=y[7];
 Object.assign(CAST_LONG,{sg_c750:1,sg_c1000:1,sg_g500:1,sg_g1000:1,sg_a500:1,sg_a1000:1,sg_s1000:1,sg_s750:1,sg_c300:1});
 Object.assign(CAST_NOROOT,{sg_g100:1,sg_n500:1,sg_n1000:1});
 /* older saves / characters already past a milestone: put the signature skills of the CURRENT class into EMPTY slots, once (nothing is replaced) */
-function giveSig(){for(const lv of SIG_LV){const id=SIGK[P.cls][lv];if(id===undefined||P.lvl<SKILLS[id].lv||EQ.includes(id))continue;const e=EQ.indexOf(-1);if(e<0)break;EQ[e]=id;AUTOSK[e]=true}}
+function giveSig(){for(const lv of SIG_LV){const id=SIGK[P.cls][lv];if(id===undefined||P.lvl<SKILLS[id].lv||EQ.includes(id))continue;const e=EQ.findIndex((v,j)=>isSigSlot(j)&&v<0);if(e<0)break;EQ[e]=id}} /* v5_277 only R / T */
 function unlock(k){unlockId(2+k)}
-function unlockId(id){const s=SKILLS[id];if(!s||(s.c||0)!==P.cls)return;const e=EQ.indexOf(-1);if(e>=0){EQ[e]=id;buildBar()}
-  say('New skill: '+s.n+(e>=0?' (slot '+(e+1)+')':'. Press K to equip')+'.',s.col)}
+function unlockId(id){const s=SKILLS[id];if(!s||(s.c||0)!==P.cls)return;const e=s.sig?EQ.findIndex((v,j)=>isSigSlot(j)&&v<0):EQ.indexOf(-1);if(e>=0){EQ[e]=id;buildBar()}
+  say('New skill: '+s.n+(e>=0?' (slot '+SLOTKEYS[e].toUpperCase()+')':s.sig?'. Unique skills go in R or T: press K to equip':'. Press K to equip')+'.',s.col)}
 /* older saves have no melee skills equipped: put the best available one of each melee type into EMPTY slots (nothing is replaced), once */
 function giveMelee(){
   for(const ty of ['strike','cleave','leap','flurry']){
@@ -1474,15 +1501,39 @@ function switchClass(c){
   const st=CLS_STORE[c];CLS_STORE[c]=null;
   if(st){for(let i=0;i<NSLOT;i++){const q=SKILLS[st.e[i]];EQ[i]=q&&P.lvl>=q.lv&&(q.c||0)===c?st.e[i]:-1;AUTOSK[i]=st.a[i]!==false}}
   else{autoArrange();AUTOSK.fill(true)}
+  fixSig();
   P.hp=Math.min(P.hp,maxHp());P.qi=Math.min(P.qi,maxQi());P.vlT=0;P.drT=0;P.ceT=0;P.spirits=[];sigReset();
   buildBar();renderBook();save();cloudFlush();netInfo(true);
   say('You are now a '+CLASSES[c].n+'.','#c7a8ff');
 }
+/* v5_283 AUTO-HUNT REALM LIMIT. The "realms" here are the 9 zones of a world (ZONES, rings of distance from the hub; the hub itself counts as zone 0).
+   The zone you are in when you switch Auto-hunt on is the ANCHOR; while it is on you may only be in the anchor zone, one zone above it or one zone below it (AUTO_REALM_SPAN = 1).
+   Auto-hunt never ends because of this: if you end up outside (you walked, dashed, chased, got pushed), you are put back at the nearest edge of the allowed range (autoRealmClamp, called from updatePlayer),
+   and auto-hunt / F / skills do not pick monsters outside the range (nearest below). Switching Auto-hunt off and on again sets a new anchor; arriving in another world also sets a new one. */
+const AUTO_REALM_SPAN=1;let autoAnc=null; /* {w:world, z:zone index} while auto-hunt is on */
+function zoneIdxAt(x,y){const d=dist(x,y,C,C);for(let k=0;k<ZONES.length-1;k++)if(d<ZONES[k].d)return k;return ZONES.length-1}
+function autoAnchorNow(){autoAnc={w:curWorld,z:zoneIdxAt(P.x,P.y)}}
+function autoRealmLimits(){ /* [lowest, highest] allowed zone index, or null = no limit (auto-hunt off, or the Arena which has no zones) */
+  if(!auto||curWorld===ARENA||!ZONES.length)return null;
+  if(!autoAnc||autoAnc.w!==curWorld)autoAnchorNow();
+  return [Math.max(0,autoAnc.z-AUTO_REALM_SPAN),Math.min(ZONES.length-1,autoAnc.z+AUTO_REALM_SPAN)];
+}
+function autoRealmClamp(){
+  const L=autoRealmLimits();if(!L)return;
+  const z=zoneIdxAt(P.x,P.y);if(z>=L[0]&&z<=L[1])return;
+  const d=dist(P.x,P.y,C,C),a=d>1?Math.atan2(P.y-C,P.x-C):0;
+  const nd=z<L[0]?(L[0]?ZONES[L[0]-1].d:0)+6:(L[1]<ZONES.length-1?ZONES[L[1]].d:RIM-20)-6; /* just inside the nearest allowed edge */
+  P.x=C+Math.cos(a)*nd;P.y=C+Math.sin(a)*nd;P.mv=null;
+  if(P.target&&!P.target.isPl){const tz=zoneIdxAt(P.target.x,P.target.y);if(tz<L[0]||tz>L[1])P.target=null}
+  if(time-(P.arMsgAt===undefined?-99:P.arMsgAt)>4){P.arMsgAt=time;say('Auto-hunt: you can only go 1 zone up or down from where you started it ('+ZONES[autoAnc.z].n+'). You were sent back.','#8d9aa2',4000)}
+}
 function nearest(maxd){
   let best=null,bd=maxd;
   if(pvpOnly()){for(const q of foes()){const d=dist(q.x,q.y,P.x,P.y);if(d<bd){bd=d;best=q}}return best}
+  const L=autoRealmLimits();
   for(const m of mons){
     if(m.dead||m.pend)continue;
+    if(L){const z=zoneIdxAt(m.x,m.y);if(z<L[0]||z>L[1])continue} /* v5_283 auto-hunt: only monsters inside the allowed zones */
     const d=dist(m.x,m.y,P.x,P.y);
     if(d<bd){bd=d;best=m}
   }
@@ -1509,7 +1560,7 @@ function hurtPlayer(dmg,byPlayer,atkLv,mon,pvpCrit){
   if(P.rfT>0&&mon&&!mon.dead&&!byPlayer){const rd=Math.round(dmg*P.rf);if(rd>0){sigBusy=true;try{hitMonster(mon,rd,false)}finally{sigBusy=false}}} /* v5_160 reflect */
   if(P.sh>0&&D<1){const b=Math.min(P.sh*(1-D),dmg);P.sh-=b;dmg-=b;if(dmg<=0){spark(P.x,P.y,'#8ff0c4',6,120,.3,2.4);SFX('block');combatPing();return}}
   if(P.absT>0&&D<1){const room=Math.max(0,maxHp()*SIG_ABS_CAP-P.abs),b=Math.min(room*(1-D),dmg);if(b>0){P.abs+=b;dmg-=b;spark(P.x,P.y,'#c8d4dc',6,120,.3,2.4);if(dmg<=0){pop(P.x,P.y-24,'ABSORBED','#c8d4dc',13);SFX('block');combatPing();return}}} /* v5_160 Unyielding Vessel */
-  P.hp-=dmg;P.hurt=.25;P.task=null;P.mine=0;combatPing();SFX(P.hp<=0?'die':'hurt'); /* home scroll keeps channelling when hit */
+  P.hp-=dmg;P.slowT=SLOW_HIT_T;P.sprT=0;P.runT=0; /* v5_279 a hit ends the sprint, hides the Sprint button until you run 3 s again, and slows you 10% */ P.hurt=.25;P.task=null;P.mine=0;combatPing();SFX(P.hp<=0?'die':'hurt'); /* home scroll keeps channelling when hit */
   spark(P.x,P.y,'#ff6a5a',8,150,.35,2.4);shake=Math.max(shake,.3);
   pop(P.x,P.y-24,'-'+dmg+(tCrit?'!':''),tCrit?'#ffb02e':'#ff7a6a',tCrit?17:14);
   if(P.hp<=0){
@@ -1861,7 +1912,8 @@ const dashEase=u=>1-Math.pow(1-Math.min(1,Math.max(0,u)),3);
 /* v5_99 ROTATABLE / TILTABLE CAMERA (3D mode). yaw rotates the view around the player, tilt is the camera pitch (radians above the ground; below CAM_TILT_MIN the camera looks up at the sky, v5_174).
    Controls: hold RIGHT or MIDDLE mouse and drag (left/right = rotate, up/down = tilt), or [ and ] to rotate, PageUp / PageDown to tilt, Home to reset;
    phone: drag with TWO fingers (sideways = rotate, up/down = tilt, pinch = zoom). Movement, joystick, dodge and the hub arrow follow the view. */
-const CAM_TILT0=Math.atan2(380,320),CAM_TILT_MIN=.3, /* v5_105 wider tilt range (about 17 to 87 degrees) */ CAM_TILT_MAX=1.52,
+const CAM_TILT0=.093, /* v5_278 default view = 40% sky / 60% ground. The camera orbits at its lowest elevation (CAM_TILT_MIN) and pitches up (the v5_174 look-up) until its axis points 0.093 rad (5.3 deg) below the horizon: with the 50 deg field of view that puts the horizon 40% of the screen height from the top. Home key / reset use it too. */
+CAM_TILT_MIN=.3, /* v5_105 wider tilt range (about 17 to 87 degrees) */ CAM_TILT_MAX=1.52,
   CAM_LOOK_MAX=1.0, CAM_TILT_LOW=CAM_TILT_MIN-CAM_LOOK_MAX; /* v5_174 LOOK UP: tilt keeps going below CAM_TILT_MIN; the camera then stays at its lowest orbit and pitches up by the difference (up to 1.0 rad = 57 degrees) to show the sky */
 const camView={yaw:0,tilt:CAM_TILT0};
 function camRot(ix,iy){if(!MODE3D||!camView.yaw)return [ix,iy];const c=Math.cos(camView.yaw),sn=Math.sin(camView.yaw);return [ix*c+iy*sn,-ix*sn+iy*c]} /* screen direction -> world direction */
@@ -2145,6 +2197,7 @@ $('autoPot').addEventListener('change',e=>{P.autoPot=e.target.checked;save()});
 $('apHp').addEventListener('input',e=>{P.apHp=clamp(+e.target.value||35,5,95);$('apHpV').textContent=P.apHp+'%'});$('apHp').addEventListener('change',()=>save());
 $('apQi').addEventListener('input',e=>{P.apQi=clamp(+e.target.value||20,5,95);$('apQiV').textContent=P.apQi+'%'});$('apQi').addEventListener('change',()=>save());
 $('fightBack').addEventListener('change',e=>{P.fightBack=e.target.checked;save()});
+$('joySmall').addEventListener('change',e=>{P.joySmall=e.target.checked;applyJoySize();save()}); /* v5_279 menu option: joystick 10% smaller */
 $('tapMove').addEventListener('change',e=>{P.tapMove=e.target.checked;if(!P.tapMove)P.mv=null;save()}); /* v5_134 phone: tapping the ground only walks when this is on */
 $('perfSel').value=PERF;
 $('perfSel').addEventListener('change',e=>{const v=e.target.value;try{localStorage.setItem('alperf',v)}catch(_){}say('Performance mode: '+v+' \u2014 reloading\u2026','#e3b559');try{saveNow()}catch(_){}setTimeout(()=>location.reload(),700)});
@@ -2425,7 +2478,7 @@ function petCombValidate(){if(!petComb)return;const o=petsObj();if(!(o[petComb.a
    (PET_ATK_PCT, F..S) x the species factor f, once every iv seconds, on your target or the nearest monster within PET_RANGE of you. It goes through hitMonster, so accuracy, monster
    defence, level gap and kill credit work like your own hits. Spirit Summoners already have wolves, so their pet's attack is halved (PET_SUMMONER_K).
    Species: Tiger / Wolf fast melee | Dragon slow fire breath that also scorches up to 2 enemies near the target | Phoenix hit + burn | Fairy weak hit + heals you | Chicken weak peck. */
-const PET_ATK_PCT=[6,9,13,18,24,31,40],PET_RANGE=320,PET_SUMMONER_K=.5;
+const PET_ATK_PCT=[6,9,13,18,24,31,40],PET_RANGE=320,PET_SUMMONER_K=.5,PET_DMG_K=1.2; /* v5_283 PET_DMG_K: every pet hit (and the Phoenix burn ticks, which are a share of the hit) does 20% more */
 const PET_FIGHT=[
  {kind:'peck',f:.4,iv:1.5,col:'#f3e6c4'},   /* 0 Chicken */
  {kind:'fire',f:1.15,iv:2.2,col:'#ff7a22'},  /* 1 Dragon */
@@ -2436,14 +2489,57 @@ const PET_FIGHT=[
 const petHitDmg=()=>{ /* damage of one pet hit before the monster's own defence, 0 when there is no pet */
   if(!P.pet)return 0;const p=petParse(P.pet),F=PET_FIGHT[p.s];if(!F)return 0;
   const atk=atkVal()/(1+petPct('atk'));
-  return atk*PET_ATK_PCT[p.s===0?0:p.c]/100*F.f*(P.cls===4?PET_SUMMONER_K:1)};
+  return atk*PET_ATK_PCT[p.s===0?0:p.c]/100*F.f*(P.cls===4?PET_SUMMONER_K:1)*PET_DMG_K};
 let petCd=0,petHc=0,petFightAt=-99,petAtkN=0,petTgt=null; /* petFightAt (v5_221): game time of the pet's last attack, drives the dragon's take-off / landing */
+/* v5_281 MELEE PETS: Tiger (claw) and Wolf (bite) run up to the enemy, strike from right beside it, and stay there until it dies or is out of reach, then run back to you.
+   PET_LUNGE = run speed (units/s), PET_STAND = gap between the enemy's edge and the pet, PET_HIT_REACH = how close it must be to land a hit, PET_CHASE = the enemy must be within this of YOU or the pet gives up. */
+const PET_LUNGE=380,PET_STAND=16,PET_HIT_REACH=36,PET_CHASE=520;
+const petIsMelee=F=>!!F&&(F.kind==='claw'||F.kind==='bite');
+/* v5_283 WHEN YOU MOVE THE PET STOPS ATTACKING: petPlayerMoving(dt) is true while you are moving (and for PET_MOVE_HOLD s after, so it does not flicker between frames).
+   Ranged pets simply hold their attack; Tiger / Wolf let go of their enemy and follow you (their cooldown keeps running). They attack again once you stand still. */
+const PET_MOVE_HOLD=.4;let petMvT=0,petLx=null,petLy=null;
+function petPlayerMoving(dt){
+  if(petLx!==null&&dt>0&&Math.hypot(P.x-petLx,P.y-petLy)>dt*12)petMvT=PET_MOVE_HOLD;else petMvT=Math.max(0,petMvT-dt);
+  petLx=P.x;petLy=P.y;return petMvT>0;
+}
+const petTgtOk=m=>!!m&&!m.dead&&!m.pend&&!m.isPl&&dist(m.x,m.y,P.x,P.y)<PET_CHASE;
+function petMeleeStep(f,m,dt){ /* v5_284 SMOOTH MELEE: the pet keeps ONE slot on a ring round the enemy (the side it came from, fixed per enemy) and moves its velocity smoothly toward it:
+     ease-in (accelerates), ease-out (slows down on arrival, no sudden stop), follows a moving enemy without jitter, and only backs off (slowly) if the enemy walks into it. */
+  const ox=f.x,oy=f.y,st=m.r+PET_STAND;
+  if(f.mt!==m){f.mt=m;f.sa=Math.atan2(f.y-m.y,f.x-m.x)}
+  if(f.mode!=='m'){f.mode='m';const q=Math.max(f.dt||.016,.001);f.ux=(f.vx||0)/q;f.uy=(f.vy||0)/q} /* carry the roaming speed over, no jump */
+  const ad=Math.hypot(f.x-m.x,f.y-m.y),tx=m.x+Math.cos(f.sa)*st,ty=m.y+Math.sin(f.sa)*st,dx=tx-f.x,dy=ty-f.y,dd=Math.hypot(dx,dy);
+  let sp=dd<5?0:Math.min(PET_LUNGE,dd*5);                 /* proportional approach: slows down as it gets close */
+  if(ad<=st+2)sp=0;                                       /* already at its standing distance (or the enemy walked into it): it only ever closes in, it never moves away from the enemy */
+  const vx=dd>.001?dx/dd*sp:0,vy=dd>.001?dy/dd*sp:0,k=Math.min(1,dt*9);
+  f.ux+=(vx-f.ux)*k;f.uy+=(vy-f.uy)*k;
+  let mx=f.ux*dt,my=f.uy*dt;const ml=Math.hypot(mx,my);if(ml>dd&&ml>0){mx*=dd/ml;my*=dd/ml}   /* never overshoot the slot */
+  f.x+=mx;f.y+=my;f.spd=Math.hypot(f.ux,f.uy);
+  f.wx=undefined;f.wait=0; /* roaming picks a fresh spot near you after the fight */
+  f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sv=Math.hypot(f.x-ox,f.y-oy)/Math.max(dt,.001);f.mv+=((sv>40?1:0)-f.mv)*Math.min(1,dt*10);
+  f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
+  return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+}
 function petFight(dt){
+  if(P.pf)P.pf.tgt=null; /* melee target is set again below every frame it still applies */
+  const moving=petPlayerMoving(dt);
   if(!P.pet||!P.pf||P.dead>0||inTown())return;
   const p=petParse(P.pet),F=PET_FIGHT[p.s];if(!F)return;
   const f=P.pf;petCd-=dt;
+  if(petIsMelee(F)){
+    if(pvpOnly()||moving)return; /* v5_283 you are moving: no target, the pet follows you instead (petStep) */
+    let b=petTgtOk(P.target)?P.target:(petTgtOk(petTgt)&&!petTgt.dead?petTgt:null);
+    if(!b){let bd=PET_RANGE;for(const m of mons){if(m.dead||m.pend)continue;const d=dist(m.x,m.y,P.x,P.y);if(d<bd){bd=d;b=m}}}
+    if(!b)return;
+    f.tgt=b;petTgt=b;
+    if(petCd>0||dist(f.x,f.y,b.x,b.y)>b.r+PET_HIT_REACH)return; /* still running up to it, or recovering */
+    petCd=F.iv;petFightAt=time;petAtkN++;
+    const d=Math.max(1,Math.round(petHitDmg()*(.9+rnd()*.2)));hitMonster(b,d,false);
+    spark(b.x,b.y,F.col,8,150,.35,3);
+    return;
+  }
   if(F.heal){petHc-=dt;if(petHc<=0){petHc=F.hiv;const mh=maxHp();if(P.hp<mh*.95){const h=Math.max(1,Math.round(mh*F.heal[p.c]/100));P.hp=Math.min(mh,P.hp+h);pop(P.x,P.y-40,'+'+h,'#7dffb0',13);spark(f.x,f.y,'#ff9ad5',10,110,.5,3);ring(P.x,P.y,40,'#7dffb0')}}}
-  if(petCd>0||pvpOnly())return;
+  if(petCd>0||pvpOnly()||moving)return; /* v5_283 no attacks while you are moving */
   let b=(P.target&&!P.target.isPl&&!P.target.dead&&!P.target.pend&&dist(P.target.x,P.target.y,P.x,P.y)<PET_RANGE)?P.target:null,bd=PET_RANGE;
   if(!b)for(const m of mons){if(m.dead||m.pend)continue;const d=dist(m.x,m.y,P.x,P.y);if(d<bd){bd=d;b=m}}
   if(!b)return;
@@ -2463,8 +2559,8 @@ function petFight(dt){
 function petInfoText(s,c){
   const g=PET_GF[c]*(s===0?PET_CHICKEN_K:1),st=PET_PAIR[s]||[],lbl={atk:'ATK',hp:'HP',def:'DEF',acc:'accuracy',eva:'evasion'};
   const gives=st.map(k=>'+'+(Math.round(PET_STAT_S[k]*g*10)/10)+(PET_FLAT[k]?(k==='eva'?'% ':' '):'% ')+lbl[k]).join(', ');
-  const F=PET_FIGHT[s],pc=PET_ATK_PCT[s===0?0:c]*F.f*(P.cls===4?PET_SUMMONER_K:1);
-  const how=F.kind==='spark'?'weak sparks and heals you '+F.heal[c]+'% HP every '+F.hiv+' s when hurt':{peck:'weak pecks',fire:'fire breath that also scorches 2 nearby enemies',burn:'hits that also burn',claw:'fast claw strikes',bite:'fast bites'}[F.kind];
+  const F=PET_FIGHT[s],pc=PET_ATK_PCT[s===0?0:c]*F.f*(P.cls===4?PET_SUMMONER_K:1)*PET_DMG_K;
+  const how=F.kind==='spark'?'weak sparks and heals you '+F.heal[c]+'% HP every '+F.hiv+' s when hurt':{peck:'weak pecks',fire:'fire breath that also scorches 2 nearby enemies',burn:'hits that also burn',claw:'fast claw strikes: it runs up to the enemy',bite:'fast bites: it runs up to the enemy'}[F.kind];
   return ' Gives you '+gives+'. It attacks for about '+(Math.round(pc*10)/10)+'% of your ATK every '+F.iv+' s ('+how+').';
 }
 
@@ -2497,8 +2593,20 @@ let petT=0;
    and catches up faster (up to PET_CATCH_MAX). Teleport (more than PET_SNAP away) snaps it next to you. Used for your pet and for other players' pets (peerPetStep).
    Tune PET_ROAM_R (how far it may wander), PET_ROAM_MIN, PET_WALK, PET_PAUSE, PET_CATCH_MAX. Returns the hop height. */
 const PET_ROAM_R=170,PET_ROAM_MIN=45,PET_WALK=85,PET_CATCH_MAX=420,PET_PAUSE=[1.2,3.2],PET_SNAP=700;
-function petRoamStep(f,px,py,dt){
+function petRoamStep(f,px,py,dt,trail,face){
   const ox=f.x,oy=f.y,d=Math.hypot(f.x-px,f.y-py);
+  if(f.mode==='m'){f.mode='r';f.spd=Math.hypot(f.ux||0,f.uy||0)}   /* leaving a fight: keep the running speed and slow down smoothly */
+  if(trail){ /* v5_284 you are moving: the pet trails just behind / beside you instead of picking a random spot (maybe ahead of you), and its speed follows its distance to that spot */
+    f.side=f.side||(Math.random()<.5?-1:1);
+    const bx=-Math.cos(face),by=-Math.sin(face);
+    f.wx=px+bx*80-by*f.side*42;f.wy=py+by*80+bx*f.side*42;f.wait=0;
+    const dx=f.wx-f.x,dy=f.wy-f.y,dd=Math.hypot(dx,dy),want=dd<14?0:Math.min(PET_CATCH_MAX,Math.max(PET_WALK,dd*3.2));
+    f.spd=f.spd||0;f.spd+=(want-f.spd)*Math.min(1,dt*7);
+    const mvd=Math.min(f.spd*dt,dd);if(dd>.001){f.x+=dx/dd*mvd;f.y+=dy/dd*mvd}
+    f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sp=Math.hypot(f.x-ox,f.y-oy)/Math.max(dt,.001);f.mv+=((sp>40?1:0)-f.mv)*Math.min(1,dt*10);
+    f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
+    return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+  }
   const pick=()=>{const a=Math.random()*6.2832,r=PET_ROAM_MIN+Math.random()*(PET_ROAM_R-PET_ROAM_MIN);f.wx=px+Math.cos(a)*r;f.wy=py+Math.sin(a)*r;f.wait=0};
   if(f.wx===undefined||Math.hypot(f.wx-px,f.wy-py)>PET_ROAM_R)pick();   /* no spot yet, or you walked off and the spot is now too far from you */
   if(f.wait>0&&d>PET_ROAM_R*1.15)f.wait=0;                              /* you left it behind: stop resting and follow */
@@ -2520,7 +2628,8 @@ function petStep(is3){
   petValidate();if(!P.pet)return 0;
   const now=performance.now(),dt=Math.min(.1,petT?(now-petT)/1000:.016);petT=now;
   if(!P.pf||Math.hypot(P.pf.x-P.x,P.pf.y-P.y)>PET_SNAP)P.pf={x:P.x+54,y:P.y,mv:0};
-  return petRoamStep(P.pf,P.x,P.y,dt);
+  if(P.pf.tgt&&petTgtOk(P.pf.tgt))return petMeleeStep(P.pf,P.pf.tgt,dt); /* v5_281 Tiger / Wolf: go to the enemy */
+  return petRoamStep(P.pf,P.x,P.y,dt,petMvT>0,P.face||0);
 }
 /* ---- 3D pet models (web/pets3d.js). Each view (world, bag, forge) owns its own rig; the model is rebuilt only when the summoned pet changes. ---- */
 const PET_WORLD_K=1.15;
@@ -2549,7 +2658,8 @@ function petRender3(){
     if(T.petSp)T.petSp.visible=false;
     const fighting=!inTown()&&P.dead<=0&&(combatT>0||time-petFightAt<4);
     let want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):Math.PI/2-P.face;
-    if(fighting&&petTgt&&!petTgt.dead&&time-petFightAt<2.5)want=Math.atan2(petTgt.x-f.x,petTgt.y-f.y);   /* v5_222 turn to face the enemy it is attacking */
+    if(fighting&&petTgt&&!petTgt.dead&&time-petFightAt<2.5)want=Math.atan2(petTgt.x-f.x,petTgt.y-f.y);
+    if(f.tgt&&!f.tgt.dead&&Math.hypot(f.tgt.x-f.x,f.tgt.y-f.y)<f.tgt.r+PET_HIT_REACH+50)want=Math.atan2(f.tgt.x-f.x,f.tgt.y-f.y);   /* v5_284 right beside its enemy: face it (before, it turned to your facing until its first hit) */   /* v5_222 turn to face the enemy it is attacking */
     if(f.yaw===undefined)f.yaw=want;
     let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*(fighting?10:7));
     rig.root.visible=true;rig.root.scale.setScalar(PET_WORLD_K);
@@ -2840,7 +2950,7 @@ window.addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();
   keys[k]=true;
   if(e.repeat)return;
-  if(SLOTKEYS.includes(k))manualSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='y')usePot('ck');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='c')cycleSkin();
+  if(SLOTKEYS.includes(k))manualSkill(SLOTKEYS.indexOf(k));else if(k==='q')usePot('hp');else if(k==='z')usePot('qi');else if(k==='y')usePot('ck');else if(k==='x')useTp();else if(k==='b')toggleBag();else if(k==='n')openShop();else if(k==='m')toggleMap();else if(k==='k')toggleBook();else if(k==='i')togglePchat();else if(k==='v')toggle3D();else if(k==='p')togglePvpMode();else if(k==='l')cycleSkin(); /* v5_280 Look moved from C to L */ else if(k==='c'){if(P.runT>=SPRINT_SHOW_T||P.sprT>0)P.sprT=SPRINT_T} /* v5_280 C = Sprint (only while the button is showing) */
   else if(k===' ')doJump(); /* v5_169 Space = jump (attack nearest is F) */
   else if(k==='e')startMine();
   else if(k==='f'){const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null;P.fatk=true}} /* F = attack nearest */
@@ -2874,11 +2984,11 @@ window.addEventListener('pointermove',e=>{
 });
 /* v5_110 CONTROLS. PC: left click = move (marker shows where) / select / attack, right-drag or middle-drag = rotate + tilt, wheel = zoom, plain right click on a player = PvP.
    Phone: one tap = move (or select a monster / player / ore), touch and drag = rotate + tilt, pinch = zoom, double tap on a monster or player = attack. */
-const lc={id:null,x:0,y:0,moved:0,ev:null};
+const lc={id:null,x:0,y:0,sx:0,sy:0,moved:0,ev:null};
 cv.addEventListener('pointerdown',e=>{
   if(e.pointerType==='mouse'&&e.button!==0){lc.id=null;return}
   if(e.pointerType==='touch'&&camTouch.size>=2){lc.id=null;return} /* second finger: two-finger camera takes over */
-  lc.id=e.pointerId;lc.x=e.clientX;lc.y=e.clientY;lc.moved=0;lc.ev={clientX:e.clientX,clientY:e.clientY,pointerType:e.pointerType,button:0};
+  lc.id=e.pointerId;lc.x=e.clientX;lc.y=e.clientY;lc.sx=e.clientX;lc.sy=e.clientY;lc.moved=0;lc.ev={clientX:e.clientX,clientY:e.clientY,pointerType:e.pointerType,button:0};
 });
 window.addEventListener('pointermove',e=>{
   if(lc.id===null||e.pointerId!==lc.id)return;
@@ -2886,7 +2996,7 @@ window.addEventListener('pointermove',e=>{
   const dx=e.clientX-lc.x,dy=e.clientY-lc.y;lc.x=e.clientX;lc.y=e.clientY;lc.moved+=Math.abs(dx)+Math.abs(dy);
   if(lc.moved>10&&e.pointerType!=='mouse'){camAdj(-dx*.006,dy*.004)}
 });
-const lcEnd=e=>{if(lc.id===null||e.pointerId!==lc.id)return;const was=e.type==='pointerup'&&lc.moved<=(e.pointerType==='mouse'?8:10);lc.id=null;if(was)cvClick(lc.ev)};
+const lcEnd=e=>{if(lc.id===null||e.pointerId!==lc.id)return;const was=e.type==='pointerup'&&(e.pointerType==='mouse'?Math.hypot(e.clientX-lc.sx,e.clientY-lc.sy)<=22:lc.moved<=10); /* v5_276 mouse: a click counts when the pointer ends within 22 px of where it went down (before: total path <= 8 px, so a slightly shaky click did nothing) */lc.id=null;if(was)cvClick(lc.ev)};
 window.addEventListener('pointerup',lcEnd);window.addEventListener('pointercancel',lcEnd);
 const camTouchEnd=e=>{if(e.pointerType!=='touch')return;camTouch.delete(e.pointerId);camMid=null};
 window.addEventListener('pointerup',camTouchEnd);window.addEventListener('pointercancel',camTouchEnd);
@@ -2923,7 +3033,7 @@ function cvClick(e){
   /* monsters: 1st left click SELECTS (nothing attacks yet), 2nd left click on the same monster ATTACKS it */
   if(!pvpOnly()){
     let m=scrPick(e,mons.filter(o=>!o.dead&&!o.pend));
-    if(!m){let bd=1e9;for(const o of mons){if(o.dead)continue;const d=dist(o.x,o.y,wx,wy);if(d<o.r+50+ex&&d<bd){bd=d;m=o}}} /* v5_109 bigger click area */
+    if(!m){let bd=1e9;for(const o of mons){if(o.dead)continue;const d=dist(o.x,o.y,wx,wy);if(d<o.r+(e.pointerType==='mouse'?32:50)+ex&&d<bd){bd=d;m=o}}} /* v5_109 bigger click area; v5_276 smaller for the mouse (a click NEAR a monster used to select it instead of walking) */
     if(m){
       const now=performance.now(),touch=e.pointerType==='touch'||e.pointerType==='pen';
       /* mouse: 2nd click on the selected monster attacks; touch: DOUBLE TAP (within 0.45 s) attacks, a single tap only selects */
@@ -2936,12 +3046,13 @@ function cvClick(e){
     if(o.cd<=0&&dist(o.x,o.y,wx,wy)<50+ex){P.sel=null;P.task=o;P.target=null;P.mv=null;P.mine=0;return}
   }
   /* v5_110 left click / single tap on the ground = move there. A ripple + a marker on the ground show the destination. */
-  if(MODE3D&&T3.r&&!w3)return; /* clicked the sky / above the horizon: no ground point */
+  let gx=wx,gy=wy;if(MODE3D&&T3.r&&!w3){const h=skyHeading(e);if(!h)return;gx=P.x+h.x*600;gy=P.y+h.y*600;{const dc=dist(gx,gy,C,C);if(dc>RIM-60){gx=C+(gx-C)/dc*(RIM-60);gy=C+(gy-C)/dc*(RIM-60)}}} /* v5_276 clicked the sky / above the horizon: walk 600 units toward that direction */
   if(PHONE&&P.tapMove===false)return; /* v5_134 phone option 'Tap to move' is off: the joystick is the only way to walk (monsters, ore and the shop can still be tapped) */
-  P.sel=null;P.mv={x:wx,y:wy};P.target=null;P.task=null;stopMine('Auto-mine off.');
-  ring(wx,wy,46,'#8ff0c4');ring(wx,wy,26,'#ffffff');
+  P.sel=null;P.mv={x:gx,y:gy};P.target=null;P.task=null;stopMine('Auto-mine off.');
+  ring(gx,gy,46,'#8ff0c4');ring(gx,gy,26,'#ffffff');
 }
 
+function applyJoySize(){document.documentElement.classList.toggle('joysm',!!P.joySmall)} /* v5_279 */
 const joy={x:0,y:0,id:null};
 const joyEl=$('joy'),joyKnob=joyEl.firstElementChild;
 function joyMove(e){
@@ -3026,7 +3137,7 @@ setInterval(()=>{
   if(SV.on){if(!act&&!SV.manual)saverOff();else saverUpdate();return}
   if(act&&performance.now()-SV.last>SAVER_IDLE*1000)saverOn();
 },1000);
-function toggleAuto(){auto=!auto;if(auto)stopMine();$('bAuto').classList.toggle('on',auto);say(auto?'Auto-hunt on.':'Auto-hunt off.','#8d9aa2')}
+function toggleAuto(){auto=!auto;if(auto){stopMine();autoAnchorNow()}else autoAnc=null; /* v5_283 the zone you start in is the anchor */ $('bAuto').classList.toggle('on',auto);say(auto?'Auto-hunt on.':'Auto-hunt off.','#8d9aa2')}
 let amine=false,amT=0,amWait=false;
 function nearestOre(){let best=null,bd=1e9;for(const o of ores){if(o.cd>0)continue;const d=dist(o.x,o.y,P.x,P.y);if(d<bd){bd=d;best=o}}return best}
 function stopMine(msg){if(!amine)return;amine=false;amWait=false;$('bMine').classList.remove('on');if(msg)say(msg,'#8d9aa2')}
@@ -3042,7 +3153,7 @@ $('bAuto').addEventListener('click',()=>{if(started)toggleAuto()});
 $('bMine').addEventListener('click',()=>{if(started)startMine()});
 $('bForge').addEventListener('click',openForge);
 
-const skWrap=$('skills');let skBtns=[],armed=3,rsvEl=null,rsvKey='';
+const skWrap=$('skills');let skBtns=[],armed=3,rsvEl=null,rsvKey='',sprEl=null;
 const GLYPH={pierce:'\u2197',fan:'\u224b',nova:'\u2738',meteor:'\u2604',chain:'\u26a1',drain:'\u263e',might:'\u25b2',mend:'\u271a',heal:'\u271a',strike:'\u2694',cleave:'\u263d',leap:'\u27a4',flurry:'\u2736',kunai:'\u2734',shadowstep:'\u21af',venom:'\u2623',bladestorm:'\u274b',smoke:'\u2601',execute:'\u2620',siphon:'\u2665',rush:'\u21d2',bash:'\u25a3',charge:'\u27a4',quake:'\u2301',bulwark:'\u26e8',roar:'\u2742',counter:'\u21ba',hammer:'\u2692',ironskin:'\u25c6',shockwave:'\u224b',arrow:'\u27b6',volley:'\u2917',rain:'\u2602',blast:'\u2739',eagle:'\u25ce',gale:'\u21e0',trap:'\u26a1',stormarrow:'\u21af',wolves:'\u2658',soulburst:'\u2735',wail:'\u224b',chains:'\u26d3',soulheal:'\u271a',harvest:'\u2766',guardian:'\u2656',spiritbomb:'\u2600'};
 for(const c of SIGD)for(const y of c)GLYPH[y[0]]=y[6]; /* v5_160 signature skill icons */
 /* [right, bottom] of each button's centre, in HUD units, measured from the bottom-right corner (round slots 1-12, then the two large ones) */
@@ -3055,6 +3166,11 @@ function buildBar(){
   atk.addEventListener('pointerdown',e=>{e.preventDefault();if(!started)return;if(P.sel&&!P.sel.dead&&P.sel.isPl){startPvp(P.sel);return}const m=(P.sel&&!P.sel.dead&&!P.sel.isPl)?P.sel:nearest(320);if(m){P.target=m;P.task=null;P.mv=null}});
   skWrap.appendChild(atk);
   rsvEl=document.createElement('div');rsvEl.className='rsv';rsvEl.hidden=true;rsvKey='';skWrap.appendChild(rsvEl);
+  /* v5_277 SPRINT: sits right above the "=" slot. Every tap = +30% move speed for 3 s; keep tapping for non-stop sprinting. */
+  sprEl=document.createElement('button');sprEl.type='button';sprEl.className='sk spr';sprEl.title='Sprint: +30% move speed. Appears after 3 s of running. Keep tapping to keep sprinting (ends 3 s after the last tap). Hotkey: C';
+  sprEl.innerHTML='<img alt="" draggable="false"><span class="kn"></span><em class="cdn"></em>';sprEl.firstChild.src=SPRINT_ICO;sprEl.style.display='none';place(sprEl,SLOTPOS[11][0],SLOTPOS[11][1]+57,40);
+  sprEl.addEventListener('pointerdown',e=>{e.preventDefault();if(!started)return;P.sprT=SPRINT_T});
+  skWrap.appendChild(sprEl);
   for(let i=0;i<NSLOT;i++){const s=SKILLS[EQ[i]],b=document.createElement('button');b.type='button';b.className='sk'+(i>=12?' big':'');
     if(i<12)place(b,SLOTPOS[i][0],SLOTPOS[i][1],40); /* R (12) and T (13) are positioned in CSS, left of the dodge pad */
     if(s)b.style.borderColor=s.col;b.title=(s?s.n:'Empty slot (K to equip)')+' ['+SLOTKEYS[i].toUpperCase()+']';
@@ -3075,18 +3191,21 @@ function toggleAutoSkill(i){
   AUTOSK[i]=!AUTOSK[i];say(SKILLS[id].n+': auto-cast '+(AUTOSK[i]?'ON':'OFF'),AUTOSK[i]?'#5fd3a5':'#8d9aa2');save();
 }
 buildBar();
-function equip(id){if((SKILLS[id].c||0)!==P.cls)return;const j=EQ.indexOf(id),o=EQ[armed];if(j>=0)EQ[j]=o;EQ[armed]=id;buildBar();renderBook();save()}
+function equip(id){if((SKILLS[id].c||0)!==P.cls)return;
+  /* v5_277 unique skills only fit R / T: if a round slot is selected, use the first free (else the first) of R / T */
+  let a=armed;if(SKILLS[id].sig&&!isSigSlot(a)){const free=EQ.findIndex((v,j)=>isSigSlot(j)&&v<0);a=free>=0?free:AUTO_SLOTS;armed=a;say('Unique skills can only be used in the R and T slots.','#e3b559')}
+  const j=EQ.indexOf(id);let o=EQ[a];if(j>=0){if(o>=0&&SKILLS[o].sig&&!isSigSlot(j))o=-1;EQ[j]=o}EQ[a]=id;buildBar();renderBook();save()}
 function renderBook(){
   const cb=$('bookCls');cb.innerHTML='';
   CLASSES.forEach((c,i)=>{const b=document.createElement('button');b.type='button';b.className='btn'+(i===P.cls?' on':'');b.textContent=c.n;b.addEventListener('click',()=>switchClass(i));cb.appendChild(b)});
   $('bookClsD').textContent=CLASSES[P.cls].d;
   const sl=$('bookSlots');sl.innerHTML='';
-  EQ.forEach((id,i)=>{const b=document.createElement('button');b.type='button';b.className='btn bk'+(i===armed?' on':'');b.textContent=(i+1)+(id>=0?' '+SKILLS[id].n:' -');b.title=id>=0?SKILLS[id].n:'empty';b.addEventListener('click',()=>{armed=i;renderBook()});sl.appendChild(b)});
+  EQ.forEach((id,i)=>{const b=document.createElement('button');b.type='button';b.className='btn bk'+(i===armed?' on':'');b.textContent=SLOTKEYS[i].toUpperCase()+(id>=0?' '+SKILLS[id].n:' -');b.title=id>=0?SKILLS[id].n:'empty';b.addEventListener('click',()=>{armed=i;renderBook()});sl.appendChild(b)});
   const rows=$('bookRows');rows.innerHTML='';
   SKILLS.map((s,id)=>[s,id]).filter(x=>(x[0].c||0)===P.cls).sort((a,b)=>(P.lvl>=b[0].lv)-(P.lvl>=a[0].lv)||a[1]-b[1]).forEach(([s,id])=>{const ok=P.lvl>=s.lv,row=document.createElement('div');row.className='row'+(ok?'':' lock');
     if(s.sig)row.classList.add('sig');
     const nm=document.createElement('b');nm.style.color=s.col;const ic=document.createElement('span');ic.className='sic';ic.textContent=GLYPH[s.t]||'\u2726';ic.style.color=s.col;ic.style.borderColor=s.col;nm.appendChild(ic);nm.appendChild(document.createTextNode(s.n));if(s.sig){const u=document.createElement('i');u.className='uq';u.textContent='\u2605 UNIQUE';nm.appendChild(u);row.title=(SIGD[s.c].find(y=>y[0]===s.t)||[])[5]||s.n}row.appendChild(nm);
-    const b=document.createElement('button');b.type='button';const sl=EQ.indexOf(id);b.className='btn'+(sl>=0?' on':'');b.textContent=!ok?'Lv '+s.lv:(sl>=0?String(sl+1):'Equip');if(sl>=0)b.title='Equipped in slot '+(sl+1)+' (click to move to the selected slot)';b.disabled=!ok;b.addEventListener('click',()=>equip(id));row.appendChild(b);
+    const b=document.createElement('button');b.type='button';const sl=EQ.indexOf(id);b.className='btn'+(sl>=0?' on':'');b.textContent=!ok?'Lv '+s.lv:(sl>=0?SLOTKEYS[sl].toUpperCase():'Equip');if(sl>=0)b.title='Equipped in slot '+SLOTKEYS[sl].toUpperCase()+' (click to move to the selected slot)';b.disabled=!ok;b.addEventListener('click',()=>equip(id));row.appendChild(b);
     const sm=document.createElement('small');sm.textContent=TL[s.t]+(s.m?' · '+s.m.toFixed(1)+'x ATK':'')+' · '+skCostLbl(s)+' · '+s.cd+'s cooldown';row.appendChild(sm);rows.appendChild(row)});
 }
 function toggleBook(){if(!started)return;const b=$('book');b.hidden=!b.hidden;if(!b.hidden)renderBook()}
@@ -3098,7 +3217,7 @@ const WD={tab:0,cls:0,raf:0,t:0};
 /* tab = [label, option names, look field]. v5_53: every class (Cultivator included) has the SAME tabs and the SAME options. Armor = all class colour schemes pooled. */
 function wdTabs(cl){
   if(!window.AL3D)return [];const A=AL3D;
-  return [['Gender',A.GENDERS,'g'],['Skin',A.SKINS.map(x=>x.n),'p'],['Hair',A.HAIRS,'h'],['Outfit',A.OUTFITS,'o'],['Headwear',A.HEADS,'w'],['Armor',A.ARMORS,'r'],['Accent',A.ACCENTS.map(x=>x.n),'x'],['Aura',A.AURAS,'a']];
+  return [['Gender',A.GENDERS,'g'],['Skin',A.SKINS.map(x=>x.n),'p'],['Hair',A.HAIRS,'h'],['Outfit',A.OUTFITS,'o'],['Headwear',A.HEADS,'w'],['Armor',A.ARMORS,'r'],['Aura',A.AURAS,'a']];
 }
 /* the class tab being edited (WD.cls) is independent of the class you are playing (P.cls); each class has its own saved look */
 const wdLookOf=c=>c===P.cls?SKIN:normLook(LOOKS[c]|0);
@@ -3118,20 +3237,21 @@ function wdRender(){
   T.innerHTML='';tabs.forEach((t,i)=>{const b=document.createElement('button');b.type='button';b.className='btn'+(i===WD.tab?' on':'');b.textContent=t[0];b.addEventListener('click',()=>{WD.tab=i;wdRender()});T.appendChild(b)});
   G.innerHTML='';const names=tabs[WD.tab][1],fk=tabs[WD.tab][2],cur=l[fk];
   names.forEach((n,i)=>{
-    const b=document.createElement('button');b.type='button';if(i===cur)b.className='on';
+    const only=fk==='w'?0:cur;   /* v5_289 every class: Hair / Outfit / Armor list only the worn option, Headwear only "None" (new avatars are coming) */
+    if('howr'.indexOf(fk)>=0&&i!==only)return;   /* v5_288 Cultivator = fixed VRM avatar: Hair / Outfit / Headwear / Armor show only the one it is wearing */
+    const b=document.createElement('button');b.type='button';if(i===only)b.className='on';
     if(fk==='p'){const p=AL3D.SKINS[i],sw=document.createElement('span');sw.className='sw';
       for(const c of (cl>0?[p.skin,p.hair]:[p.robe,p.trim,p.sash])){const e=document.createElement('i');e.style.background=c;sw.appendChild(e)}
       const u=document.createElement('u');u.style.background=p.skin;sw.appendChild(u);b.appendChild(sw)}
     if(fk==='r'){const p=i>0?AL3D.ARMOR_POOL[i-1]:cl>0?AL3D.CLS_SCHEMES[cl][0]:null,sw=document.createElement('span');sw.className='sw';
       const q=AL3D.SKINS[l.p%AL3D.SKINS.length];
       for(const c of (p?[p.r,p.s,p.b]:[q.robe,q.sash,q.boot])){const e=document.createElement('i');e.style.background=c;sw.appendChild(e)}b.appendChild(sw)}
-    if(fk==='x'){const sw=document.createElement('span');sw.className='sw';sw.style.background=AL3D.ACCENTS[i].c||'#9aa5ab';b.appendChild(sw)}
     if(fk==='a'){const sw=document.createElement('span');sw.className='sw';const c=AL3D.AURA_CFG[i];sw.style.background='radial-gradient(circle,'+(c.col||c.ring)+','+c.ring+' 55%,#10161a)';b.appendChild(sw)}
     b.appendChild(document.createTextNode(n));
     b.addEventListener('click',()=>wdSet(fk,i));G.appendChild(b)});
   const cur2=G.querySelector('.on');if(cur2&&cur2.scrollIntoView)try{cur2.scrollIntoView({block:'nearest'})}catch(e){}
   const S=skinOf(lk);
-  $('wdName').innerHTML='<b>'+AL3D.SKINS[S.pi].n+'</b> ('+AL3D.GENDERS[S.ge]+')<br>'+AL3D.HAIRS[S.hs]+' / '+AL3D.OUTFITS[S.ot]+' / '+AL3D.HEADS[S.hw]+'<br>'+AL3D.ARMORS[S.ar]+' / '+AL3D.ACCENTS[S.ax].n+' / '+AL3D.AURAS[S.au];
+  $('wdName').innerHTML='<b>'+AL3D.SKINS[S.pi].n+'</b> ('+AL3D.GENDERS[S.ge]+')<br>'+AL3D.HAIRS[S.hs]+' / '+AL3D.OUTFITS[S.ot]+' / '+'None<br>'+AL3D.ARMORS[S.ar]+' / '+AL3D.AURAS[S.au];
 }
 /* wardrobe preview: the same rotatable Three.js character the bag shows (drag to spin, double-click to face front), for the class tab being edited.
    It has its own WebGL view; if 3D is off or unavailable the flat 2D avatar is painted instead. */
@@ -3335,7 +3455,7 @@ function toggleWardrobe(){
 }
 $('wdClose').addEventListener('click',()=>{$('wardrobe').hidden=true});
 $('wdReset').addEventListener('click',()=>wdApply(AL3D.packLook({p:0,h:WD.cls>0?7:0,o:0,w:0,a:0,g:AL3D.look(wdLookOf(WD.cls)).g,r:0,x:0})));
-$('wdRand').addEventListener('click',()=>{const A=AL3D,c=WD.cls,R=n=>Math.random()*n|0,l={p:R(A.SKINS.length),h:R(A.HAIRS.length),o:R(A.OUTFITS.length),w:R(A.HEADS.length),a:R(A.AURAS.length),g:A.look(wdLookOf(c)).g,r:R(A.ARMORS.length),x:R(A.ACCENTS.length)};wdApply(A.packLook(l))});
+$('wdRand').addEventListener('click',()=>{const A=AL3D,c=WD.cls,R=n=>Math.random()*n|0,l={p:R(A.SKINS.length),h:R(A.HAIRS.length),o:R(A.OUTFITS.length),w:R(A.HEADS.length),a:R(A.AURAS.length),g:A.look(wdLookOf(c)).g,r:R(A.ARMORS.length),x:0};wdApply(A.packLook(l))});
 $('wardrobe').addEventListener('mousedown',e=>{if(e.target.id==='wardrobe')$('wardrobe').hidden=true});
 
 /* ---------- update ---------- */
@@ -3637,7 +3757,7 @@ function updatePlayer(dt){
   const ox0=P.x,oy0=P.y;
   pot.hp=Math.max(0,pot.hp-dt);pot.qi=Math.max(0,pot.qi-dt);pot.tp=Math.max(0,pot.tp-dt);pot.ck=Math.max(0,pot.ck-dt);
   if(P.tp>0){if(dist(P.x,P.y,P.tpx,P.tpy)>30)cancelTp('Teleport cancelled: you moved.');else{P.tp-=dt;tpFx(dt);if(P.tp<=0)finishTp()}}
-  autoPot();for(let i=0;i<SCD.length;i++)if(SCD[i]>0)SCD[i]-=dt;P.bfT-=dt;P.vlT-=dt;P.drT-=dt;P.ceT-=dt;if(P.lsT>0)P.lsT-=dt;if(P.rfT>0)P.rfT-=dt;if(P.linkT>0)P.linkT-=dt;if(P.markT>0)P.markT-=dt;if(P.absT>0)P.absT-=dt;if(P.gsT>0)P.gsT-=dt;if(P.galeLock>0)P.galeLock-=dt;P.inv-=dt;if(P.shT>0){P.shT-=dt;if(P.shT<=0)P.sh=0}
+  autoPot();for(let i=0;i<SCD.length;i++)if(SCD[i]>0)SCD[i]-=dt;P.bfT-=dt;P.vlT-=dt;P.drT-=dt;P.ceT-=dt;if(P.lsT>0)P.lsT-=dt;if(P.rfT>0)P.rfT-=dt;if(P.linkT>0)P.linkT-=dt;if(P.markT>0)P.markT-=dt;if(P.absT>0)P.absT-=dt;if(P.gsT>0)P.gsT-=dt;if(P.slowT>0)P.slowT-=dt;if(P.sprT>0)P.sprT-=dt;if(P.galeLock>0)P.galeLock-=dt;P.inv-=dt;if(P.shT>0){P.shT-=dt;if(P.shT<=0)P.sh=0}
   P.qi=Math.min(maxQi(),P.qi+dt*(3+P.lvl*.1+maxQi()*qrgVal()/100));
   if(P.hubSkMsg>0)P.hubSkMsg-=dt;
   if(P.rngMsg>0)P.rngMsg-=dt;
@@ -3647,6 +3767,8 @@ function updatePlayer(dt){
   if(amine&&!P.task&&!P.target&&!P.mv&&P.tp<=0&&!inTown()){
     amT-=dt;if(amT<=0){amT=.5;const o=nearestOre();if(o){P.task=o;P.mine=0;amWait=false}else if(!amWait){amWait=true;say('Auto-mine: waiting for an ore vein to respawn.','#8d9aa2')}}
   }
+  {const rd=Math.hypot(P.x-(P.rlx===undefined?P.x:P.rlx),P.y-(P.rly===undefined?P.y:P.rly));P.rlx=P.x;P.rly=P.y; /* v5_278 how long you have been running without stopping (teleports / knock-backs are ignored) */
+   if(rd>dt*40&&rd<dt*moveSpd()*4)P.runT=(P.runT||0)+dt;else if(rd<=dt*40)P.runT=0}
   const speed=P.cast>0?0:moveSpd(); /* rooted while casting */
   let ix=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0)+joy.x;
   let iy=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)+joy.y;
@@ -3715,6 +3837,7 @@ function updatePlayer(dt){
     if(P.dashT<=0){ring(P.x,P.y,58,'#bfe9ff');spark(P.x,P.y,'#e8f6ff',12,110,.4,3);}}
   const d=dist(P.x,P.y,C,C);
   if(d>RIM-20){P.x=C+(P.x-C)/d*(RIM-20);P.y=C+(P.y-C)/d*(RIM-20)}
+  autoRealmClamp(); /* v5_283 auto-hunt stays within 1 zone of where it was started */
   if(solidPush(P)&&P.mv){P.mvBlk=(P.mvBlk||0)+dt;if(P.mvBlk>.35){P.mv=null;P.mvBlk=0}}else P.mvBlk=0; /* v5_167 solid structures; a click-to-move that keeps pressing into a wall is cancelled */
   playerVert(dt);
   const mvd=Math.hypot(P.x-ox0,P.y-oy0);
@@ -4893,7 +5016,12 @@ function sync3(map,list,make,upd,vis){const fr=T3.fr;
   for(const [o,m] of map)if(m.userData.f!==fr){T3.sc.remove(m);if(m.userData.mat)m.userData.mat.dispose();map.delete(o)}}
 function proj3(x,y,h){const v=T3.v.set(x-C,gh3(x,y)+h,y-C).project(T3.cam);return v.z>1?null:{x:(v.x+1)/2*VW,y:(1-v.y)/2*VH}}
 function pick3(e){const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1,.5).unproject(T3.cam),o=T3.cam.position;v.sub(o).normalize();
-  if(v.y>=-.01)return null;const t=(gh3(P.x,P.y)-o.y)/v.y;return {x:o.x+v.x*t+C,y:o.z+v.z*t+C}}
+  if(v.y>=-.01)return null;let t=(gh3(P.x,P.y)-o.y)/v.y;
+  for(let k=0;k<3;k++){const h=gh3(o.x+v.x*t+C,o.z+v.z*t+C),t2=(h-o.y)/v.y;if(!(t2>0)||t2>9000)break;t=t2} /* v5_276 refine against the real terrain height (was one flat plane at the player's height, so on a slope the click landed beside / short of the spot you pointed at) */
+  return {x:o.x+v.x*t+C,y:o.z+v.z*t+C}}
+/* v5_276 the ground direction (unit vector) of a click that hit the sky / horizon, or null */
+function skyHeading(e){const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1,.5).unproject(T3.cam),o=T3.cam.position;v.sub(o).normalize();
+  const l=Math.hypot(v.x,v.z);return l>.05?{x:v.x/l,y:v.z/l}:null}
 /* v5_173 extra 3D effects (web/fx3d.js): sky gradient dome, additive glow sprites, light pillars (the 2D 'beams' were missing in 3D mode).
    Self-contained: if anything in it throws, only this layer switches off (the game keeps running). Off switch: ?fx3=0 in the URL or localStorage woa_fx3='0'. */
 const FXC={};
@@ -4924,14 +5052,14 @@ function render3D(){
       const cl=gh3(tx+ox+C,tz+oz+C)+30-(ty+st*D);if(cl>lift)lift=cl;
       T3.lift=lift>(T3.lift||0)?lift:(T3.lift||0)+(lift-(T3.lift||0))*.06;
       T3.cam.position.set(tx+ox+(Math.random()-.5)*sh,ty+st*D+T3.lift,tz+oz)}T3.cam.lookAt(tx,gy+24+(T3.cz||0),tz);if(camView.tilt<CAM_TILT_MIN)T3.cam.rotateX(CAM_TILT_MIN-camView.tilt);T3.cam.updateMatrixWorld();T3.pm.multiplyMatrices(T3.cam.projectionMatrix,T3.cam.matrixWorldInverse);T3.frus.setFromProjectionMatrix(T3.pm);
-    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=Math.PI/2-P.face;pl.rotation.x=P.dead>0?-1.4:0;if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());P.ft=armorFireTier(P);AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
+    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=smoothYaw(pl,Math.PI/2-P.face);pl.rotation.x=P.dead>0?-1.4:0;if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());P.ft=armorFireTier(P);AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
     let rpl=NONE;
     if(MP&&NET.peers.size){const prg=LOW?800:1200,PMAX=LOW?PQ.peers:14;let nw=0;rpl=[];
       for(const q of NET.peers.values()){const had=T3.rp.has(q),e=prg+(had?150:0);if(Math.abs(q.x-P.x)>e||Math.abs(q.y-P.y)>e)continue;
         if(!had){if(nw>=1)continue;nw++}rpl.push(q)}
       if(rpl.length>PMAX){rpl.sort((a,b)=>Math.hypot(a.x-P.x,a.y-P.y)-Math.hypot(b.x-P.x,b.y-P.y));rpl.length=PMAX}}
     sync3(T3.rp,rpl,q=>{const R=AL3D.makePlayer(q.sk),g=R.root;g.userData.rig=R;g.userData.mat={dispose(){try{Object.values(R.m).forEach(x=>x.dispose&&x.dispose())}catch(e){}}};return g},
-      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=Math.PI/2-q.face;g.rotation.x=q.dead>0?-1.4:0;q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
+      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=smoothYaw(g,Math.PI/2-q.face);g.rotation.x=q.dead>0?-1.4:0;q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
       null);
     peerPets3(rpl===NONE?NONE:rpl); /* v5_201 other players' pets */
     {const rg=((LOW?650:900)+(LOW?200:300)*T3.zoom)*(PQ.lock?PQ.mon:1);sync3(T3.mp,mons,mkMon,updMon,m=>(!m.dead||m.dieT>0)&&Math.abs(m.x-P.x)<rg+(T3.mp.has(m)?150:0)&&Math.abs(m.y-P.y)<rg-100+(T3.mp.has(m)?150:0))}
@@ -5043,7 +5171,11 @@ function drawVitals(){
     ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH);
   }
 }
-
+/* v5_275 SMOOTH TURNING: the character (yours and other players') turns toward its facing over ~0.15 s by the shortest way round instead of snapping. Only the 3D model is smoothed; P.face (aiming, attacks) stays instant. */
+function smoothYaw(o,tg){const now=performance.now(),dt=Math.min(.1,Math.max(0,(now-(o._yt||now))/1000));o._yt=now;
+  if(o._yw===undefined||!isFinite(o._yw)){o._yw=tg;return tg}
+  let da=tg-o._yw;da=Math.atan2(Math.sin(da),Math.cos(da));
+  o._yw+=da*(1-Math.exp(-dt*18));return o._yw}
 /* ---------- HUD ---------- */
 const el={hp:$('hp'),qi:$('qi'),xp:$('xp'),tg:$('tg'),tgHp:$('tgHp')};
 const power=()=>Math.round(atkVal()*6+defVal()*4+maxHp()*.25);
@@ -5137,6 +5269,7 @@ function hud(){
   renderOnline();
   if(rsvEl){const ri=P.rsv>=0?P.rsv:P.rsvA,rk=ri>=0?SKILLS[EQ[ri]]:null,key=rk?EQ[ri]+(P.rsv>=0?'m':'a'):'';
     if(key!==rsvKey){rsvKey=key;rsvEl.hidden=!rk;if(rk){rsvEl.style.borderColor=rk.col;rsvEl.classList.toggle('man',P.rsv>=0);rsvEl.innerHTML='<b style="color:'+rk.col+'">'+(GLYPH[rk.t]||'\u2726')+'</b><u>Reserved</u>'}}} /* v5_189 */
+  if(sprEl){const vis=P.runT>=SPRINT_SHOW_T||P.sprT>0;if(vis!==sprEl._vis){sprEl._vis=vis;sprEl.style.display=vis?'':'none'}const on=P.sprT>0;if(on!==sprEl._on){sprEl._on=on;sprEl.classList.toggle('on',on)}const t=on?String(Math.ceil(P.sprT)):'';if(t!==sprEl._t){sprEl._t=t;sprEl.children[2].textContent=t}} /* v5_277 */
   skBtns.forEach((b,i)=>{const id=EQ[i],k=SKILLS[id],cd=k?Math.max(0,SCD[id]):0;
     sh(b.lastElementChild,k?(cd/k.cd*100)+'%':'0');
     st(b.children[2],cd>0?fmtT(cd):'');
@@ -5166,7 +5299,7 @@ onlineApply();
 $('bMap').addEventListener('click',toggleMap);
 $('bBell').classList.add('on');
 $('bBell').addEventListener('click',()=>{const l=$('log');l.hidden=!l.hidden;$('bBell').classList.toggle('on',!l.hidden)});
-function syncMenuOpts(){$('autoPot').checked=!!P.autoPot;$('apHp').value=P.apHp||35;$('apHpV').textContent=(P.apHp||35)+'%';$('apQi').value=P.apQi||20;$('apQiV').textContent=(P.apQi||20)+'%';$('fightBack').checked=!!P.fightBack;$('tapMove').checked=P.tapMove!==false;$('perfSel').value=PERF}
+function syncMenuOpts(){$('autoPot').checked=!!P.autoPot;$('apHp').value=P.apHp||35;$('apHpV').textContent=(P.apHp||35)+'%';$('apQi').value=P.apQi||20;$('apQiV').textContent=(P.apQi||20)+'%';$('fightBack').checked=!!P.fightBack;$('tapMove').checked=P.tapMove!==false;$('joySmall').checked=!!P.joySmall;$('perfSel').value=PERF}
 $('bGear').addEventListener('click',()=>{const m=$('menu');m.hidden=!m.hidden;if(!m.hidden)syncMenuOpts()});
 $('bSaver').addEventListener('click',()=>{if(!started)return;$('menu').hidden=true;saverOn(true)});
 /* volume sliders (menu): music and sound effects are separate and remembered */

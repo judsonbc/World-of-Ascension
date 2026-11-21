@@ -157,7 +157,7 @@ function petCombValidate(){if(!petComb)return;const o=petsObj();if(!(o[petComb.a
    (PET_ATK_PCT, F..S) x the species factor f, once every iv seconds, on your target or the nearest monster within PET_RANGE of you. It goes through hitMonster, so accuracy, monster
    defence, level gap and kill credit work like your own hits. Spirit Summoners already have wolves, so their pet's attack is halved (PET_SUMMONER_K).
    Species: Tiger / Wolf fast melee | Dragon slow fire breath that also scorches up to 2 enemies near the target | Phoenix hit + burn | Fairy weak hit + heals you | Chicken weak peck. */
-const PET_ATK_PCT=[6,9,13,18,24,31,40],PET_RANGE=320,PET_SUMMONER_K=.5;
+const PET_ATK_PCT=[6,9,13,18,24,31,40],PET_RANGE=320,PET_SUMMONER_K=.5,PET_DMG_K=1.2; /* v5_283 PET_DMG_K: every pet hit (and the Phoenix burn ticks, which are a share of the hit) does 20% more */
 const PET_FIGHT=[
  {kind:'peck',f:.4,iv:1.5,col:'#f3e6c4'},   /* 0 Chicken */
  {kind:'fire',f:1.15,iv:2.2,col:'#ff7a22'},  /* 1 Dragon */
@@ -168,14 +168,57 @@ const PET_FIGHT=[
 const petHitDmg=()=>{ /* damage of one pet hit before the monster's own defence, 0 when there is no pet */
   if(!P.pet)return 0;const p=petParse(P.pet),F=PET_FIGHT[p.s];if(!F)return 0;
   const atk=atkVal()/(1+petPct('atk'));
-  return atk*PET_ATK_PCT[p.s===0?0:p.c]/100*F.f*(P.cls===4?PET_SUMMONER_K:1)};
+  return atk*PET_ATK_PCT[p.s===0?0:p.c]/100*F.f*(P.cls===4?PET_SUMMONER_K:1)*PET_DMG_K};
 let petCd=0,petHc=0,petFightAt=-99,petAtkN=0,petTgt=null; /* petFightAt (v5_221): game time of the pet's last attack, drives the dragon's take-off / landing */
+/* v5_281 MELEE PETS: Tiger (claw) and Wolf (bite) run up to the enemy, strike from right beside it, and stay there until it dies or is out of reach, then run back to you.
+   PET_LUNGE = run speed (units/s), PET_STAND = gap between the enemy's edge and the pet, PET_HIT_REACH = how close it must be to land a hit, PET_CHASE = the enemy must be within this of YOU or the pet gives up. */
+const PET_LUNGE=380,PET_STAND=16,PET_HIT_REACH=36,PET_CHASE=520;
+const petIsMelee=F=>!!F&&(F.kind==='claw'||F.kind==='bite');
+/* v5_283 WHEN YOU MOVE THE PET STOPS ATTACKING: petPlayerMoving(dt) is true while you are moving (and for PET_MOVE_HOLD s after, so it does not flicker between frames).
+   Ranged pets simply hold their attack; Tiger / Wolf let go of their enemy and follow you (their cooldown keeps running). They attack again once you stand still. */
+const PET_MOVE_HOLD=.4;let petMvT=0,petLx=null,petLy=null;
+function petPlayerMoving(dt){
+  if(petLx!==null&&dt>0&&Math.hypot(P.x-petLx,P.y-petLy)>dt*12)petMvT=PET_MOVE_HOLD;else petMvT=Math.max(0,petMvT-dt);
+  petLx=P.x;petLy=P.y;return petMvT>0;
+}
+const petTgtOk=m=>!!m&&!m.dead&&!m.pend&&!m.isPl&&dist(m.x,m.y,P.x,P.y)<PET_CHASE;
+function petMeleeStep(f,m,dt){ /* v5_284 SMOOTH MELEE: the pet keeps ONE slot on a ring round the enemy (the side it came from, fixed per enemy) and moves its velocity smoothly toward it:
+     ease-in (accelerates), ease-out (slows down on arrival, no sudden stop), follows a moving enemy without jitter, and only backs off (slowly) if the enemy walks into it. */
+  const ox=f.x,oy=f.y,st=m.r+PET_STAND;
+  if(f.mt!==m){f.mt=m;f.sa=Math.atan2(f.y-m.y,f.x-m.x)}
+  if(f.mode!=='m'){f.mode='m';const q=Math.max(f.dt||.016,.001);f.ux=(f.vx||0)/q;f.uy=(f.vy||0)/q} /* carry the roaming speed over, no jump */
+  const ad=Math.hypot(f.x-m.x,f.y-m.y),tx=m.x+Math.cos(f.sa)*st,ty=m.y+Math.sin(f.sa)*st,dx=tx-f.x,dy=ty-f.y,dd=Math.hypot(dx,dy);
+  let sp=dd<5?0:Math.min(PET_LUNGE,dd*5);                 /* proportional approach: slows down as it gets close */
+  if(ad<=st+2)sp=0;                                       /* already at its standing distance (or the enemy walked into it): it only ever closes in, it never moves away from the enemy */
+  const vx=dd>.001?dx/dd*sp:0,vy=dd>.001?dy/dd*sp:0,k=Math.min(1,dt*9);
+  f.ux+=(vx-f.ux)*k;f.uy+=(vy-f.uy)*k;
+  let mx=f.ux*dt,my=f.uy*dt;const ml=Math.hypot(mx,my);if(ml>dd&&ml>0){mx*=dd/ml;my*=dd/ml}   /* never overshoot the slot */
+  f.x+=mx;f.y+=my;f.spd=Math.hypot(f.ux,f.uy);
+  f.wx=undefined;f.wait=0; /* roaming picks a fresh spot near you after the fight */
+  f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sv=Math.hypot(f.x-ox,f.y-oy)/Math.max(dt,.001);f.mv+=((sv>40?1:0)-f.mv)*Math.min(1,dt*10);
+  f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
+  return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+}
 function petFight(dt){
+  if(P.pf)P.pf.tgt=null; /* melee target is set again below every frame it still applies */
+  const moving=petPlayerMoving(dt);
   if(!P.pet||!P.pf||P.dead>0||inTown())return;
   const p=petParse(P.pet),F=PET_FIGHT[p.s];if(!F)return;
   const f=P.pf;petCd-=dt;
+  if(petIsMelee(F)){
+    if(pvpOnly()||moving)return; /* v5_283 you are moving: no target, the pet follows you instead (petStep) */
+    let b=petTgtOk(P.target)?P.target:(petTgtOk(petTgt)&&!petTgt.dead?petTgt:null);
+    if(!b){let bd=PET_RANGE;for(const m of mons){if(m.dead||m.pend)continue;const d=dist(m.x,m.y,P.x,P.y);if(d<bd){bd=d;b=m}}}
+    if(!b)return;
+    f.tgt=b;petTgt=b;
+    if(petCd>0||dist(f.x,f.y,b.x,b.y)>b.r+PET_HIT_REACH)return; /* still running up to it, or recovering */
+    petCd=F.iv;petFightAt=time;petAtkN++;
+    const d=Math.max(1,Math.round(petHitDmg()*(.9+rnd()*.2)));hitMonster(b,d,false);
+    spark(b.x,b.y,F.col,8,150,.35,3);
+    return;
+  }
   if(F.heal){petHc-=dt;if(petHc<=0){petHc=F.hiv;const mh=maxHp();if(P.hp<mh*.95){const h=Math.max(1,Math.round(mh*F.heal[p.c]/100));P.hp=Math.min(mh,P.hp+h);pop(P.x,P.y-40,'+'+h,'#7dffb0',13);spark(f.x,f.y,'#ff9ad5',10,110,.5,3);ring(P.x,P.y,40,'#7dffb0')}}}
-  if(petCd>0||pvpOnly())return;
+  if(petCd>0||pvpOnly()||moving)return; /* v5_283 no attacks while you are moving */
   let b=(P.target&&!P.target.isPl&&!P.target.dead&&!P.target.pend&&dist(P.target.x,P.target.y,P.x,P.y)<PET_RANGE)?P.target:null,bd=PET_RANGE;
   if(!b)for(const m of mons){if(m.dead||m.pend)continue;const d=dist(m.x,m.y,P.x,P.y);if(d<bd){bd=d;b=m}}
   if(!b)return;
@@ -195,8 +238,8 @@ function petFight(dt){
 function petInfoText(s,c){
   const g=PET_GF[c]*(s===0?PET_CHICKEN_K:1),st=PET_PAIR[s]||[],lbl={atk:'ATK',hp:'HP',def:'DEF',acc:'accuracy',eva:'evasion'};
   const gives=st.map(k=>'+'+(Math.round(PET_STAT_S[k]*g*10)/10)+(PET_FLAT[k]?(k==='eva'?'% ':' '):'% ')+lbl[k]).join(', ');
-  const F=PET_FIGHT[s],pc=PET_ATK_PCT[s===0?0:c]*F.f*(P.cls===4?PET_SUMMONER_K:1);
-  const how=F.kind==='spark'?'weak sparks and heals you '+F.heal[c]+'% HP every '+F.hiv+' s when hurt':{peck:'weak pecks',fire:'fire breath that also scorches 2 nearby enemies',burn:'hits that also burn',claw:'fast claw strikes',bite:'fast bites'}[F.kind];
+  const F=PET_FIGHT[s],pc=PET_ATK_PCT[s===0?0:c]*F.f*(P.cls===4?PET_SUMMONER_K:1)*PET_DMG_K;
+  const how=F.kind==='spark'?'weak sparks and heals you '+F.heal[c]+'% HP every '+F.hiv+' s when hurt':{peck:'weak pecks',fire:'fire breath that also scorches 2 nearby enemies',burn:'hits that also burn',claw:'fast claw strikes: it runs up to the enemy',bite:'fast bites: it runs up to the enemy'}[F.kind];
   return ' Gives you '+gives+'. It attacks for about '+(Math.round(pc*10)/10)+'% of your ATK every '+F.iv+' s ('+how+').';
 }
 
@@ -229,8 +272,20 @@ let petT=0;
    and catches up faster (up to PET_CATCH_MAX). Teleport (more than PET_SNAP away) snaps it next to you. Used for your pet and for other players' pets (peerPetStep).
    Tune PET_ROAM_R (how far it may wander), PET_ROAM_MIN, PET_WALK, PET_PAUSE, PET_CATCH_MAX. Returns the hop height. */
 const PET_ROAM_R=170,PET_ROAM_MIN=45,PET_WALK=85,PET_CATCH_MAX=420,PET_PAUSE=[1.2,3.2],PET_SNAP=700;
-function petRoamStep(f,px,py,dt){
+function petRoamStep(f,px,py,dt,trail,face){
   const ox=f.x,oy=f.y,d=Math.hypot(f.x-px,f.y-py);
+  if(f.mode==='m'){f.mode='r';f.spd=Math.hypot(f.ux||0,f.uy||0)}   /* leaving a fight: keep the running speed and slow down smoothly */
+  if(trail){ /* v5_284 you are moving: the pet trails just behind / beside you instead of picking a random spot (maybe ahead of you), and its speed follows its distance to that spot */
+    f.side=f.side||(Math.random()<.5?-1:1);
+    const bx=-Math.cos(face),by=-Math.sin(face);
+    f.wx=px+bx*80-by*f.side*42;f.wy=py+by*80+bx*f.side*42;f.wait=0;
+    const dx=f.wx-f.x,dy=f.wy-f.y,dd=Math.hypot(dx,dy),want=dd<14?0:Math.min(PET_CATCH_MAX,Math.max(PET_WALK,dd*3.2));
+    f.spd=f.spd||0;f.spd+=(want-f.spd)*Math.min(1,dt*7);
+    const mvd=Math.min(f.spd*dt,dd);if(dd>.001){f.x+=dx/dd*mvd;f.y+=dy/dd*mvd}
+    f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sp=Math.hypot(f.x-ox,f.y-oy)/Math.max(dt,.001);f.mv+=((sp>40?1:0)-f.mv)*Math.min(1,dt*10);
+    f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
+    return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+  }
   const pick=()=>{const a=Math.random()*6.2832,r=PET_ROAM_MIN+Math.random()*(PET_ROAM_R-PET_ROAM_MIN);f.wx=px+Math.cos(a)*r;f.wy=py+Math.sin(a)*r;f.wait=0};
   if(f.wx===undefined||Math.hypot(f.wx-px,f.wy-py)>PET_ROAM_R)pick();   /* no spot yet, or you walked off and the spot is now too far from you */
   if(f.wait>0&&d>PET_ROAM_R*1.15)f.wait=0;                              /* you left it behind: stop resting and follow */
@@ -252,7 +307,8 @@ function petStep(is3){
   petValidate();if(!P.pet)return 0;
   const now=performance.now(),dt=Math.min(.1,petT?(now-petT)/1000:.016);petT=now;
   if(!P.pf||Math.hypot(P.pf.x-P.x,P.pf.y-P.y)>PET_SNAP)P.pf={x:P.x+54,y:P.y,mv:0};
-  return petRoamStep(P.pf,P.x,P.y,dt);
+  if(P.pf.tgt&&petTgtOk(P.pf.tgt))return petMeleeStep(P.pf,P.pf.tgt,dt); /* v5_281 Tiger / Wolf: go to the enemy */
+  return petRoamStep(P.pf,P.x,P.y,dt,petMvT>0,P.face||0);
 }
 /* ---- 3D pet models (web/pets3d.js). Each view (world, bag, forge) owns its own rig; the model is rebuilt only when the summoned pet changes. ---- */
 const PET_WORLD_K=1.15;
@@ -281,7 +337,8 @@ function petRender3(){
     if(T.petSp)T.petSp.visible=false;
     const fighting=!inTown()&&P.dead<=0&&(combatT>0||time-petFightAt<4);
     let want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):Math.PI/2-P.face;
-    if(fighting&&petTgt&&!petTgt.dead&&time-petFightAt<2.5)want=Math.atan2(petTgt.x-f.x,petTgt.y-f.y);   /* v5_222 turn to face the enemy it is attacking */
+    if(fighting&&petTgt&&!petTgt.dead&&time-petFightAt<2.5)want=Math.atan2(petTgt.x-f.x,petTgt.y-f.y);
+    if(f.tgt&&!f.tgt.dead&&Math.hypot(f.tgt.x-f.x,f.tgt.y-f.y)<f.tgt.r+PET_HIT_REACH+50)want=Math.atan2(f.tgt.x-f.x,f.tgt.y-f.y);   /* v5_284 right beside its enemy: face it (before, it turned to your facing until its first hit) */   /* v5_222 turn to face the enemy it is attacking */
     if(f.yaw===undefined)f.yaw=want;
     let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*(fighting?10:7));
     rig.root.visible=true;rig.root.scale.setScalar(PET_WORLD_K);

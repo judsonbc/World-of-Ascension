@@ -1,3 +1,139 @@
+v5_299 SMALL VRM FILES: 104 MB -> 13 MB  (all 10 web/*.vrm, new tools/slim_vrm.py; no code change)
+  - Every avatar file is now 1.0 - 1.6 MB (was 9 - 14 MB): the ten models together shrink from 104.5 MB to 12.9 MB, so the exe and the first download of a player are about 91 MB smaller.
+  - What was removed: (1) the textures vrm3d.js never draws (the shade, matcap, rim, outline and similar MToon maps, plus any normal / emissive maps: only the 2 base-colour maps per model are used), (2) the blend-shape / face-expression data (342 morph-target arrays per model; the game does not use expressions), (3) the base-colour maps were scaled from 2048 px to 512 px (the game never zooms in close enough to see more; PNG with alpha kept, so hair / lash cut-outs look the same).
+  - Not touched: the meshes, skeleton, humanoid bones and skin weights are byte-identical, so the animation, scale and look are unchanged. The files stay valid VRM 1.0 / GLB.
+  - tools/slim_vrm.py does this to any VRM (python3 + Pillow; edit INPUT / MAXTEX at the top: 512 = current size, 1024 = sharper and about 3x bigger). Use it on every new avatar you add, the originals are not needed by the game.
+
+v5_298 NO HALO RING, NO ACCENT TAB  (web/models3d.js, web-src/client/01_core.js, 04_input_wardrobe.js -> rebuilt web/game.js)
+  - The spinning ring above the head (the halo that appeared at armor level 50+) is deleted from every 3D character, including its animation.
+  - Wardrobe: the Accent tab is removed (Gender, Skin, Hair, Outfit, Headwear, Armor and Aura remain), also its colour swatches, its entry in the name line under the preview and its part in the Randomize button. Accent was only the trim / ring colour, which the VRM avatars do not use.
+  - Saved accents are ignored: normLook and skinOf force the accent to 0 for your look and for other players' looks, so nothing breaks with old saves. The look number layout is unchanged (the accent bits are simply always 0).
+  - Not touched: the ground ring of the level aura, the Aura tab (Jade Ring etc.) and the armor fire.
+
+v5_297 ARMS SWING FREELY ON EVERY CLASS  (web/models3d.js only)
+  - With the weapons gone some avatars still kept their arms in the weapon pose: the Storm Archer held both arms raised (bow draw) with the body turned sideways, the Spirit Summoner kept both arms fixed at staff / orb height, and the Cultivator's right arm only swung a quarter as far as the left (sword hand).
+  - Now all five classes use the same arm animation: both arms swing against the legs while moving, hang loose when standing, and the right arm still swings on an attack. The Storm Archer's sideways stance and the Spirit Summoner's held-arm pose are removed. The casting pose (both arms up over the head) is unchanged.
+
+v5_296 ALL OLD WEAPONS DELETED  (web/models3d.js, web/vrm3d.js; game.js untouched)
+  - Deleted from the 3D rigs: the Cultivator sword (blade, tip, glow), the Night Blade daggers, the Iron Guardian war hammer and tower shield, the Storm Archer bow and nocked arrow, the Spirit Summoner lantern staff and floating soul orb, plus their forge-tier glow shells (R.wg). This is for every body, the built-in ones too, so no 3D character holds a weapon any more.
+  - Deleted with them: the VRM hand-mounting code and the HOLD switch of v5_295 (R.vrmKit, sword / dagger mounts in vrm3d.js). New weapons will be written later; the arm animations (walk, swing, cast) are unchanged, so the hands just swing empty.
+  - Not touched: the Primary Weapon (Blade) item, its icon, forge level and stats (the gear system is unchanged, only the 3D object is gone), armor fire / glow, halo, aura, spirit wolf, sparks, cape and wisps. Removed from the animation: the lantern pulse, the soul-orb bob and the bow-arrow hide during the draw.
+  - Rebuild: only web/models3d.js and web/vrm3d.js changed (web/ is embedded, so run build.bat).
+
+v5_295 VRM AVATARS HOLD NOTHING  (web/vrm3d.js only)
+  - The Cultivator, Night Blade, Iron Guardian, Storm Archer and Spirit Summoner VRM avatars no longer carry anything: the sword, daggers, war hammer, tower shield, bow (and nocked arrow), lantern staff and soul orb are hidden, with their glow. Reason: new weapons are being made for the avatars.
+  - Switch: HOLD at the top of vrm3d.js (const HOLD=false). Set it to true to put the old weapons back into the VRM hands. The built-in (fallback) bodies still show their own weapons, and the armor fire, halo, aura, spirit wolf, sparks and ground ring are unchanged.
+
+v5_294 VRM AVATARS FOR THE SPIRIT SUMMONER  (web/vrm3d.js, web/SpiritSummoner_He.vrm, web/SpiritSummoner_She.vrm, two lines in web/models3d.js; game.js untouched)
+  - The Spirit Summoner class is now the VRM model SpiritSummoner_He.vrm (gender He) / SpiritSummoner_She.vrm (gender She) in the 3D view (you, other players, Wardrobe / Bag / Forge previews). All five classes now have VRM avatars; the built-in bodies stay as the fallback if a file cannot be loaded.
+  - vrm3d.js now holds ten models. Spirit Summoner He is drawn at 31 units per metre (about 56 tall), She at 30.5 (about 49); change suhe.scale / sushe.scale in MODELS to resize.
+  - The soul-lantern staff (right hand, held upright, lamp pulse kept) and the floating soul orb with its ring (left hand) are re-parented to the VRM hands (R.vrmKit[4]). The old headdress, robe, rib chest, skull pauldron, sash ribbons and bracers are hidden because the VRM has its own outfit; the spirit wolf companion, armor fire, halo, aura and ground ring still work.
+  - Animation is the old rig's, copied onto the VRM bones. Hair / Outfit / Skin options do not change the body. ?vrm=0 turns all VRM avatars off.
+  - Rebuild the server (build.bat): web/ is embedded, the exe grows by about the size of the two models.
+
+v5_293 VRM AVATARS FOR THE STORM ARCHER  (web/vrm3d.js, web/StormArcher_He.vrm, web/StormArcher_She.vrm, two lines in web/models3d.js; game.js untouched)
+  - The Storm Archer class is now the VRM model StormArcher_He.vrm (gender He) / StormArcher_She.vrm (gender She) in the 3D view (you, other players, Wardrobe / Bag / Forge previews). Cultivator, Night Blade and Iron Guardian keep their VRMs; only the Spirit Summoner still has the built-in body.
+  - vrm3d.js now holds eight models. Storm Archer He is drawn at 30 units per metre (about 56 tall), She at 33.5 (about 48); change sahe.scale / sashe.scale in MODELS to resize.
+  - The recurve bow with its nocked lightning arrow (and glow) is re-parented to the left VRM hand (R.vrmKit[3]); the arrow still hides during the draw animation. The old cap, feather, goggles, coat, cape and quiver are hidden because the VRM has its own outfit; the crackling sparks, armor fire, halo, aura and ground ring still work.
+  - Animation is the old rig's, copied onto the VRM bones. Hair / Outfit / Skin options do not change the body. If a file cannot be loaded the built-in Storm Archer stays. ?vrm=0 turns all VRM avatars off.
+  - Rebuild the server (build.bat): web/ is embedded, the exe grows by about the size of the two models.
+
+v5_292 VRM AVATARS FOR THE IRON GUARDIAN  (web/vrm3d.js, web/IronGuardian_He.vrm, web/IronGuardian_She.vrm, small changes in web/models3d.js; game.js untouched)
+  - The Iron Guardian class is now the VRM model IronGuardian_He.vrm (gender He) / IronGuardian_She.vrm (gender She) in the 3D view (you, other players, Wardrobe / Bag / Forge previews). Cultivator and Night Blade keep their VRMs; Storm Archer / Spirit Summoner keep their built-in bodies.
+  - vrm3d.js now holds six models (MODELS at the top: file + scale + kit). Iron Guardian He is drawn at 31 units per metre (about 56 tall). IronGuardian_She is a small model (1.31 m), so she is drawn at 36 units per metre (about 47 tall); change igshe.scale to resize her.
+  - The war hammer (with its forge glow) is re-parented to the right VRM hand and the tower shield to the left one. The class weapons now come from one table, R.vrmKit (models3d.js), shared with the Night Blade daggers (v5_291, which used R.nbDag).
+  - The old helm, plate, pauldrons and cape are hidden (the VRM has its own outfit); armor fire, halo, aura, shield bubble and ground ring still work. Animation is the old rig's, copied onto the VRM bones. Hair / Outfit / Skin options do not change the body. If a file cannot be loaded the built-in Iron Guardian stays. ?vrm=0 turns all VRM avatars off.
+  - Rebuild the server (build.bat): web/ is embedded, the exe grows by about the size of the two models.
+
+v5_291 VRM AVATARS FOR THE NIGHT BLADE  (web/vrm3d.js, web/NightBlade_He.vrm, web/NightBlade_She.vrm, two lines in web/models3d.js; game.js untouched)
+  - The Night Blade class is now the VRM model NightBlade_He.vrm (gender He) / NightBlade_She.vrm (gender She) in the 3D view (you, other players, Wardrobe / Bag / Forge previews). Cultivator keeps its own two VRMs; Iron Guardian / Storm Archer / Spirit Summoner keep their built-in bodies.
+  - vrm3d.js now holds four models (MODELS at the top: file + scale + nb flag): he, she, nbhe, nbshe. Night Blade He is drawn at 31 units per metre (about 52 tall), She at 30.5 (about 49). Each file is fetched the first time it is needed; switching class or gender swaps models at once.
+  - Animation is unchanged: the old rig drives walk, attacks, torso twist and head, and vrm3d.js copies the angles onto the VRM bones.
+  - The twin daggers (with their forge glow) are re-parented to the VRM hands (right = forward grip, left = reverse grip, same as before); the old hood, mask, scarf, cloak and pauldrons are hidden because the VRM has its own outfit. The shadow wisps and aura / halo / shield / ground ring still work.
+  - Skin / Hair / Outfit / Headwear options do not change the Night Blade body any more (same as the Cultivator VRM; the Wardrobe already lists only the worn option since v5_289). Spring bones, MToon outlines and blend-shape faces are not used. If a file cannot be loaded the built-in Night Blade stays. ?vrm=0 turns all VRM avatars off.
+  - Rebuild the server (build.bat): web/ is embedded, the exe grows by about 19.7 MB (two more models).
+
+v5_289 WARDROBE LOCKED FOR ALL CLASSES, NO HEADWEAR  (01_core.js, 04_input_wardrobe.js -> rebuilt web/game.js, web/models3d.js)
+  - Every class (not only the Cultivator): the Hair, Outfit and Armor tabs list only the option currently worn, so they cannot be changed. Gender, Skin, Accent and Aura stay selectable.
+  - Headwear is removed for everyone: the Headwear tab has the single entry "None"; saved headwear is cleared when a look is loaded (normLook) and ignored when drawing any player, including other players' looks (models3d setSkin, skinOf) - the 3D and 2D views show no hat. Reason: new avatars are being added per class.
+
+v5_288 CULTIVATOR WARDROBE: ONLY THE WORN HAIR / OUTFIT / HEADWEAR / ARMOR, NO CAPE  (04_input_wardrobe.js -> rebuilt web/game.js, web/vrm3d.js)
+  - Wardrobe, Cultivator tab: Hair, Outfit, Headwear and Armor each list only the one option that is currently worn (the VRM avatar is a fixed look), so nothing else can be picked. Gender, Skin, Accent and Aura are unchanged. The other four classes are unchanged.
+  - Cultivator Headwear tab: the single entry is "None" (it used to read Bamboo Hat), also in the name line under the preview.
+  - The cape that appeared at armor level 20+ is no longer drawn on the Cultivator (shoulder pads were already hidden). Armor fire and weapon glow are unchanged.
+
+v5_287 VRM AVATAR FOR THE CULTIVATOR (SHE)  (web/vrm3d.js, web/Cultivator_She.vrm, one line in web/models3d.js setSkin; game.js untouched)
+  - The Cultivator class with gender She is now the VRM model Cultivator_She.vrm (He keeps Cultivator_He.vrm). Same rules as v5_286: animation, sword, armor fire, cape, halo, aura, shield all carry over; Night Blade / Iron Guardian / Storm Archer / Spirit Summoner keep their built-in bodies.
+  - vrm3d.js now holds one model per gender (MODELS at the top: file + scale). She is drawn at 30.5 units per metre (about 48 units tall) and He at 31 (about 55), the same height ratio as the two models. Each model is loaded the first time it is needed; changing gender in the Wardrobe swaps models at once (the built-in body shows for a moment if the model is still loading).
+  - Her long hair is part of the model and does not move (spring bones are not used). Skin / Hair / Outfit / Headwear options no longer change either Cultivator body.
+  - Rebuild the server (build.bat): web/ is embedded; the exe grows by another 14.4 MB (two models, 24 MB together). ?vrm=0 still turns both off.
+
+v5_286 VRM AVATAR FOR THE CULTIVATOR (HE)  (new web/vrm3d.js + web/Cultivator_He.vrm, small hooks in web/models3d.js, script tag in web/index.html, web/sw.js CORE; game.js untouched)
+  - The Cultivator class with gender He is now the VRM model Cultivator_He.vrm in the 3D view (you, other players, Wardrobe / Bag / Forge previews). Night Blade / Iron Guardian / Storm Archer / Spirit Summoner and every She keep their built-in bodies.
+  - web/vrm3d.js is a small self-contained VRM 1.0 loader for Three.js r128 (no GLTFLoader / three-vrm). The file is fetched once, geometry + textures are shared, every character gets its own skeleton + materials.
+  - Animation: the old rig keeps driving everything (walk, sword swing, casting pose with both arms up, torso twist, head, hurt / burn tint); vrm3d.js copies those angles onto the VRM bones, so all attack and move animations work as before.
+  - Kept from the game: sword (re-parented to the VRM hand, forge glow included), armor fire / ground glow, cape (armor level 20), halo, aura rings and particles, shield, shadow. The old body meshes are only moved off the camera layer.
+  - Wardrobe: for Cultivator + He the Skin / Hair / Outfit / Headwear options no longer change the body (the VRM is one fixed look); Aura, Accent, Armor fire and weapon glow still work. Switching gender to She or another class brings the built-in body back at once.
+  - If Cultivator_He.vrm is missing or cannot be decoded the built-in avatar stays (a console warning is printed). Off switch: open the game with ?vrm=0.
+  - Not used from the VRM: MToon outlines / toon shading (drawn as a lit texture), blend-shape faces, spring bones (hair / cloth physics), eye look-at. The 2D canvas view still draws the old sprite.
+  - Rebuild the server (build.bat): web/ is embedded, so the 9.7 MB model is inside the exe. Players download it once, the service worker caches it.
+
+v5_284 SMOOTHER MELEE PET MOVEMENT + POSITIONING  (03_pets.js -> rebuilt web/game.js)
+  - Tiger / Wolf now accelerate and brake smoothly (velocity easing) instead of running at a fixed speed and stopping dead. The approach slows down as it nears the enemy (no overshoot).
+  - Each enemy gets one fixed slot on a ring beside it (the side the pet came from). The pet follows a moving enemy smoothly instead of re-aiming every frame (no jitter). The pet never moves backward / away from its enemy: once at its standing distance it stays put (PET_BACKOFF removed).
+  - The pet now faces its enemy as soon as it is beside it (before, it turned toward YOUR facing until its first hit, then snapped around).
+  - While you move, the pet trails just behind / beside you (it used to pick a random roam spot, sometimes ahead of you) and its speed follows its distance, so it keeps up. Runs from fight to following keep their speed (no jump).
+  - Stopping hold PET_MOVE_HOLD .25 -> .4 s so a short stutter in your movement does not make the pet leave and re-run at the enemy.
+
+v5_283 PET +20% DAMAGE, PETS STOP WHEN YOU MOVE, AUTO-HUNT ZONE LIMIT  (03_pets.js, 02_combat.js, 04_input_wardrobe.js, 05_render2d.js -> rebuilt web/game.js)
+  - Pet damage +20%: PET_DMG_K = 1.2 in petHitDmg (every pet hit, the Dragon's scorch hits and the Phoenix burn ticks). The Bag text shows the new % of your ATK.
+  - When you move, your pet stops attacking (petPlayerMoving; true while you move and for 0.25 s after). Tiger / Wolf let go of the enemy and follow you; the others hold their attack. Fairy healing is not an attack and continues. Everything resumes when you stand still.
+  - A pet that is attacking never moves backward: Tiger / Wolf only ever close in on their enemy and stay put once they are at their standing distance (petMeleeStep).
+  - Auto-hunt zone limit (AUTO_REALM_SPAN = 1, autoAnc / autoRealmClamp in 02_combat.js): the zone (the 9 distance rings of a world; the hub counts as zone 0) you are in when you switch Auto-hunt on is the anchor. While it is on you can only be in the anchor zone, 1 zone above or 1 zone below. If you end up outside you are put back at the nearest allowed edge; auto-hunt itself is never switched off by this. Auto-hunt / F / auto skills ignore monsters outside the allowed zones. Switching auto-hunt off and on again (or entering another world) sets a new anchor. No limit in the Arena.
+  - Client only: the server needed no change.
+
+v5_282 TIGER AND WOLF PETS RUN TO THE ENEMY  (03_pets.js -> rebuilt web/game.js)
+  - Tiger and Wolf are melee: when you have a target (or an enemy is within PET_RANGE of you) the pet runs to it (PET_LUNGE 380 units/s), stands right beside it (PET_STAND) and claws / bites from there. Damage, speed of attacks and everything else are unchanged.
+  - It stays by the enemy until the enemy dies or is more than PET_CHASE (520) from you, then runs back and goes on roaming near you. Nothing in town or in PvP-only mode.
+  - Other species (Dragon, Phoenix, Fairy, Chicken) still attack from where they stand. Other players see your pet roaming near you as before (its charge is drawn only on your own screen).
+
+v5_281 MONSTER PACKS OF 3  (game.go, 01_core, 02_combat -> rebuilt web/game.js)
+  - Every normal monster now belongs to a pack of 3. Hit one (or miss it) and the other two of its pack attack you too. Bosses are not grouped.
+  - Nothing moves: every monster keeps its own spawn spot. A monster is packed with the 2 nearest monsters of the same ring that have no pack yet, so a pack is a small cluster.
+  - Rings are packed separately (a pack never mixes levels / monster types). Ring sizes that are not a multiple of 3 (400, 700, 800, 1000) leave one pack of 1 or 2 at the end of that ring.
+  - Only idle pack mates join. One that is returning home or already chasing someone else is left alone. The normal leash still applies to every pack mate.
+  - Shared worlds: server does it (groupMons / pullPack in game.go, called from the 'hit' message). Solo: groupMonsters / pullPack in 01_core, called from hitMonster. Constant PACK_SIZE / packSize = 3.
+
+v5_280 C = SPRINT HOTKEY  (04_input_wardrobe, web/index.html -> rebuilt web/game.js)
+  - Press C to sprint (same as tapping the Sprint button: +30% for 3 s, press again to keep going). Works only while the button is showing (after 3 s of running, not after a hit).
+  - The Look / wardrobe skin-cycle hotkey moved from C to L (Look button tooltip updated).
+
+v5_279 SPRINT SHOWS AFTER 3 s + HIT HIDES SPRINT + SMALLER JOYSTICK OPTION  (01_core, 02_combat, 03_items_forge_bag, 04_input_wardrobe, 07_hud, web/index.html -> rebuilt web/game.js)
+  - The Sprint button now appears after 3 s of running (SPRINT_SHOW_T = 3, was 5).
+  - Getting hit makes the Sprint button disappear (and ends any sprint in progress); you are slowed 10% for SLOW_HIT_T s as before. The button comes back after you run 3 s again.
+  - New menu option "Smaller joystick (10% smaller than normal)" (phone / touch only). Saved with the character (field js). Class html.joysm in index.html: 116->104 px (phone 128->115 px), knob scaled the same.
+
+v5_278 SPRINT ICON + SHOWS AFTER 5 s OF RUNNING + 40% SKY DEFAULT VIEW  (01_core, 03_items_forge_bag, 04_input_wardrobe, 05_render2d, 07_hud, web/index.html -> rebuilt web/game.js)
+  - The Sprint button now uses the running-figure icon (embedded as SPRINT_ICO, green on the dark button, dimmed while the seconds-left counter shows).
+  - It is hidden until you have run for 5 s without stopping (P.runT, measured from real movement; stopping resets it; teleports / knock-backs are ignored). Once visible it stays while you are sprinting, and goes away after you stop (and the 3 s sprint ends). SPRINT_SHOW_T in 01_core.
+  - Default 3D camera: 40% sky / 60% ground (horizon 40% of the screen height from the top). CAM_TILT0 = 0.093 rad: the camera stays at its lowest orbit and uses the look-up pitch, so the character stands lower on screen (about 73% from the top). PageUp / PageDown / two-finger drag still tilt up to the old top-down view; Home resets to the new default.
+
+v5_277 UNIQUE SKILLS ONLY IN R / T + HIT SLOW + SPRINT BUTTON  (01_core, 02_combat, 04_input_wardrobe, 05_render2d, 07_hud, web/index.html -> rebuilt web/game.js)
+  - Unique (signature, star) skills can only be equipped in the large R and T slots. Equipping one while a round slot is selected sends it to a free R/T slot (else R). New unique skills unlock straight into a free R/T slot. Old saves / class layouts with a unique skill in a round slot are fixed on load and on class switch (moved to a free R/T slot, else unequipped). Normal skills can still go anywhere. Skill Book slot buttons now show the key (1..0 - = R T).
+  - Getting hurt by a monster or another player slows you 10% for 2 s (refreshed by every hit, never stacks). Dodged / fully blocked hits do not slow. Constants: SLOW_HIT_MUL, SLOW_HIT_T in 01_core.
+  - New SPRINT button directly above the "=" slot. Each tap = +30% move speed for 3 s; keep tapping for non-stop sprinting; 3 s after the last tap you are back to normal speed. It lights up and shows the seconds left. Constants: SPRINT_MUL, SPRINT_T. Hit slow and sprint multiply (1.3 x 0.9).
+
+v5_276 LEFT-CLICK MOVE MORE RELIABLE  (04_input_wardrobe.js, 06_render3d.js -> rebuilt web/game.js)
+  - A mouse click was thrown away when the TOTAL path of the pointer between pressing and releasing was over 8 px (x+y added up), so a slightly shaky click or a trackpad tap did nothing. Now it counts when the pointer ends within 22 px of where it went down.
+  - Clicking close to a monster selected it instead of walking (the click area was monster radius + 50). For the mouse it is now radius + 32; touch keeps the large area.
+  - Clicking the sky / far horizon did nothing. Now you walk 600 units toward that direction.
+  - Where you click on a hill is now found on the real terrain (3 refinement steps) instead of on a flat plane at your own height, so the destination no longer lands beside / short of the spot you point at on slopes.
+  - Unchanged: a click-to-move that keeps pushing into a wall / tree / building is still cancelled after 0.35 s.
+
+v5_275 SMOOTH TURNING  (06_render3d.js -> rebuilt web/game.js)
+  - In 3D the character (yours and other players') no longer snaps to a new direction: the model turns toward its facing over about 0.15 s, always the short way round (no spinning the long way across 180 degrees).
+  - Only the visual model is smoothed. P.face (aiming, attacks, skills, the network position) is unchanged, so combat and hit direction stay instant and accurate.
+
 v5_274 GITHUB BACKUP FOR HOSTS WITHOUT A DISK (Render free)  (new ghbackup.go, main.go, game.go, 09_chat_ui.js -> rebuilt web/game.js)
   - Admin chat command /backup copies users.json (accounts + saves), friends.json, coupons.json and whispers.json to a PRIVATE GitHub repository (only files that changed are pushed).
   - Automatic restore: at start-up, any of those files that is MISSING in the data folder is fetched from GitHub first (so a Render deploy / restart / idle spin-down that wipes the disk starts from the last backup). Existing files are never overwritten.

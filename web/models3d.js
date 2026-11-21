@@ -88,7 +88,7 @@ const packLook=l=>(((l.p&63)|((l.h&15)<<6)|((l.o&7)<<10)|((l.w&15)<<13)|((l.a&7)
 /* ------------------------------------------------------------------ helpers */
 let LITE=false;
 let FLT=null;
-function init(THREE,lite){T=THREE;LITE=!!lite}
+function init(THREE,lite){T=THREE;LITE=!!lite;if(window.VRM3D)VRM3D.init(THREE)}
 function geo(k){
   if(GC[k])return GC[k];
   let g;
@@ -348,15 +348,9 @@ function makePlayer(skinIdx){
     A(hd,'sphL',mSkin,[-sx*2.0,.2,.9],[1.3,2.6,1.3],[0,0,-sx*.3]);return a};                                  /* thumb */
   R.armR=mkArm(1);R.armL=mkArm(-1);
 
-  /* sword in the sword hand */
-  const sw=G(R.armR,[0,-16.8,0]);sw.rotation.x=PI/2;R.sword=sw;
-  A(sw,'cyl',mBoot,[0,0,0],[1.7,6.5,1.7]);A(sw,'sph',mTrim,[0,-3.6,0],2.4);A(sw,'box',mTrim,[0,3.4,0],[7.6,1.3,2.2]);
-  R.blade=A(sw,'box',mSteel,[0,19,0],[2.4,30,.7]);R.tip=A(sw,'cone4',mSteel,[0,36,0],[2.4,5,.9],[0,PI/4,0]);
-  R.bglow=A(sw,'box',mGlow,[0,20,0],[4.6,32,2.4]);
   /* forge-level extras */
   R.paul=G(torso);for(const sx of [-1,1])A(R.paul,'hemi',mTrim,[sx*10.4,36,0],[8,6,8],[0,0,-sx*.45]);
   R.cape=G(torso,[0,36,-8.4]);A(R.cape,'box',mSash,[0,-11,-.6],[15,24,.9],[.08,0,0]);A(R.cape,'box',mTrim,[0,-22.6,-.6],[15,1.4,1],[.08,0,0]);
-  R.halo=A(root,'tor',mTrim,[0,59,0],[17,17,17],[PI/2,0,0]);
   /* status effects */
   R.shield=A(root,'sph',new T.MeshBasicMaterial(addMat({color:'#8ff0c4',opacity:.18})),[0,26,0],[50,56,50]);
   R.aura=A(root,'fplane',softMat('aura','#5fd3a5',.4),[0,1.2,0],[60,1,60]);R.aura.renderOrder=1; /* level ring: soft fade on both the inner and outer edge */
@@ -408,11 +402,6 @@ function makePlayer(skinIdx){
   for(const sx of [-1,1])KN(torso,'box',nCl,[sx*3.8,10,-10.4],[6,20,.9],[-.1,0,0]);
   R.nbCape=KG(torso,[0,36,-8.8]);
   [[-5,26,.06],[0,31,0],[5,22,-.06]].forEach(a=>A(R.nbCape,'box',nCl,[a[0],-a[1]*.42,-.6],[5.2,a[1],.8],[.08,0,a[2]]));
-  const dagger=(g,len)=>{A(g,'cyl',nCl,[0,0,0],[1.6,6,1.6]);A(g,'sph',nEdge,[0,-3.4,0],2.2);A(g,'box',nSt,[0,3.2,0],[5.4,1.1,2]);
-    A(g,'box',nSt,[0,3.8+len*.5,0],[2.2,len,.6]);A(g,'box',nSt,[0,3.8+len+3.4,1.3],[2,7.4,.6],[-.28,0,0]);
-    A(g,'cone4',nSt,[0,3.8+len+8.6,2.4],[2,4.4,.7],[-.5,PI/4,0]);A(g,'box',nEdge,[0,3.8+len*.5,-.35],[2.5,len,.25])};
-  const dR=KG(R.armR,[0,-16.8,0]);dR.rotation.x=PI/2;dagger(dR,15);
-  const dL=KG(R.armL,[0,-16.8,0]);dL.rotation.x=2.3;dagger(dL,12);
   R.nbWispG=KG(root,[0,0,0]);R.nbWp=[];for(let i=0;i<6;i++)R.nbWp.push(A(R.nbWispG,'sph',nWisp,[0,0,0],[4,6,4]));
 
   /* IRON GUARDIAN: broad full plate, great helm with plume, layered pauldrons, tower shield, war hammer, heavy cape */
@@ -436,14 +425,6 @@ function makePlayer(skinIdx){
     KI(torso,'tube',iGd,[sx*9.6,36.8,0],[14,1,14],[0,0,-sx*.3]);KI(torso,'cone6',iGd,[sx*10,43,0],[3.4,7,3.4],[0,0,-sx*.3])}
   for(const a of [R.armR,R.armL]){KI(a,'taper',iSt,[0,-4.6,0],[9.8,7,9.8]);KI(a,'cyl',iSt,[0,-12.2,0],[10.4,8,10.4]);KI(a,'tube',iGd,[0,-8.4,0],[10.8,1,10.8]);KI(a,'sph',iSt,[0,-16.8,0],6.2)}
   for(const L of [R.legL,R.legR]){KI(L,'cyl',iSt,[0,-7.4,0],[6.4,10.6,6.4]);KI(L,'sph',iSt,[0,-1.2,1.6],5.4);KI(L,'box',iDk,[0,-13.2,1.6],[6.4,4.2,9]);KI(L,'tube',iGd,[0,-11,0],[6.6,.8,6.6])}
-  const sh=KJ(R.armL,[-4.4,-9.5,3.2]);
-  A(sh,'box',iSt,[0,0,0],[2.2,27,18]);A(sh,'box',iGd,[0,13.5,0],[2.8,1.6,18.6]);A(sh,'box',iGd,[0,-13.5,0],[2.8,1.6,18.6]);
-  for(const sz of [-1,1])A(sh,'box',iGd,[0,0,sz*9.2],[2.8,27.6,1.6]);
-  A(sh,'box',iRd,[-1.25,0,0],[.9,22,3.4]);A(sh,'box',iRd,[-1.25,3,0],[.9,3.4,14]);A(sh,'sph',iGd,[-1.8,0,0],5.2);
-  const hm=KJ(R.armR,[0,-16.8,0]);hm.rotation.x=PI/2;
-  A(hm,'cyl',iWd,[0,10,0],[2.4,36,2.4]);A(hm,'cyl',iDk,[0,0,0],[2.8,7,2.8]);A(hm,'sph',iGd,[0,-4,0],3.4);
-  A(hm,'box',iSt,[0,29,0],[15,8.5,8.5]);for(const sx of [-1,1]){A(hm,'box',iGd,[sx*7.8,29,0],[1.6,9.6,9.6]);A(hm,'cone4',iDk,[sx*10.5,29,0],[5,5.5,5],[0,0,-sx*PI/2])}
-  A(hm,'cone4',iGd,[0,35,0],[4,6,4]);R.igHead=A(hm,'box',iGl,[0,29,0],[16.4,10,10]);
   R.igCape=KJ(torso,[0,37,-9.2]);A(R.igCape,'box',iRd,[0,-15,-.6],[19,32,1.2],[.06,0,0]);A(R.igCape,'box',iGd,[0,-30.6,-.6],[19.4,1.4,1.4],[.06,0,0]);
   /* STORM ARCHER (3): windswept ranger cap with feather plume and storm goggles, slate-teal coat, lightning chest harness,
      feathered half-cape, back quiver of cyan-fletched arrows, glowing recurve bow with a nocked lightning arrow, crackling sparks */
@@ -482,16 +463,6 @@ function makePlayer(skinIdx){
   /* bracers and boot cuffs */
   for(const a of [R.armR,R.armL]){KA(a,'cyl',aLe,[0,-12.6,0],[6.4,7.4,6.4]);KA(a,'tube',aGlow,[0,-9.2,0],[6.8,.8,6.8])}
   for(const L of [R.legL,R.legR]){KA(L,'cyl',aLe,[0,-9.6,0],[6.4,6.4,6.4]);KA(L,'tube',aGlow,[0,-6.6,0],[6.8,.7,6.8])}
-  /* recurve bow in the left hand: limbs run along the arm's local Z, the belly faces local -Y */
-  const bow=KB(R.armL,[0,-16.8,0]);bow.rotation.y=0;
-  A(bow,'cyl',aGd,[0,0,0],[2.6,6,2.6],[PI/2,0,0]);
-  for(const sz of [-1,1]){
-    [[4.8,.6,9,.12],[12.4,2.6,8,.42],[18.4,5.6,6,.8]].forEach((s,i)=>{A(bow,'box',aWd,[0,s[1],sz*s[0]],[1.7,1.7,s[2]],[-sz*s[3],0,0]);if(i<2)A(bow,'box',aGlow,[0,s[1]-.95,sz*s[0]],[.5,.5,s[2]*.9],[-sz*s[3],0,0])});
-    A(bow,'cone4',aGlow,[0,6.6,sz*21.2],[1.8,3,1.8],[sz*PI/2,0,0])}
-  A(bow,'box',aGlow,[0,6.2,0],[.35,.35,41]);
-  R.saArrow=KB(bow,[0,0,0]);
-  A(R.saArrow,'box',aFl,[0,-3.2,0],[.6,18.6,.6]);A(R.saArrow,'cone4',aGlow,[0,-13.8,0],[2.2,4.4,.9],[PI,PI/4,0]);
-  A(R.saArrow,'cone4',aGlow,[0,5.6,0],[1.8,3.6,.4],[0,PI/4,0]);
   R.saSpk=KB(root,[0,0,0]);R.saSp=[];for(let i=0;i<6;i++)R.saSp.push(A(R.saSpk,'oct',aSpk,[0,0,0],[2,5,2]));
 
   /* SPIRIT SUMMONER (4): wolf-skull headdress, indigo shaman robe, bone-rib chest, skull pauldron, ghost sash ribbons,
@@ -524,14 +495,6 @@ function makePlayer(skinIdx){
   R.suRib=[];[[-1,24],[0,30],[1,22]].forEach((a,k)=>{const t=KT(torso,[a[0]*5.6,22,-8.6]);A(t,'box',sGh,[0,-a[1]*.5,0],[3.8,a[1],.4]);A(t,'box',sGl,[0,-a[1],0],[4,.6,.6]);R.suRib.push(t)});
   /* spirit-ward bracers */
   for(const a of [R.armR,R.armL]){KS(a,'cyl',sWd,[0,-12.6,0],[6.3,7,6.3]);KS(a,'tube',sGl,[0,-9.4,0],[6.7,.8,6.7])}
-  /* soul-lantern staff (right hand, held upright) */
-  const stf=KT(R.armR,[0,-16.8,0]);stf.rotation.x=.55;R.suStaff=stf;
-  A(stf,'cyl',sWd,[0,10,0],[2,48,2]);A(stf,'cyl',sBn,[0,0,0],[2.8,6,2.8]);
-  A(stf,'tor',sBn,[0,35,0],[9,9,9],[0,0,0]);A(stf,'cone4',sBn,[0,35,5.4],[2,5,2]);A(stf,'cone4',sBn,[0,35,-5.4],[2,5,2],[PI,0,0]);
-  R.suLamp=A(stf,'sph',sOr,[0,35,0],[5,5,5]);A(stf,'sph',sGl,[0,35,0],[2.4,2.4,2.4]);
-  A(stf,'sph',sGl,[0,26,0],1.8);A(stf,'tube',sRb,[0,26,0],[3.4,.6,3.4]);
-  /* off hand: floating soul orb */
-  R.suHand=KT(R.armL,[0,-16.8,0]);R.suHandOrb=A(R.suHand,'sph',sOr,[0,-5,0],[6,6,6]);A(R.suHand,'sph',sGl,[0,-5,0],[2.6,2.6,2.6]);R.suHandRing=A(R.suHand,'tor',sGl,[0,-5,0],[10,10,10]);
   /* spirit wolf companion: ghostly body, head, ears, tail, glowing eyes, wisp trail */
   const wf=R.suWolf=KT(root,[-26,14,6]);
   A(wf,'sph',sGh,[0,0,0],[8,7,17]);A(wf,'sph',sGh,[0,2,10.5],[7,6.4,7]);A(wf,'box',sGh,[0,.6,15.4],[3.4,3,5]);
@@ -554,13 +517,6 @@ function makePlayer(skinIdx){
     R.ofire=G(body,[0,1.5,0]);R.ofire.visible=false;R.ofl=[];
     const NO=LITE?10:18,NC=LITE?3:6;
     for(let i=0;i<NO+NC;i++){const core=i>=NO,fm=mk(),q=new T.Sprite(fm);q.center.set(.5,.1);q.renderOrder=3;R.ofire.add(q);R.ofl.push({q:q,m:fm,core:core,i:core?i-NO:i,n:core?NC:NO,ph:i*1.7+.3,k:core?.7:(.62+.38*(((i*37)%10)/10))})}}
-  R.wg=[[],[],[],[],[]];
-  const WG=(c,par,p,s)=>{const q=A(par,'sph',R.m.glow2,p,s);q.visible=false;q.userData.b=s.slice();R.wg[c].push(q);return q};
-  WG(0,sw,[0,20,0],[9,34,6]).userData.sword=1;           /* Cultivator blade */
-  WG(1,dR,[0,3.8+15*.5+2,0],[6,24,6]);WG(1,dL,[0,3.8+12*.5+2,0],[6,21,6]); /* Night Blade daggers */
-  WG(2,hm,[0,29,0],[22,16,16]);                            /* Iron Guardian hammer head */
-  WG(3,bow,[0,3,0],[8,8,44]);                              /* Storm Archer bow */
-  WG(4,stf,[0,35,0],[12,12,12]);                           /* Spirit Summoner lantern staff */
 
   /* ---- aura particles (aura style > 0) ---- */
   R.orb=G(root,[0,0,0]);R.orb.visible=false;R.orbM=new T.MeshBasicMaterial(addMat({color:'#ffffff',opacity:.85}));R.orbP=[];
@@ -570,6 +526,7 @@ function makePlayer(skinIdx){
 }
 function setSkin(R,sk){
   const l=look(sk),cls=clsOf(sk),s=SKINS[l.p%SKINS.length],m=R.m,HS=R.hs;
+  l.w=0;   /* v5_289 no headwear for anyone (also other players' looks) */
   m.skin.color.set(s.skin);m.hair.color.set(s.hair);m.hairCap.color.set(s.hair);
   m.earIn.color.copy(tn(s.skin,.88));m.nostril.color.copy(tn(s.skin,.72));
   m.robe.color.set(s.robe);m.robe2.color.set(s.robe);m.trim.color.set(s.trim);m.sash.color.set(s.sash);m.boot.color.set(s.boot);
@@ -603,36 +560,31 @@ function setSkin(R,sk){
   /* class kits replace hair, headwear and outfit pieces */
   R.cls=cls;R.gear='';
   for(let c=1;c<R.cv.length;c++)for(const o of R.cv[c])o.visible=(cls===c);
-  R.sword.visible=!cls;R.embMesh.visible=!cls;
+  R.embMesh.visible=!cls;
   /* hair, outfit and headwear now work on every class (drawn with the class kit); Shaven (the class default) keeps the original class silhouette */
   if(cls){if(hs===7)R.headband.visible=false;R.lashes.visible=fem&&(cls===1||cls===3||cls===4)}
   const ts=cls===1?.9:cls===2?1.18:cls===3?.96:1,ls=cls===1?.92:cls===2?1.15:1;
   R.torso.scale.set(ts,1,ts);R.legL.scale.set(ls,1,ls);R.legR.scale.set(ls,1,ls);
   {const hk=(fem?.94:1)*HEAD_K;R.head.scale.set(hk/ts,hk,hk/ts)}
   R.lk=l;R.skin=sk;
+  /* v5_286 / v5_287 the Cultivator is a VRM avatar (web/vrm3d.js): He -> Cultivator_He.vrm, She -> Cultivator_She.vrm; v5_291 the Night Blade too: NightBlade_He.vrm / NightBlade_She.vrm; v5_292 the Iron Guardian: IronGuardian_He.vrm / IronGuardian_She.vrm; v5_293 the Storm Archer: StormArcher_He.vrm / StormArcher_She.vrm; v5_294 the Spirit Summoner: SpiritSummoner_He.vrm / SpiritSummoner_She.vrm; the other classes keep the built-in body */
+  if(window.VRM3D)VRM3D.sync(R,cls===0?(fem?'she':'he'):cls===1?(fem?'nbshe':'nbhe'):cls===2?(fem?'igshe':'ighe'):cls===3?(fem?'sashe':'sahe'):cls===4?(fem?'sushe':'suhe'):null);
 }
 function setGear(R,wlv,alv,ft){
   const k=wlv+','+alv+','+ft;if(R.gear===k)return;R.gear=k;
   const gt=forgeTier(wlv),at=ft===undefined?forgeTier(alv):ft|0,gc=gt>0?FORGE_GLOW[gt]:null,ac=at>0?(at>=10?'#ff6aa0':FORGE_GLOW[at]):null,L=30+Math.min(wlv,40)*.35,w=gt>0?1+(gt-1)*.16:1;
   R.gt=gt;R.at=at;
-  /* primary weapon: blade tint + inner glow + outer glow, colour and size by forge tier */
-  R.m.steel.color.set(gc?lc('#cfe8ff',gc,.4):'#cfe8ff');R.m.steel.emissive.set(tn(gc||'#cfe8ff',.35));R.m.glow.color.set(gc||'#cfe8ff');
-  R.m.glow2.color.set(gc||'#cfe8ff'); /* pure tier colour (no white mix) so the halo never reads as the blade */
-  R.blade.scale.y=L;R.blade.position.y=4+L/2;R.tip.position.y=4+L+2.5;R.bglow.scale.set(4.6*w,L+2,2.4*w);R.bglow.position.y=5+L/2;
-  R.bglow.visible=false; /* old additive slab hid the blade; the soft halo (glow2) replaces it */
   const cl=R.cls|0;
-  R.wg.forEach((arr,c)=>arr.forEach(q=>{q.visible=gt>0&&cl===c;if(!q.visible)return;
-    if(q.userData.sword){q.scale.set(9*w,L+8+gt,6*w);q.position.y=5+L/2}else{const b=q.userData.b;q.scale.set(b[0]*w,b[1]*w,b[2]*w)}}));
   /* outfit: glow shell around the body, emissive trim and sash, colour and size by forge tier */
   R.ogl.visible=at>0;R.ogb.visible=false;R.ofire.visible=at>0;
   if(at>0){const FE=at+2,rad=11+.5*FE,S=2*rad/.6,   /* v5_228 FE = 'fire size step': every tier looks like the tier two above it (tier 1 = the old tier 3 ...) so low tiers are clearly visible */
     bd=2*(12+.4*at);R.m.oglow.color.set(ac);R.m.oband.color.set(ac);R.ogl.scale.set(S,1,S);R.ogb.scale.set(bd,7,bd);for(const f of R.ofl)f.m.color.set(f.core?lc(ac,'#ffffff',.6):ac);R.frad=rad;R.fh=24+FE*4.5;R.fn=FE}
   R.m.trim.emissive.set(ac?tn(ac,.18+.02*at):'#3a2a08');R.m.sash.emissive.set(ac?tn(ac,.12+.015*at):'#000000');
-  R.paul.visible=alv>=5&&!cl;R.cape.visible=alv>=20&&!cl;R.halo.visible=alv>=50;
+  R.paul.visible=alv>=5&&!cl;R.cape.visible=alv>=20&&!cl;
   R.m.nbEdge.color.set(gc||'#a070ff');
   R.m.suGlow.color.set(gc||'#7ff5d0');
   R.m.saGlow.color.set(gc||'#6af0ff');
-  R.m.igGlow.color.set(gc||'#ffb35a');R.igHead.visible=wlv>=10;R.m.igVis.color.set(gc||'#ffae4a');
+  R.m.igGlow.color.set(gc||'#ffb35a');R.m.igVis.color.set(gc||'#ffae4a');
 }
 /* P = game player state, ri = realm index */
 function animPlayer(R,P,time,ri){
@@ -645,7 +597,7 @@ function animPlayer(R,P,time,ri){
   R.legL.rotation.x=st*.9*mv*lk;R.legR.rotation.x=-st*.9*mv*lk;
   const sw=P.swing>0?1-clamp(P.swing/.2,0,1):-1,sl=sw>=0;
   const eo=1-(1-clamp(sw,0,1))*(1-clamp(sw,0,1));
-  const tR=sl?-2.7+3*eo:-.5-st*.25*mv,tL=-.15+st*.8*mv;
+  const tR=sl?-2.7+3*eo:-.15-st*.8*mv,tL=-.15+st*.8*mv;   /* v5_297 both arms swing freely (the right arm used to hang nearly still for the sword) */
   R.aR+=(tR-R.aR)*Math.min(1,dt*(sl?45:14));R.aL+=(tL-R.aL)*Math.min(1,dt*14);
   R.armR.rotation.x=R.aR;R.armR.rotation.z=.1;R.armL.rotation.x=R.aL;R.armL.rotation.z=-.1;
   R.torso.rotation.y=sl?Math.sin(sw*PI)*.55:0;
@@ -665,22 +617,18 @@ function animPlayer(R,P,time,ri){
   }else if(cl===2){
     R.torso.rotation.x=.02*mv;R.body.position.y*=.6;R.head.rotation.x=0;
     R.igCape.rotation.x=.06+mv*.28+Math.sin(time*2.2)*.03;
-    R.m.igVis.opacity=1;R.m.igGlow.opacity=(R.igHead.visible?.22+.1*Math.sin(time*4)+(sl?.35:0):0);
+    R.m.igVis.opacity=1;R.m.igGlow.opacity=0;
   }else if(cl===3){
-    R.torso.rotation.x=.05*mv;R.torso.rotation.y=-.22+(sl?Math.sin(sw*PI)*.16:0);R.head.rotation.x=0;R.head.rotation.y=.22;
-    R.armL.rotation.x=-1.38;R.armL.rotation.z=.08;
-    R.armR.rotation.x=-1.25+(sl?Math.sin(sw*PI)*.5:0);R.armR.rotation.z=-.45;
+    R.torso.rotation.x=.05*mv;R.head.rotation.x=0;   /* v5_297 no bow stance any more: arms swing like the other classes */
     R.saFeather.rotation.x=.2+mv*.55+Math.sin(time*4)*.1;R.saFeather.rotation.y=Math.sin(time*2.6)*.15;
     R.saCape.rotation.x=.18+mv*.7+Math.sin(time*3.1)*.08;
-    R.m.saGlow.opacity=1;R.saArrow.visible=!(sl&&sw>.05&&sw<.5);
+    R.m.saGlow.opacity=1;
     const W=R.saSp;for(let i=0;i<W.length;i++){const f=((time*.7+i/W.length)%1),a=time*2.2+i*1.05,r=15+Math.sin(time*9+i*3)*3,k=Math.sin(time*14+i*5)>.2?1:.2;
       W[i].position.set(Math.cos(a)*r,6+f*44,Math.sin(a)*r);W[i].rotation.set(time*3+i,i,time*2);const sc=Math.sin(f*PI)*k;W[i].scale.set(2*sc+.1,5*sc+.1,2*sc+.1)}
   }else if(cl===4){
     R.torso.rotation.x=.04*mv;R.head.rotation.x=0;
-    R.armR.rotation.x=-.55+(sl?-Math.sin(sw*PI)*.95:0);R.armR.rotation.z=.12;
-    R.armL.rotation.x=-.95+Math.sin(time*2)*.07;R.armL.rotation.z=.2;
     R.suRib.forEach((t,i)=>{t.rotation.x=.4+mv*.8+Math.sin(time*4+i*1.9)*.18;t.rotation.z=Math.sin(time*2.6+i)*.15});
-    const pl=.75+.25*Math.sin(time*5)+(sl?.5:0);R.suLamp.scale.set(5*pl,5*pl,5*pl);R.suHandOrb.position.y=-6+Math.sin(time*3)*1.2;R.suHandRing.rotation.set(time*2,time*1.3,0);
+    
     R.suWolf.position.set(-26+Math.sin(time*1.4)*3,14+Math.sin(time*2.2)*2.4,6+Math.cos(time*1.1)*3);R.suWolf.rotation.y=.4+Math.sin(time*1.4)*.2;
     R.suWp.forEach((q,i)=>{const k=.5+.5*Math.sin(time*5-i*.9);q.scale.set(3*k+.4,3*k+.4,3*k+.4)})
   }
@@ -694,7 +642,6 @@ function animPlayer(R,P,time,ri){
       q.position.set(Math.cos(ang)*rad,y,Math.sin(ang)*rad);q.rotation.y=time*2+i;q.rotation.z=c.g==='cone4'?Math.sin(time*7+i)*.6:0;
       const fade=c.rise?Math.sin(f*3.1416):1;q.scale.set(c.sc[0]*(.35+.65*fade),c.sc[1]*(.35+.65*fade),c.sc[2]*(.35+.65*fade))})}
   R.aura.visible=ri>0||ao;if(R.aura.visible){const s=26+Math.min(ri,12)*3;R.aura.scale.set(s*2,1,s*2);R.aura.material.opacity=.5+.12*Math.sin(time*2)}
-  if(R.halo.visible){R.halo.rotation.z=time*.8;R.halo.position.y=59+Math.sin(time*2)*1.2}
   R.m.glow.opacity=.28+.1*Math.sin(time*5)+(sl?.3:0);
   {const gt=R.gt|0,at=R.at|0; /* forge glow pulse: faster and stronger every tier */
    R.m.glow2.opacity=gt?(.22+.02*gt+.06*Math.sin(time*(3+gt*.6))+(sl?.12:0)):0;
@@ -717,6 +664,7 @@ function animPlayer(R,P,time,ri){
     R.armR.rotation.x=-2.55*up-.12*Math.sin(time*20)*up;R.armL.rotation.x=-2.55*up+.12*Math.sin(time*20)*up;
     R.armR.rotation.z=.5*up;R.armL.rotation.z=-.5*up;R.torso.rotation.x=-.2*up;R.torso.rotation.y=0;
     R.body.position.y+=2.5*up*pu;R.m.glow.opacity=Math.min(1,.28+.1*Math.sin(time*5)+.6*up);R.aR=R.armR.rotation.x;R.aL=R.armL.rotation.x}
+  if(R.vrmOn)VRM3D.pose(R,P);   /* v5_286 VRM avatar: copy this rig's arm / leg / torso / head angles onto the VRM bones */
 }
 
 /* ================================================================== MONSTERS (unit space, facing +Z) */

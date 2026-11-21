@@ -297,7 +297,7 @@ function updatePlayer(dt){
   const ox0=P.x,oy0=P.y;
   pot.hp=Math.max(0,pot.hp-dt);pot.qi=Math.max(0,pot.qi-dt);pot.tp=Math.max(0,pot.tp-dt);pot.ck=Math.max(0,pot.ck-dt);
   if(P.tp>0){if(dist(P.x,P.y,P.tpx,P.tpy)>30)cancelTp('Teleport cancelled: you moved.');else{P.tp-=dt;tpFx(dt);if(P.tp<=0)finishTp()}}
-  autoPot();for(let i=0;i<SCD.length;i++)if(SCD[i]>0)SCD[i]-=dt;P.bfT-=dt;P.vlT-=dt;P.drT-=dt;P.ceT-=dt;if(P.lsT>0)P.lsT-=dt;if(P.rfT>0)P.rfT-=dt;if(P.linkT>0)P.linkT-=dt;if(P.markT>0)P.markT-=dt;if(P.absT>0)P.absT-=dt;if(P.gsT>0)P.gsT-=dt;if(P.galeLock>0)P.galeLock-=dt;P.inv-=dt;if(P.shT>0){P.shT-=dt;if(P.shT<=0)P.sh=0}
+  autoPot();for(let i=0;i<SCD.length;i++)if(SCD[i]>0)SCD[i]-=dt;P.bfT-=dt;P.vlT-=dt;P.drT-=dt;P.ceT-=dt;if(P.lsT>0)P.lsT-=dt;if(P.rfT>0)P.rfT-=dt;if(P.linkT>0)P.linkT-=dt;if(P.markT>0)P.markT-=dt;if(P.absT>0)P.absT-=dt;if(P.gsT>0)P.gsT-=dt;if(P.slowT>0)P.slowT-=dt;if(P.sprT>0)P.sprT-=dt;if(P.galeLock>0)P.galeLock-=dt;P.inv-=dt;if(P.shT>0){P.shT-=dt;if(P.shT<=0)P.sh=0}
   P.qi=Math.min(maxQi(),P.qi+dt*(3+P.lvl*.1+maxQi()*qrgVal()/100));
   if(P.hubSkMsg>0)P.hubSkMsg-=dt;
   if(P.rngMsg>0)P.rngMsg-=dt;
@@ -307,6 +307,8 @@ function updatePlayer(dt){
   if(amine&&!P.task&&!P.target&&!P.mv&&P.tp<=0&&!inTown()){
     amT-=dt;if(amT<=0){amT=.5;const o=nearestOre();if(o){P.task=o;P.mine=0;amWait=false}else if(!amWait){amWait=true;say('Auto-mine: waiting for an ore vein to respawn.','#8d9aa2')}}
   }
+  {const rd=Math.hypot(P.x-(P.rlx===undefined?P.x:P.rlx),P.y-(P.rly===undefined?P.y:P.rly));P.rlx=P.x;P.rly=P.y; /* v5_278 how long you have been running without stopping (teleports / knock-backs are ignored) */
+   if(rd>dt*40&&rd<dt*moveSpd()*4)P.runT=(P.runT||0)+dt;else if(rd<=dt*40)P.runT=0}
   const speed=P.cast>0?0:moveSpd(); /* rooted while casting */
   let ix=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0)+joy.x;
   let iy=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)+joy.y;
@@ -375,6 +377,7 @@ function updatePlayer(dt){
     if(P.dashT<=0){ring(P.x,P.y,58,'#bfe9ff');spark(P.x,P.y,'#e8f6ff',12,110,.4,3);}}
   const d=dist(P.x,P.y,C,C);
   if(d>RIM-20){P.x=C+(P.x-C)/d*(RIM-20);P.y=C+(P.y-C)/d*(RIM-20)}
+  autoRealmClamp(); /* v5_283 auto-hunt stays within 1 zone of where it was started */
   if(solidPush(P)&&P.mv){P.mvBlk=(P.mvBlk||0)+dt;if(P.mvBlk>.35){P.mv=null;P.mvBlk=0}}else P.mvBlk=0; /* v5_167 solid structures; a click-to-move that keeps pressing into a wall is cancelled */
   playerVert(dt);
   const mvd=Math.hypot(P.x-ox0,P.y-oy0);

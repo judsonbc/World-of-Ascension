@@ -293,7 +293,12 @@ function sync3(map,list,make,upd,vis){const fr=T3.fr;
   for(const [o,m] of map)if(m.userData.f!==fr){T3.sc.remove(m);if(m.userData.mat)m.userData.mat.dispose();map.delete(o)}}
 function proj3(x,y,h){const v=T3.v.set(x-C,gh3(x,y)+h,y-C).project(T3.cam);return v.z>1?null:{x:(v.x+1)/2*VW,y:(1-v.y)/2*VH}}
 function pick3(e){const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1,.5).unproject(T3.cam),o=T3.cam.position;v.sub(o).normalize();
-  if(v.y>=-.01)return null;const t=(gh3(P.x,P.y)-o.y)/v.y;return {x:o.x+v.x*t+C,y:o.z+v.z*t+C}}
+  if(v.y>=-.01)return null;let t=(gh3(P.x,P.y)-o.y)/v.y;
+  for(let k=0;k<3;k++){const h=gh3(o.x+v.x*t+C,o.z+v.z*t+C),t2=(h-o.y)/v.y;if(!(t2>0)||t2>9000)break;t=t2} /* v5_276 refine against the real terrain height (was one flat plane at the player's height, so on a slope the click landed beside / short of the spot you pointed at) */
+  return {x:o.x+v.x*t+C,y:o.z+v.z*t+C}}
+/* v5_276 the ground direction (unit vector) of a click that hit the sky / horizon, or null */
+function skyHeading(e){const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1,.5).unproject(T3.cam),o=T3.cam.position;v.sub(o).normalize();
+  const l=Math.hypot(v.x,v.z);return l>.05?{x:v.x/l,y:v.z/l}:null}
 /* v5_173 extra 3D effects (web/fx3d.js): sky gradient dome, additive glow sprites, light pillars (the 2D 'beams' were missing in 3D mode).
    Self-contained: if anything in it throws, only this layer switches off (the game keeps running). Off switch: ?fx3=0 in the URL or localStorage woa_fx3='0'. */
 const FXC={};
@@ -324,14 +329,14 @@ function render3D(){
       const cl=gh3(tx+ox+C,tz+oz+C)+30-(ty+st*D);if(cl>lift)lift=cl;
       T3.lift=lift>(T3.lift||0)?lift:(T3.lift||0)+(lift-(T3.lift||0))*.06;
       T3.cam.position.set(tx+ox+(Math.random()-.5)*sh,ty+st*D+T3.lift,tz+oz)}T3.cam.lookAt(tx,gy+24+(T3.cz||0),tz);if(camView.tilt<CAM_TILT_MIN)T3.cam.rotateX(CAM_TILT_MIN-camView.tilt);T3.cam.updateMatrixWorld();T3.pm.multiplyMatrices(T3.cam.projectionMatrix,T3.cam.matrixWorldInverse);T3.frus.setFromProjectionMatrix(T3.pm);
-    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=Math.PI/2-P.face;pl.rotation.x=P.dead>0?-1.4:0;if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());P.ft=armorFireTier(P);AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
+    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=smoothYaw(pl,Math.PI/2-P.face);pl.rotation.x=P.dead>0?-1.4:0;if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());P.ft=armorFireTier(P);AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
     let rpl=NONE;
     if(MP&&NET.peers.size){const prg=LOW?800:1200,PMAX=LOW?PQ.peers:14;let nw=0;rpl=[];
       for(const q of NET.peers.values()){const had=T3.rp.has(q),e=prg+(had?150:0);if(Math.abs(q.x-P.x)>e||Math.abs(q.y-P.y)>e)continue;
         if(!had){if(nw>=1)continue;nw++}rpl.push(q)}
       if(rpl.length>PMAX){rpl.sort((a,b)=>Math.hypot(a.x-P.x,a.y-P.y)-Math.hypot(b.x-P.x,b.y-P.y));rpl.length=PMAX}}
     sync3(T3.rp,rpl,q=>{const R=AL3D.makePlayer(q.sk),g=R.root;g.userData.rig=R;g.userData.mat={dispose(){try{Object.values(R.m).forEach(x=>x.dispose&&x.dispose())}catch(e){}}};return g},
-      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=Math.PI/2-q.face;g.rotation.x=q.dead>0?-1.4:0;q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
+      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=smoothYaw(g,Math.PI/2-q.face);g.rotation.x=q.dead>0?-1.4:0;q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
       null);
     peerPets3(rpl===NONE?NONE:rpl); /* v5_201 other players' pets */
     {const rg=((LOW?650:900)+(LOW?200:300)*T3.zoom)*(PQ.lock?PQ.mon:1);sync3(T3.mp,mons,mkMon,updMon,m=>(!m.dead||m.dieT>0)&&Math.abs(m.x-P.x)<rg+(T3.mp.has(m)?150:0)&&Math.abs(m.y-P.y)<rg-100+(T3.mp.has(m)?150:0))}
@@ -443,4 +448,8 @@ function drawVitals(){
     ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH);
   }
 }
-
+/* v5_275 SMOOTH TURNING: the character (yours and other players') turns toward its facing over ~0.15 s by the shortest way round instead of snapping. Only the 3D model is smoothed; P.face (aiming, attacks) stays instant. */
+function smoothYaw(o,tg){const now=performance.now(),dt=Math.min(.1,Math.max(0,(now-(o._yt||now))/1000));o._yt=now;
+  if(o._yw===undefined||!isFinite(o._yw)){o._yw=tg;return tg}
+  let da=tg-o._yw;da=Math.atan2(Math.sin(da),Math.cos(da));
+  o._yw+=da*(1-Math.exp(-dt*18));return o._yw}

@@ -199,7 +199,8 @@ const dashEase=u=>1-Math.pow(1-Math.min(1,Math.max(0,u)),3);
 /* v5_99 ROTATABLE / TILTABLE CAMERA (3D mode). yaw rotates the view around the player, tilt is the camera pitch (radians above the ground; below CAM_TILT_MIN the camera looks up at the sky, v5_174).
    Controls: hold RIGHT or MIDDLE mouse and drag (left/right = rotate, up/down = tilt), or [ and ] to rotate, PageUp / PageDown to tilt, Home to reset;
    phone: drag with TWO fingers (sideways = rotate, up/down = tilt, pinch = zoom). Movement, joystick, dodge and the hub arrow follow the view. */
-const CAM_TILT0=Math.atan2(380,320),CAM_TILT_MIN=.3, /* v5_105 wider tilt range (about 17 to 87 degrees) */ CAM_TILT_MAX=1.52,
+const CAM_TILT0=.093, /* v5_278 default view = 40% sky / 60% ground. The camera orbits at its lowest elevation (CAM_TILT_MIN) and pitches up (the v5_174 look-up) until its axis points 0.093 rad (5.3 deg) below the horizon: with the 50 deg field of view that puts the horizon 40% of the screen height from the top. Home key / reset use it too. */
+CAM_TILT_MIN=.3, /* v5_105 wider tilt range (about 17 to 87 degrees) */ CAM_TILT_MAX=1.52,
   CAM_LOOK_MAX=1.0, CAM_TILT_LOW=CAM_TILT_MIN-CAM_LOOK_MAX; /* v5_174 LOOK UP: tilt keeps going below CAM_TILT_MIN; the camera then stays at its lowest orbit and pitches up by the difference (up to 1.0 rad = 57 degrees) to show the sky */
 const camView={yaw:0,tilt:CAM_TILT0};
 function camRot(ix,iy){if(!MODE3D||!camView.yaw)return [ix,iy];const c=Math.cos(camView.yaw),sn=Math.sin(camView.yaw);return [ix*c+iy*sn,-ix*sn+iy*c]} /* screen direction -> world direction */
@@ -483,6 +484,7 @@ $('autoPot').addEventListener('change',e=>{P.autoPot=e.target.checked;save()});
 $('apHp').addEventListener('input',e=>{P.apHp=clamp(+e.target.value||35,5,95);$('apHpV').textContent=P.apHp+'%'});$('apHp').addEventListener('change',()=>save());
 $('apQi').addEventListener('input',e=>{P.apQi=clamp(+e.target.value||20,5,95);$('apQiV').textContent=P.apQi+'%'});$('apQi').addEventListener('change',()=>save());
 $('fightBack').addEventListener('change',e=>{P.fightBack=e.target.checked;save()});
+$('joySmall').addEventListener('change',e=>{P.joySmall=e.target.checked;applyJoySize();save()}); /* v5_279 menu option: joystick 10% smaller */
 $('tapMove').addEventListener('change',e=>{P.tapMove=e.target.checked;if(!P.tapMove)P.mv=null;save()}); /* v5_134 phone: tapping the ground only walks when this is on */
 $('perfSel').value=PERF;
 $('perfSel').addEventListener('change',e=>{const v=e.target.value;try{localStorage.setItem('alperf',v)}catch(_){}say('Performance mode: '+v+' \u2014 reloading\u2026','#e3b559');try{saveNow()}catch(_){}setTimeout(()=>location.reload(),700)});

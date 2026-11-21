@@ -29,6 +29,7 @@ function hitMonster(m,dmg,crit,sure){ /* sure (v5_219): skip the accuracy roll, 
   if(m.dead||m.pend||pvpOnly()||inTown())return 0; /* v5_90 no attacking inside the safe hub */
   if(!sure&&rnd()>hitChance(m)){ /* missed: no damage, but the monster still notices you */
     if(m.state==='idle'&&!inTown())m.state='chase';
+    if(!MP&&!inTown())pullPack(m);
     pop(m.x,m.y-m.r-8,'MISS','#9aa7ad',12);SFX('miss');combatPing();return 0;
   }
   dmg=Math.max(1,Math.round(dmg*(1-monRed(m))*atkGap(m.lvl,P.lvl)*(1+(m.boss?bsaVal():mabVal())/100)));
@@ -36,6 +37,7 @@ function hitMonster(m,dmg,crit,sure){ /* sure (v5_219): skip the accuracy roll, 
   if(P.lsT>0||P.markT>0||P.linkT>0)sigOnHit(m,dmg); /* v5_160 lifesteal / death mark / soul web */
   spark(m.x,m.y,crit?'#ffd36b':'#ffd9a0',crit?12:6,170,.35,2.6);if(crit)shake=Math.max(shake,.5);
   if(m.state==='idle'&&!inTown())m.state='chase';
+  if(!MP&&!inTown())pullPack(m); /* v5_281 solo: the whole pack joins in (shared worlds: the server does it) */
   pop(m.x,m.y-m.r-8,String(dmg)+(crit?'!':''),crit?'#ffd36b':'#fff',crit?17:13);SFX(crit?'crit':'hit');combatPing();
   if(MP){
     /* the server applies the damage and decides the kill; we only predict the health bar */
@@ -558,10 +560,10 @@ for(const c of SIGD)for(const y of c)SKFAM[y[0]]=y[7];
 Object.assign(CAST_LONG,{sg_c750:1,sg_c1000:1,sg_g500:1,sg_g1000:1,sg_a500:1,sg_a1000:1,sg_s1000:1,sg_s750:1,sg_c300:1});
 Object.assign(CAST_NOROOT,{sg_g100:1,sg_n500:1,sg_n1000:1});
 /* older saves / characters already past a milestone: put the signature skills of the CURRENT class into EMPTY slots, once (nothing is replaced) */
-function giveSig(){for(const lv of SIG_LV){const id=SIGK[P.cls][lv];if(id===undefined||P.lvl<SKILLS[id].lv||EQ.includes(id))continue;const e=EQ.indexOf(-1);if(e<0)break;EQ[e]=id;AUTOSK[e]=true}}
+function giveSig(){for(const lv of SIG_LV){const id=SIGK[P.cls][lv];if(id===undefined||P.lvl<SKILLS[id].lv||EQ.includes(id))continue;const e=EQ.findIndex((v,j)=>isSigSlot(j)&&v<0);if(e<0)break;EQ[e]=id}} /* v5_277 only R / T */
 function unlock(k){unlockId(2+k)}
-function unlockId(id){const s=SKILLS[id];if(!s||(s.c||0)!==P.cls)return;const e=EQ.indexOf(-1);if(e>=0){EQ[e]=id;buildBar()}
-  say('New skill: '+s.n+(e>=0?' (slot '+(e+1)+')':'. Press K to equip')+'.',s.col)}
+function unlockId(id){const s=SKILLS[id];if(!s||(s.c||0)!==P.cls)return;const e=s.sig?EQ.findIndex((v,j)=>isSigSlot(j)&&v<0):EQ.indexOf(-1);if(e>=0){EQ[e]=id;buildBar()}
+  say('New skill: '+s.n+(e>=0?' (slot '+SLOTKEYS[e].toUpperCase()+')':s.sig?'. Unique skills go in R or T: press K to equip':'. Press K to equip')+'.',s.col)}
 /* older saves have no melee skills equipped: put the best available one of each melee type into EMPTY slots (nothing is replaced), once */
 function giveMelee(){
   for(const ty of ['strike','cleave','leap','flurry']){
@@ -621,15 +623,39 @@ function switchClass(c){
   const st=CLS_STORE[c];CLS_STORE[c]=null;
   if(st){for(let i=0;i<NSLOT;i++){const q=SKILLS[st.e[i]];EQ[i]=q&&P.lvl>=q.lv&&(q.c||0)===c?st.e[i]:-1;AUTOSK[i]=st.a[i]!==false}}
   else{autoArrange();AUTOSK.fill(true)}
+  fixSig();
   P.hp=Math.min(P.hp,maxHp());P.qi=Math.min(P.qi,maxQi());P.vlT=0;P.drT=0;P.ceT=0;P.spirits=[];sigReset();
   buildBar();renderBook();save();cloudFlush();netInfo(true);
   say('You are now a '+CLASSES[c].n+'.','#c7a8ff');
 }
+/* v5_283 AUTO-HUNT REALM LIMIT. The "realms" here are the 9 zones of a world (ZONES, rings of distance from the hub; the hub itself counts as zone 0).
+   The zone you are in when you switch Auto-hunt on is the ANCHOR; while it is on you may only be in the anchor zone, one zone above it or one zone below it (AUTO_REALM_SPAN = 1).
+   Auto-hunt never ends because of this: if you end up outside (you walked, dashed, chased, got pushed), you are put back at the nearest edge of the allowed range (autoRealmClamp, called from updatePlayer),
+   and auto-hunt / F / skills do not pick monsters outside the range (nearest below). Switching Auto-hunt off and on again sets a new anchor; arriving in another world also sets a new one. */
+const AUTO_REALM_SPAN=1;let autoAnc=null; /* {w:world, z:zone index} while auto-hunt is on */
+function zoneIdxAt(x,y){const d=dist(x,y,C,C);for(let k=0;k<ZONES.length-1;k++)if(d<ZONES[k].d)return k;return ZONES.length-1}
+function autoAnchorNow(){autoAnc={w:curWorld,z:zoneIdxAt(P.x,P.y)}}
+function autoRealmLimits(){ /* [lowest, highest] allowed zone index, or null = no limit (auto-hunt off, or the Arena which has no zones) */
+  if(!auto||curWorld===ARENA||!ZONES.length)return null;
+  if(!autoAnc||autoAnc.w!==curWorld)autoAnchorNow();
+  return [Math.max(0,autoAnc.z-AUTO_REALM_SPAN),Math.min(ZONES.length-1,autoAnc.z+AUTO_REALM_SPAN)];
+}
+function autoRealmClamp(){
+  const L=autoRealmLimits();if(!L)return;
+  const z=zoneIdxAt(P.x,P.y);if(z>=L[0]&&z<=L[1])return;
+  const d=dist(P.x,P.y,C,C),a=d>1?Math.atan2(P.y-C,P.x-C):0;
+  const nd=z<L[0]?(L[0]?ZONES[L[0]-1].d:0)+6:(L[1]<ZONES.length-1?ZONES[L[1]].d:RIM-20)-6; /* just inside the nearest allowed edge */
+  P.x=C+Math.cos(a)*nd;P.y=C+Math.sin(a)*nd;P.mv=null;
+  if(P.target&&!P.target.isPl){const tz=zoneIdxAt(P.target.x,P.target.y);if(tz<L[0]||tz>L[1])P.target=null}
+  if(time-(P.arMsgAt===undefined?-99:P.arMsgAt)>4){P.arMsgAt=time;say('Auto-hunt: you can only go 1 zone up or down from where you started it ('+ZONES[autoAnc.z].n+'). You were sent back.','#8d9aa2',4000)}
+}
 function nearest(maxd){
   let best=null,bd=maxd;
   if(pvpOnly()){for(const q of foes()){const d=dist(q.x,q.y,P.x,P.y);if(d<bd){bd=d;best=q}}return best}
+  const L=autoRealmLimits();
   for(const m of mons){
     if(m.dead||m.pend)continue;
+    if(L){const z=zoneIdxAt(m.x,m.y);if(z<L[0]||z>L[1])continue} /* v5_283 auto-hunt: only monsters inside the allowed zones */
     const d=dist(m.x,m.y,P.x,P.y);
     if(d<bd){bd=d;best=m}
   }
@@ -656,7 +682,7 @@ function hurtPlayer(dmg,byPlayer,atkLv,mon,pvpCrit){
   if(P.rfT>0&&mon&&!mon.dead&&!byPlayer){const rd=Math.round(dmg*P.rf);if(rd>0){sigBusy=true;try{hitMonster(mon,rd,false)}finally{sigBusy=false}}} /* v5_160 reflect */
   if(P.sh>0&&D<1){const b=Math.min(P.sh*(1-D),dmg);P.sh-=b;dmg-=b;if(dmg<=0){spark(P.x,P.y,'#8ff0c4',6,120,.3,2.4);SFX('block');combatPing();return}}
   if(P.absT>0&&D<1){const room=Math.max(0,maxHp()*SIG_ABS_CAP-P.abs),b=Math.min(room*(1-D),dmg);if(b>0){P.abs+=b;dmg-=b;spark(P.x,P.y,'#c8d4dc',6,120,.3,2.4);if(dmg<=0){pop(P.x,P.y-24,'ABSORBED','#c8d4dc',13);SFX('block');combatPing();return}}} /* v5_160 Unyielding Vessel */
-  P.hp-=dmg;P.hurt=.25;P.task=null;P.mine=0;combatPing();SFX(P.hp<=0?'die':'hurt'); /* home scroll keeps channelling when hit */
+  P.hp-=dmg;P.slowT=SLOW_HIT_T;P.sprT=0;P.runT=0; /* v5_279 a hit ends the sprint, hides the Sprint button until you run 3 s again, and slows you 10% */ P.hurt=.25;P.task=null;P.mine=0;combatPing();SFX(P.hp<=0?'die':'hurt'); /* home scroll keeps channelling when hit */
   spark(P.x,P.y,'#ff6a5a',8,150,.35,2.4);shake=Math.max(shake,.3);
   pop(P.x,P.y-24,'-'+dmg+(tCrit?'!':''),tCrit?'#ffb02e':'#ff7a6a',tCrit?17:14);
   if(P.hp<=0){

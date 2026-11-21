@@ -25,6 +25,7 @@ const (
 	worldCentre = 3200.0 * mapK
 	rimR        = 3080.0 * mapK
 	townR       = 400.0
+	packSize    = 3 // v5_281 monsters per pack: hit one and the whole pack attacks (keep equal to PACK_SIZE in web/game.js)
 	monMult     = 2 // monster density multiplier; must equal MON_MULT in web/game.js
 	nMons       = 5500 // total of ringMons below (monMult is no longer used for the count)
 	nOre        = 80 * mapK
@@ -217,6 +218,7 @@ type Mon struct {
 	respawn   float64
 	atkFlag   bool
 	dmgBy     map[int]*Player
+	grp       []*Mon // v5_281 pack: the (up to) 3 normal monsters that fight together, this one included; nil for bosses
 }
 
 func newMon(wi int, id int, x, y float64, bi int, blvl int) *Mon {
@@ -404,11 +406,13 @@ func newRealm(wi int) *Realm {
 		if k < 8 {
 			hi = zoneD[k]
 		}
+		first := len(r.mons)
 		for n := 0; n < cnt; n++ {
 			a := rand.Float64() * math.Pi * 2
 			d := math.Sqrt(lo*lo + rand.Float64()*(hi*hi-lo*lo))
 			r.mons = append(r.mons, newMon(wi, len(r.mons), worldCentre+math.Cos(a)*d, worldCentre+math.Sin(a)*d, -1, 0))
 		}
+		groupMons(r.mons[first:]) // v5_281 packs of 3 (spawn spots are not touched)
 	}
 	// maxBosses boss slots (ids stay fixed); they start empty and are filled by random waves
 	for k := 0; k < maxBosses; k++ {
@@ -459,6 +463,43 @@ func (r *Realm) spawnWave() {
 	}
 	if len(out) > 0 {
 		r.sendAll(jsonBytes(map[string]interface{}{"t": "bs", "b": out}), nil)
+	}
+}
+
+// groupMons (v5_281) splits one ring's monsters into packs of 3 without moving anyone: each still stands on its own spawn spot.
+// A monster takes the two nearest monsters that have no pack yet, so a pack is a little cluster. A ring whose count is not a
+// multiple of 3 ends with one pack of 1 or 2. Keep equal to groupMonsters() in web-src/client/01_core.js (solo mode).
+func groupMons(list []*Mon) {
+	free := make([]*Mon, len(list))
+	copy(free, list)
+	for len(free) > 0 {
+		a := free[0]
+		free = free[1:]
+		pack := []*Mon{a}
+		for k := 0; k < packSize-1 && len(free) > 0; k++ {
+			bi, bd := 0, math.MaxFloat64
+			for i, o := range free {
+				if d := (o.hx-a.hx)*(o.hx-a.hx) + (o.hy-a.hy)*(o.hy-a.hy); d < bd {
+					bi, bd = i, d
+				}
+			}
+			pack = append(pack, free[bi])
+			free[bi] = free[len(free)-1]
+			free = free[:len(free)-1]
+		}
+		for _, m := range pack {
+			m.grp = pack
+		}
+	}
+}
+
+// pullPack (v5_281): when one monster of a pack is hit, every other living member that is idle joins the fight against the same player.
+func pullPack(m *Mon, p *Player) {
+	for _, o := range m.grp {
+		if o != m && !o.dead && o.state == 0 {
+			o.state = 1
+			o.target = p
+		}
 	}
 }
 
@@ -1211,6 +1252,9 @@ func (h *Hub) onMsg(p *Player, raw []byte) {
 		if m.state == 0 && p.hunted() {
 			m.state = 1
 			m.target = p
+		}
+		if p.hunted() {
+			pullPack(m, p) // v5_281 the whole pack joins in
 		}
 		r.sendNear(m.x, m.y, 1500, []byte(`{"t":"h","i":`+itoa(m.id)+`,"d":`+strconv.FormatFloat(math.Round(d), 'f', 0, 64)+`,"c":`+itoa(clampI(in.Cr, 0, 1))+`}`), p)
 		if m.hp <= 0 {

@@ -490,6 +490,11 @@ html.phone #finv button{min-height:36px;padding:6px 12px;font-size:13px}
 .rsv[hidden]{display:none}
 .rsv b{font:700 calc(21*var(--u))/1 var(--body);text-shadow:0 0 calc(6*var(--u)) currentColor}
 .rsv u{position:absolute;top:100%;left:50%;transform:translate(-50%,calc(-4*var(--u)));text-decoration:none;white-space:nowrap;font:700 calc(8*var(--u))/1 var(--body);padding:calc(2*var(--u)) calc(6*var(--u));border-radius:calc(7*var(--u));background:#3a2f12;border:calc(1*var(--u)) solid var(--gold);color:#ffd27a}
+.sk.spr{border-color:#5fd3a5;background:radial-gradient(circle at 35% 28%,#2f4a44,#0b1512 78%)}
+.sk.spr img{width:78%;height:78%;object-fit:contain;pointer-events:none;-webkit-user-drag:none}
+.sk.spr .kn{display:none}
+.sk.spr.on{box-shadow:0 0 calc(10*var(--u)) #5fd3a5;background:radial-gradient(circle at 35% 28%,#3f7a64,#10231d 78%)}
+.sk.spr.on img{opacity:.35}
 .sk.big{width:calc(56*var(--u));height:calc(56*var(--u));border-width:calc(3*var(--u))}
 .sk.big b{font-size:calc(24*var(--u))}
 .sk.sm{width:calc(38*var(--u));height:calc(38*var(--u))}
@@ -559,6 +564,11 @@ html.phone #log{left:14px;bottom:calc(64px + 128px + 56px + env(safe-area-inset-
 html.phone #log div{font-size:max(12px,calc(13*var(--u)))}
 html.phone #skills{transform:scale(1.1);transform-origin:100% 100%;right:env(safe-area-inset-right,0px);bottom:env(safe-area-inset-bottom,0px);z-index:4}
 html.phone #joy{left:calc(24px + env(safe-area-inset-left,0px))}
+/* v5_279 menu option "Smaller joystick": 10% smaller ring and knob */
+html.joysm #joy{width:104px;height:104px}
+html.joysm #joy i{width:41px;height:41px;margin:-20.5px 0 0 -20.5px}
+html.phone.joysm #joy{width:115px;height:115px}
+html.phone.joysm #joy i{width:47px;height:47px;margin:-23.5px 0 0 -23.5px}
 #menu #bLand{display:none}html.phone #menu #bLand{display:block}
 /* PERF: a blurred backdrop over a canvas that redraws every frame forces the GPU to re-blur each frame; on phones use a slightly more opaque panel instead */
 html.phone .panel{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(13,17,20,.86)}
@@ -576,7 +586,7 @@ html.phone #menu .vol input{height:22px}
 html.phone #menu .mrow{margin-top:1px;gap:6px}
 html.phone #menu .mrow select{font-size:11px;padding:1px 3px;min-height:22px}
 html.phone #menu .mrow.ck{line-height:1.2}
-html:not(.phone) #menu #tapMoveRow{display:none}
+html:not(.phone) #menu #tapMoveRow,html:not(.phone) #menu #joySmallRow{display:none}
 html.phone #menu .mrow.ck input{margin:0 4px 0 0;width:15px;height:15px;flex:0 0 auto}
 html.phone #menu .mbtns{gap:4px;margin-top:3px}
 html.phone #menu .mbtns .btn{flex:1 1 30%;min-height:26px;padding:3px 4px;font-size:11px;line-height:1.15;border-radius:6px;white-space:normal}
@@ -1144,7 +1154,7 @@ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padd
       <button class="ic" id="bWare" type="button" title="Warehouse (H, in a hub)">&#128230;<span class="lb">Store</span></button>
       <button class="ic" id="bBag" type="button" title="Bag (B)">&#127890;<span class="lb">Bag</span></button>
       <button class="ic" id="bMap" type="button" title="Minimap (M)">&#9906;<span class="lb">Map</span></button>
-      <button class="ic" id="bSkin" type="button" title="Wardrobe: skin, hair, outfit, headwear, aura (C)"><span>&#9786;</span><span class="lb">Look</span></button>
+      <button class="ic" id="bSkin" type="button" title="Wardrobe: skin, hair, outfit, headwear, aura (L)"><span>&#9786;</span><span class="lb">Look</span></button>
       <button class="ic" id="bNest" type="button" title="Pet Nest (U): hatch eggs and combine pets"><span>&#129370;</span><span class="lb">Nest</span></button>
       <button class="ic" id="bBell" type="button" hidden>&#128276;</button>
       </div>
@@ -1172,6 +1182,7 @@ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padd
       <div class="vol"><b>Sound FX</b><input type="range" id="volSfx" min="0" max="100" step="1" aria-label="Sound effects volume"><span id="volSfxV">70%</span></div>
       <div class="mrow"><span>Resolution</span><select id="perfSel"><option value="auto">Auto (by device)</option><option value="vlow">Very low (fastest, very blurry)</option><option value="low">Low</option><option value="med">Medium</option><option value="high">High (best looking)</option></select></div>
       <label class="mrow ck" id="tapMoveRow"><input type="checkbox" id="tapMove"> Tap to move: tap the ground to walk there (off = joystick only)</label>
+      <label class="mrow ck" id="joySmallRow"><input type="checkbox" id="joySmall"> Smaller joystick (10% smaller than normal)</label>
       <label class="mrow ck"><input type="checkbox" id="fightBack"> Fight back: attack the monster that hits you</label>
       <label class="mrow ck"><input type="checkbox" id="autoPot"> Auto-use potions when low</label>
       <div class="vol"><b>HP potion at</b><input type="range" id="apHp" min="5" max="95" step="5" aria-label="Use HP potion when HP is below this percent"><span id="apHpV">35%</span></div>
@@ -1432,6 +1443,7 @@ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padd
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="var q=document.createElement('script');q.src='three.min.js';document.head.appendChild(q)"></script>
 <script src="three-compat.js"></script>
 <script src="models3d.js"></script>
+<script src="vrm3d.js"></script>
 <script src="pets3d.js"></script>
 <script src="fx3d.js"></script>
 <script src="audio.js"></script>
