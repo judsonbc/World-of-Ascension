@@ -315,7 +315,8 @@ function setGear(R,wlv,alv,ft){
 }
 /* P = game player state, ri = realm index */
 function animPlayer(R,P,time,ri){
-  const dt=clamp(time-R.lt,0,.05);R.lt=time;
+  const dt=clamp(time-R.lt,0,.05);R.lt=time;R.dtA=dt;
+  const CL=!!(R.vrmOn&&window.ANIM3D&&ANIM3D.ready());   /* v5_322 Universal Animation Library moves are driving the VRM bones (vrm3d.js -> anim3d.js): no procedural dodge */
   const mv=P.mvAmt;
   /* v5_302 two walk paces. Normal (PC, tap-to-move, joystick fully pushed) = the old pace. Small steps only while P.walkSm is set (phone joystick pushed part way):
      shorter stride, a little arm swing, hip sway; R.sm blends between the two so nothing jumps, and the step phase is accumulated so it never jumps either. */
@@ -380,7 +381,7 @@ function animPlayer(R,P,time,ri){
   /* v5_304 DODGE ANIMATION. P.dg: 1 = forward (a forward roll, then a run), 2 = left / right (the character already faces the way it goes: short crouch, then a roll),
      3 = back (back dive, then a backward roll; keeps facing the front). P.dgU = progress 0..1 of the dash (the game sets it; other players' come from the 'dg' fx message).
      Roll / dive = R.rollG turned around the hips; R.dgTuck bends knees and elbows on the VRM bones (vrm3d.js pose). Everything resets when P.dg is 0. */
-  if(P.dg>0&&P.dgU>=0){
+  if(!CL&&P.dg>0&&P.dgU>=0){
     const u=clamp(P.dgU,0,1),dg=P.dg|0,SS=(a,b,x)=>{const q=clamp((x-a)/(b-a),0,1);return q*q*(3-2*q)};
     let ang=0,tuck=0,lift=0,lean=0;
     if(dg===3){   /* v5_308 BACK DIVE AND ROLL: dive back first (leap, lean back, arms up), then a full backward roll, then stand up; keeps facing the front */
@@ -409,6 +410,9 @@ function animPlayer(R,P,time,ri){
     R.body.position.y+=lift;R.dgTuck=tuck;R.walk=0;R.dgOn=true;
     R.aR=R.armR.rotation.x;R.aL=R.armL.rotation.x;
   }else if(R.dgOn){R.dgOn=false;R.dgTuck=0;R.rollG.rotation.x=0;R.rollG.position.set(0,0,0)}
+  /* v5_318 ATTACK MODE: the weapon is drawn while the character attacks, casts, is hit or has a target (own player), and for 3.5 s after the last of these; otherwise it rides on the back.
+     Other players have no target here: their swings / casts / hits keep it drawn the same way. */
+  {const act=P.swing>0||P.cast>0||P.hurt>0||P.fatk||(P.target&&!P.target.dead);R.wT=act?3.5:Math.max(0,(R.wT||0)-dt);R.wOut=R.wT>0&&!(P.dead>0)}
   if(R.vrmOn)VRM3D.pose(R,P);   /* v5_286 VRM avatar: copy this rig's arm / leg / torso / head angles onto the VRM bones */
 }
 

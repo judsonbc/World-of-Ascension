@@ -32,29 +32,30 @@ window.addEventListener('pointerup',e=>{if(camDrag.on&&e.pointerType==='mouse'){
 /* two-finger camera on touch screens: sideways = rotate, up/down = tilt, pinch = zoom */
 const camTouch=new Map();let camMid=null,camDist=0;
 function camTouchInfo(){const a=[...camTouch.values()];if(a.length<2)return null;return{x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2,d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)}}
-cv.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;camTouch.set(e.pointerId,{x:e.clientX,y:e.clientY});if(camTouch.size===2){P.mv=null;const i=camTouchInfo();camMid={x:i.x,y:i.y};camDist=i.d}});
+cv.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;if(e.isPrimary)camTouch.clear(); /* v5_312 a first finger can only be alone: drop fingers whose pointerup was missed (they made every later tap look like a two-finger gesture and the tap did nothing) */ camTouch.set(e.pointerId,{x:e.clientX,y:e.clientY});if(camTouch.size===2){P.mv=null;const i=camTouchInfo();camMid={x:i.x,y:i.y};camDist=i.d}});
 window.addEventListener('pointermove',e=>{
   if(e.pointerType!=='touch'||!camTouch.has(e.pointerId))return;
   camTouch.set(e.pointerId,{x:e.clientX,y:e.clientY});
   const i=camTouchInfo();if(!i||!camMid)return;
-  if(camDist>20&&i.d>20&&MODE3D)T3.zoom=clamp(T3.zoom*camDist/i.d,.55,2.2);
+  if(camDist>20&&i.d>20&&MODE3D)T3.zoom=clamp(T3.zoom*camDist/i.d,ZOOM_MIN,2.2);
   camMid={x:i.x,y:i.y};camDist=i.d;P.mv=null;
 });
 /* v5_110 CONTROLS. PC: left click = move (marker shows where) / select / attack, right-drag or middle-drag = rotate + tilt, wheel = zoom, plain right click on a player = PvP.
    Phone: one tap = move (or select a monster / player / ore), touch and drag = rotate + tilt, pinch = zoom, double tap on a monster or player = attack. */
+const TAP_SLOP=16; /* v5_312 touch: a tap may wobble up to 16 px (was 10: a normal finger tap on a phone was often read as a camera drag and ignored) */
 const lc={id:null,x:0,y:0,sx:0,sy:0,moved:0,ev:null};
 cv.addEventListener('pointerdown',e=>{
   if(e.pointerType==='mouse'&&e.button!==0){lc.id=null;return}
   if(e.pointerType==='touch'&&camTouch.size>=2){lc.id=null;return} /* second finger: two-finger camera takes over */
-  lc.id=e.pointerId;lc.x=e.clientX;lc.y=e.clientY;lc.sx=e.clientX;lc.sy=e.clientY;lc.moved=0;lc.ev={clientX:e.clientX,clientY:e.clientY,pointerType:e.pointerType,button:0};
+  lc.id=e.pointerId;lc.x=e.clientX;lc.y=e.clientY;lc.sx=e.clientX;lc.sy=e.clientY;lc.moved=0;lc.ev={clientX:e.clientX,clientY:e.clientY,pointerType:e.pointerType,button:0,cam:snapCam()}; /* v5_312 the camera as it was when you pressed (it keeps moving until you release) */
 });
 window.addEventListener('pointermove',e=>{
   if(lc.id===null||e.pointerId!==lc.id)return;
   if(e.pointerType==='touch'&&camTouch.size>=2){lc.id=null;return}
   const dx=e.clientX-lc.x,dy=e.clientY-lc.y;lc.x=e.clientX;lc.y=e.clientY;lc.moved+=Math.abs(dx)+Math.abs(dy);
-  if(lc.moved>10&&e.pointerType!=='mouse'){camAdj(-dx*.006,dy*.004)}
+  if(lc.moved>TAP_SLOP&&e.pointerType!=='mouse'){camAdj(-dx*.006,dy*.004)}
 });
-const lcEnd=e=>{if(lc.id===null||e.pointerId!==lc.id)return;const was=e.type==='pointerup'&&(e.pointerType==='mouse'?Math.hypot(e.clientX-lc.sx,e.clientY-lc.sy)<=22:lc.moved<=10); /* v5_276 mouse: a click counts when the pointer ends within 22 px of where it went down (before: total path <= 8 px, so a slightly shaky click did nothing) */lc.id=null;if(was)cvClick(lc.ev)};
+const lcEnd=e=>{if(lc.id===null||e.pointerId!==lc.id)return;const was=e.type==='pointerup'&&(e.pointerType==='mouse'?Math.hypot(e.clientX-lc.sx,e.clientY-lc.sy)<=22:lc.moved<=TAP_SLOP); /* v5_276 mouse: a click counts when the pointer ends within 22 px of where it went down (before: total path <= 8 px, so a slightly shaky click did nothing) */lc.id=null;if(was)cvClick(lc.ev)};
 window.addEventListener('pointerup',lcEnd);window.addEventListener('pointercancel',lcEnd);
 const camTouchEnd=e=>{if(e.pointerType!=='touch')return;camTouch.delete(e.pointerId);camMid=null};
 window.addEventListener('pointerup',camTouchEnd);window.addEventListener('pointercancel',camTouchEnd);
@@ -75,10 +76,17 @@ cv.addEventListener('contextmenu',e=>{
   else P.sel=q;               /* 1st right click: select only */
 });
 let tapO=null,tapT=0;
+/* v5_312 snapCam / cvClick: the tap is resolved with the camera of the moment you PRESSED (the player keeps running until you release, which moved the camera and put the destination beside the spot you pointed at) */
+function snapCam(){if(!(MODE3D&&T3.r&&T3.cam))return null;const c=T3.cam;return{p:c.position.clone(),w:c.matrixWorld.clone(),i:c.matrixWorldInverse.clone()}}
 function cvClick(e){
+  const s=e.cam&&T3.cam?e.cam:null;let b=null;
+  if(s){const c=T3.cam;b={p:c.position.clone(),w:c.matrixWorld.clone(),i:c.matrixWorldInverse.clone()};c.position.copy(s.p);c.matrixWorld.copy(s.w);c.matrixWorldInverse.copy(s.i)}
+  try{cvClick0(e)}finally{if(b){const c=T3.cam;c.position.copy(b.p);c.matrixWorld.copy(b.w);c.matrixWorldInverse.copy(b.i)}}
+}
+function cvClick0(e){
   if(!started||P.dead>0||!$('forge').hidden)return;
   const r=cv.getBoundingClientRect();
-  const w3=(MODE3D&&T3.r)?pick3(e):null,wx=w3?w3.x:e.clientX-r.left+cam.x,wy=w3?w3.y:e.clientY-r.top+cam.y,ex=w3?20:0;
+  const w3=(MODE3D&&T3.r)?pick3(e):null,sky3=MODE3D&&T3.r&&!w3,wx=w3?w3.x:sky3?NaN:e.clientX-r.left+cam.x,wy=w3?w3.y:sky3?NaN:e.clientY-r.top+cam.y,ex=w3?20:0; /* v5_312 a click on the sky has no ground point: NaN so it can no longer 'hit' the shop / an ore / a monster through made-up 2D coordinates */
   if(inTown()&&dist(NPC.x,NPC.y,wx,wy)<46+ex){openShop();return}
   /* touch: tapping another player SELECTS them (no right-click on a phone); the action bar under the target frame offers Inspect / Attack / Party / Friend / Whisper */
   if(MP&&(PHONE||e.pointerType==='touch'||e.pointerType==='pen')){
@@ -104,7 +112,8 @@ function cvClick(e){
     if(o.cd<=0&&dist(o.x,o.y,wx,wy)<50+ex){P.sel=null;P.task=o;P.target=null;P.mv=null;P.mine=0;return}
   }
   /* v5_110 left click / single tap on the ground = move there. A ripple + a marker on the ground show the destination. */
-  let gx=wx,gy=wy;if(MODE3D&&T3.r&&!w3){const h=skyHeading(e);if(!h)return;gx=P.x+h.x*600;gy=P.y+h.y*600;{const dc=dist(gx,gy,C,C);if(dc>RIM-60){gx=C+(gx-C)/dc*(RIM-60);gy=C+(gy-C)/dc*(RIM-60)}}} /* v5_276 clicked the sky / above the horizon: walk 600 units toward that direction */
+  let gx=wx,gy=wy;if(MODE3D&&T3.r&&!w3){const h=skyHeading(e);if(!h)return;gx=P.x+h.x*600;gy=P.y+h.y*600}
+  {const dc=dist(gx,gy,C,C);if(dc>RIM-60){gx=C+(gx-C)/dc*(RIM-60);gy=C+(gy-C)/dc*(RIM-60)}} /* v5_312 the world-edge clamp now also applies to a normal ground click */ /* v5_276 clicked the sky / above the horizon: walk 600 units toward that direction */
   if(PHONE&&P.tapMove===false)return; /* v5_134 phone option 'Tap to move' is off: the joystick is the only way to walk (monsters, ore and the shop can still be tapped) */
   P.sel=null;P.mv={x:gx,y:gy};P.target=null;P.task=null;stopMine('Auto-mine off.');
   ring(gx,gy,46,'#8ff0c4');ring(gx,gy,26,'#ffffff');

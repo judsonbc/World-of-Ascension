@@ -1266,7 +1266,8 @@ function useSkill(i,auto){
     if(t==='mend'){P.sh=Math.round(maxHp()*(.1+tr*.03));P.shT=8;P.qi=Math.min(maxQi(),P.qi+maxQi()*.1)}
     ring(P.x,P.y,70,'#5fd3a5');fxs({k:'ri',x:P.x,y:P.y,r:70,c:'#5fd3a5'});pop(P.x,P.y-30,'+'+h,'#5fd3a5',15);spark(P.x,P.y,'#f4b3c8',14,70,1,3,60);spark(P.x,P.y,'#8ff0c4',10,60,1,2.4,50);
   }
-  skPay(s,hpc);SCD[id]=s.cd;P.swing=.2;P.skLock=SKILL_GCD;sfxSkill(t);
+  skPay(s,hpc);SCD[id]=s.cd;P.skT=t;P.skTi=(P.skTi|0)+1;fxs({k:'an',s:t});P.swing=.2;P.skLock=SKILL_GCD;sfxSkill(t);
+  {const rc=skillReach(t,tr,mel,mr),tp=aimT();skfxCast({t,cls:P.cls,x:P.x,y:P.y,face:P.face,tx:tp?tp.x:null,ty:tp?tp.y:null,r:rc?rc[0]:150,col:s.col})} /* v5_327 spell sprites + slash meshes of the skill (web/skillfx3d.js) */
   /* v5_109 CASTING: casting a skill stops you for a moment and plays a cast pose (arms raised). Dash skills (CAST_NOROOT) keep moving you instead. Tune CAST_T / CAST_T_LONG. */
   if(!CAST_NOROOT[t]){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null} /* v5_153 casting roots you again (v5_152 removed the root while moving); v5_154 a move input does NOT cancel it, you move when the pose ends */
   return true;
@@ -1509,7 +1510,8 @@ function switchClass(c){
 /* v5_283 AUTO-HUNT REALM LIMIT. The "realms" here are the 9 zones of a world (ZONES, rings of distance from the hub; the hub itself counts as zone 0).
    The zone you are in when you switch Auto-hunt on is the ANCHOR; while it is on you may only be in the anchor zone, one zone above it or one zone below it (AUTO_REALM_SPAN = 1).
    Auto-hunt never ends because of this: if you end up outside (you walked, dashed, chased, got pushed), you are put back at the nearest edge of the allowed range (autoRealmClamp, called from updatePlayer),
-   and auto-hunt / F / skills do not pick monsters outside the range (nearest below). Switching Auto-hunt off and on again sets a new anchor; arriving in another world also sets a new one. */
+   and auto-hunt / F / skills do not pick monsters outside the range (nearest below). Switching Auto-hunt off and on again sets a new anchor; arriving in another world also sets a new one.
+   v5_311: moving by hand (keys / joystick / tap to move) while auto-hunt is on is free; the zone where you stop becomes the new anchor (no prompt). */
 const AUTO_REALM_SPAN=1;let autoAnc=null; /* {w:world, z:zone index} while auto-hunt is on */
 function zoneIdxAt(x,y){const d=dist(x,y,C,C);for(let k=0;k<ZONES.length-1;k++)if(d<ZONES[k].d)return k;return ZONES.length-1}
 function autoAnchorNow(){autoAnc={w:curWorld,z:zoneIdxAt(P.x,P.y)}}
@@ -1519,6 +1521,7 @@ function autoRealmLimits(){ /* [lowest, highest] allowed zone index, or null = n
   return [Math.max(0,autoAnc.z-AUTO_REALM_SPAN),Math.min(ZONES.length-1,autoAnc.z+AUTO_REALM_SPAN)];
 }
 function autoRealmClamp(){
+  if(P.arMoving)return; /* v5_311 walking by hand: free until you stop, then autoAnchorNow() sets the new starting realm (05_render2d.js) */
   const L=autoRealmLimits();if(!L)return;
   const z=zoneIdxAt(P.x,P.y);if(z>=L[0]&&z<=L[1])return;
   const d=dist(P.x,P.y,C,C),a=d>1?Math.atan2(P.y-C,P.x-C):0;
@@ -1533,6 +1536,7 @@ function nearest(maxd){
   const L=autoRealmLimits();
   for(const m of mons){
     if(m.dead||m.pend)continue;
+    if(m===P.skipM&&P.skipT>0)continue; /* v5_315 the stuck-target watchdog skips a monster that took no damage for 5 s */
     if(L){const z=zoneIdxAt(m.x,m.y);if(z<L[0]||z>L[1])continue} /* v5_283 auto-hunt: only monsters inside the allowed zones */
     const d=dist(m.x,m.y,P.x,P.y);
     if(d<bd){bd=d;best=m}
@@ -1975,6 +1979,17 @@ function finishTp(){
   spark(P.x,P.y,'#ffffff',30,260,1,3.4,120);spark(P.x,P.y,'#9a6bff',24,180,1,3,90);ring(P.x,P.y,100,'#ffffff');ring(P.x,P.y,70,'#b794f4');shake=Math.max(shake,.25);pop(P.x,P.y-40,'Home','#d2b4ff',16);
   bagLog('Used a Home Scroll','#d2b4ff');save();if(!$('bag').hidden)renderBag();
 }
+/* v5_322 Universal Animation Library: the avatar's moves (web/anim3d.js).  deadTilt: the Death01 clip lies the figure down itself, the old -1.4 rad tilt is only used without clips.
+   emoteCmd: /dance /sit /talk /yes /no /kneel ... (/emotes lists them, /stand stops, walking stops them too); others see it through the 'em' fx. */
+function deadTilt(R,d){return d>0&&!(window.ANIM3D&&ANIM3D.ready()&&R.vrmOn)?-1.4:0}
+function emoteCmd(n){
+  const E=window.ANIM3D&&ANIM3D.EMOTES;
+  if(n==='emotes'||n==='emote'){say('Emotes: /'+(E?Object.keys(E).join(' /'):'(not loaded)')+'   \u00b7 /stand stops. Walking stops them too.','#8d9aa2');return true}
+  if(n==='stand'){P.emo={n:null,id:(P.emo?P.emo.id:0)+1};fxs({k:'em',e:''});return true}
+  if(!E||!Object.prototype.hasOwnProperty.call(E,n))return false;
+  if(P.dead>0)return true;
+  P.emo={n,id:(P.emo?P.emo.id:0)+1};fxs({k:'em',e:n});return true;
+}
 function usePot(k,auto){
   if(k==='tp'){useTp();return}
   if(!started||P.dead>0||pot[k]>0)return;
@@ -1982,7 +1997,7 @@ function usePot(k,auto){
   if(k==='ck'){if(P.hp>=maxHp()){say('HP is already full.','#8d9aa2');return}const h=healP(Math.round(maxHp()*CK_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#f0b25a',17);spark(P.x,P.y,'#f0b25a',16,90,.9,2.8,60);ring(P.x,P.y,60,'#f0b25a')}
   else if(k==='hp'){if(P.hp>=maxHp())return;const h=healP(Math.round(maxHp()*HP_POT_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#ff8a80',15);spark(P.x,P.y,'#ff9a8a',10,70,.8,2.6,50)}
   else{if(P.qi>=maxQi())return;const q=Math.round(maxQi()*MP_POT_PCT);P.qi=Math.min(maxQi(),P.qi+q);pop(P.x,P.y-30,'+'+q+' MP','#8fd0ff',14);spark(P.x,P.y,'#8fd0ff',10,70,.8,2.6,50)}
-  P.pots[k]--;pot[k]=k==='ck'?CK_CD:POT_CD;SFX('potion');save();if(!$('bag').hidden)renderBag();
+  P.pots[k]--;pot[k]=k==='ck'?CK_CD:POT_CD;SFX('potion');P.act={n:'drink',id:(P.act?P.act.id:0)+1};fxs({k:'ac',e:'drink'});save();if(!$('bag').hidden)renderBag();
 }
 function autoPot(){if(!P.autoPot||!started||P.dead>0)return;if(P.hp<maxHp()*(P.apHp||35)/100)usePot('hp',true);if(P.qi<maxQi()*(P.apQi||20)/100)usePot('qi',true)}
 function bagRow(label,val,col){const d=document.createElement('div');d.className='row';const b=document.createElement('b');b.textContent=label;if(col)b.style.color=col;const v=document.createElement('span');v.textContent=val;d.appendChild(b);d.appendChild(v);return d}
@@ -2978,29 +2993,30 @@ window.addEventListener('pointerup',e=>{if(camDrag.on&&e.pointerType==='mouse'){
 /* two-finger camera on touch screens: sideways = rotate, up/down = tilt, pinch = zoom */
 const camTouch=new Map();let camMid=null,camDist=0;
 function camTouchInfo(){const a=[...camTouch.values()];if(a.length<2)return null;return{x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2,d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)}}
-cv.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;camTouch.set(e.pointerId,{x:e.clientX,y:e.clientY});if(camTouch.size===2){P.mv=null;const i=camTouchInfo();camMid={x:i.x,y:i.y};camDist=i.d}});
+cv.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;if(e.isPrimary)camTouch.clear(); /* v5_312 a first finger can only be alone: drop fingers whose pointerup was missed (they made every later tap look like a two-finger gesture and the tap did nothing) */ camTouch.set(e.pointerId,{x:e.clientX,y:e.clientY});if(camTouch.size===2){P.mv=null;const i=camTouchInfo();camMid={x:i.x,y:i.y};camDist=i.d}});
 window.addEventListener('pointermove',e=>{
   if(e.pointerType!=='touch'||!camTouch.has(e.pointerId))return;
   camTouch.set(e.pointerId,{x:e.clientX,y:e.clientY});
   const i=camTouchInfo();if(!i||!camMid)return;
-  if(camDist>20&&i.d>20&&MODE3D)T3.zoom=clamp(T3.zoom*camDist/i.d,.55,2.2);
+  if(camDist>20&&i.d>20&&MODE3D)T3.zoom=clamp(T3.zoom*camDist/i.d,ZOOM_MIN,2.2);
   camMid={x:i.x,y:i.y};camDist=i.d;P.mv=null;
 });
 /* v5_110 CONTROLS. PC: left click = move (marker shows where) / select / attack, right-drag or middle-drag = rotate + tilt, wheel = zoom, plain right click on a player = PvP.
    Phone: one tap = move (or select a monster / player / ore), touch and drag = rotate + tilt, pinch = zoom, double tap on a monster or player = attack. */
+const TAP_SLOP=16; /* v5_312 touch: a tap may wobble up to 16 px (was 10: a normal finger tap on a phone was often read as a camera drag and ignored) */
 const lc={id:null,x:0,y:0,sx:0,sy:0,moved:0,ev:null};
 cv.addEventListener('pointerdown',e=>{
   if(e.pointerType==='mouse'&&e.button!==0){lc.id=null;return}
   if(e.pointerType==='touch'&&camTouch.size>=2){lc.id=null;return} /* second finger: two-finger camera takes over */
-  lc.id=e.pointerId;lc.x=e.clientX;lc.y=e.clientY;lc.sx=e.clientX;lc.sy=e.clientY;lc.moved=0;lc.ev={clientX:e.clientX,clientY:e.clientY,pointerType:e.pointerType,button:0};
+  lc.id=e.pointerId;lc.x=e.clientX;lc.y=e.clientY;lc.sx=e.clientX;lc.sy=e.clientY;lc.moved=0;lc.ev={clientX:e.clientX,clientY:e.clientY,pointerType:e.pointerType,button:0,cam:snapCam()}; /* v5_312 the camera as it was when you pressed (it keeps moving until you release) */
 });
 window.addEventListener('pointermove',e=>{
   if(lc.id===null||e.pointerId!==lc.id)return;
   if(e.pointerType==='touch'&&camTouch.size>=2){lc.id=null;return}
   const dx=e.clientX-lc.x,dy=e.clientY-lc.y;lc.x=e.clientX;lc.y=e.clientY;lc.moved+=Math.abs(dx)+Math.abs(dy);
-  if(lc.moved>10&&e.pointerType!=='mouse'){camAdj(-dx*.006,dy*.004)}
+  if(lc.moved>TAP_SLOP&&e.pointerType!=='mouse'){camAdj(-dx*.006,dy*.004)}
 });
-const lcEnd=e=>{if(lc.id===null||e.pointerId!==lc.id)return;const was=e.type==='pointerup'&&(e.pointerType==='mouse'?Math.hypot(e.clientX-lc.sx,e.clientY-lc.sy)<=22:lc.moved<=10); /* v5_276 mouse: a click counts when the pointer ends within 22 px of where it went down (before: total path <= 8 px, so a slightly shaky click did nothing) */lc.id=null;if(was)cvClick(lc.ev)};
+const lcEnd=e=>{if(lc.id===null||e.pointerId!==lc.id)return;const was=e.type==='pointerup'&&(e.pointerType==='mouse'?Math.hypot(e.clientX-lc.sx,e.clientY-lc.sy)<=22:lc.moved<=TAP_SLOP); /* v5_276 mouse: a click counts when the pointer ends within 22 px of where it went down (before: total path <= 8 px, so a slightly shaky click did nothing) */lc.id=null;if(was)cvClick(lc.ev)};
 window.addEventListener('pointerup',lcEnd);window.addEventListener('pointercancel',lcEnd);
 const camTouchEnd=e=>{if(e.pointerType!=='touch')return;camTouch.delete(e.pointerId);camMid=null};
 window.addEventListener('pointerup',camTouchEnd);window.addEventListener('pointercancel',camTouchEnd);
@@ -3021,10 +3037,17 @@ cv.addEventListener('contextmenu',e=>{
   else P.sel=q;               /* 1st right click: select only */
 });
 let tapO=null,tapT=0;
+/* v5_312 snapCam / cvClick: the tap is resolved with the camera of the moment you PRESSED (the player keeps running until you release, which moved the camera and put the destination beside the spot you pointed at) */
+function snapCam(){if(!(MODE3D&&T3.r&&T3.cam))return null;const c=T3.cam;return{p:c.position.clone(),w:c.matrixWorld.clone(),i:c.matrixWorldInverse.clone()}}
 function cvClick(e){
+  const s=e.cam&&T3.cam?e.cam:null;let b=null;
+  if(s){const c=T3.cam;b={p:c.position.clone(),w:c.matrixWorld.clone(),i:c.matrixWorldInverse.clone()};c.position.copy(s.p);c.matrixWorld.copy(s.w);c.matrixWorldInverse.copy(s.i)}
+  try{cvClick0(e)}finally{if(b){const c=T3.cam;c.position.copy(b.p);c.matrixWorld.copy(b.w);c.matrixWorldInverse.copy(b.i)}}
+}
+function cvClick0(e){
   if(!started||P.dead>0||!$('forge').hidden)return;
   const r=cv.getBoundingClientRect();
-  const w3=(MODE3D&&T3.r)?pick3(e):null,wx=w3?w3.x:e.clientX-r.left+cam.x,wy=w3?w3.y:e.clientY-r.top+cam.y,ex=w3?20:0;
+  const w3=(MODE3D&&T3.r)?pick3(e):null,sky3=MODE3D&&T3.r&&!w3,wx=w3?w3.x:sky3?NaN:e.clientX-r.left+cam.x,wy=w3?w3.y:sky3?NaN:e.clientY-r.top+cam.y,ex=w3?20:0; /* v5_312 a click on the sky has no ground point: NaN so it can no longer 'hit' the shop / an ore / a monster through made-up 2D coordinates */
   if(inTown()&&dist(NPC.x,NPC.y,wx,wy)<46+ex){openShop();return}
   /* touch: tapping another player SELECTS them (no right-click on a phone); the action bar under the target frame offers Inspect / Attack / Party / Friend / Whisper */
   if(MP&&(PHONE||e.pointerType==='touch'||e.pointerType==='pen')){
@@ -3050,7 +3073,8 @@ function cvClick(e){
     if(o.cd<=0&&dist(o.x,o.y,wx,wy)<50+ex){P.sel=null;P.task=o;P.target=null;P.mv=null;P.mine=0;return}
   }
   /* v5_110 left click / single tap on the ground = move there. A ripple + a marker on the ground show the destination. */
-  let gx=wx,gy=wy;if(MODE3D&&T3.r&&!w3){const h=skyHeading(e);if(!h)return;gx=P.x+h.x*600;gy=P.y+h.y*600;{const dc=dist(gx,gy,C,C);if(dc>RIM-60){gx=C+(gx-C)/dc*(RIM-60);gy=C+(gy-C)/dc*(RIM-60)}}} /* v5_276 clicked the sky / above the horizon: walk 600 units toward that direction */
+  let gx=wx,gy=wy;if(MODE3D&&T3.r&&!w3){const h=skyHeading(e);if(!h)return;gx=P.x+h.x*600;gy=P.y+h.y*600}
+  {const dc=dist(gx,gy,C,C);if(dc>RIM-60){gx=C+(gx-C)/dc*(RIM-60);gy=C+(gy-C)/dc*(RIM-60)}} /* v5_312 the world-edge clamp now also applies to a normal ground click */ /* v5_276 clicked the sky / above the horizon: walk 600 units toward that direction */
   if(PHONE&&P.tapMove===false)return; /* v5_134 phone option 'Tap to move' is off: the joystick is the only way to walk (monsters, ore and the shop can still be tapped) */
   P.sel=null;P.mv={x:gx,y:gy};P.target=null;P.task=null;stopMine('Auto-mine off.');
   ring(gx,gy,46,'#8ff0c4');ring(gx,gy,26,'#ffffff');
@@ -3773,6 +3797,7 @@ function updatePlayer(dt){
   }
   {const rd=Math.hypot(P.x-(P.rlx===undefined?P.x:P.rlx),P.y-(P.rly===undefined?P.y:P.rly));P.rlx=P.x;P.rly=P.y; /* v5_278 how long you have been running without stopping (teleports / knock-backs are ignored) */
    if(rd>dt*40&&rd<dt*moveSpd()*4)P.runT=(P.runT||0)+dt;else if(rd<=dt*40)P.runT=0}
+  P.arMvNow=false;
   const speed=P.cast>0?0:moveSpd(); /* rooted while casting */
   let ix=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0)+joy.x;
   let iy=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)+joy.y;
@@ -3786,7 +3811,7 @@ function updatePlayer(dt){
     {const r=camRot(ix,iy);ix=r[0];iy=r[1]}
     const l=Math.max(.001,Math.hypot(ix,iy));   /* v5_307 unit direction: the speed no longer follows the push, only the walk zone slows it (sf) */
     P.x+=ix/l*speed*sf*dt;P.y+=iy/l*speed*sf*dt;if(!(P.dashT>0&&P.dg===3))P.face=Math.atan2(iy,ix);   /* v5_304 a back dive keeps facing the front */
-    P.mv=null;P.task=null;P.mine=0;P.fatk=false;stopMine('Auto-mine off.');
+    P.mv=null;P.task=null;P.mine=0;P.fatk=false;stopMine('Auto-mine off.');P.arMvNow=true; /* v5_311 you are steering by hand */
   }else if(P.task){
     const o=P.task;
     if(o.cd>0){P.task=null;P.mine=0}
@@ -3800,7 +3825,16 @@ function updatePlayer(dt){
     }else P.mine=0;
   }else if(P.target&&!P.target.dead){
     const m=P.target,rng=BASIC_RANGE[P.cls]||0,reach=rng?rng+m.r:P.r+m.r+30;
-    if(inTown())P.target=null; /* v5_90 no attacking inside the hub */
+    /* v5_315 STUCK-TARGET WATCHDOG (auto-hunt): a target that never loses health is dropped and skipped for 10 s, so the character looks for another monster instead of swinging at nothing for hours.
+       Causes: the server already killed it but the client missed the kill message (ghost), a predicted kill that was never confirmed (pend), a monster that cannot be reached or hit. */
+    if(auto&&!m.isPl){
+      const cur=MP&&m.hpAuth!==undefined?m.hpAuth:m.hp;
+      if(P.tgM!==m){P.tgM=m;P.tgHp=cur;P.tgT=0}
+      else if(cur<P.tgHp-.5){P.tgT=0;P.tgHp=cur}else{P.tgT+=dt;P.tgHp=Math.min(P.tgHp,cur)}
+      if(m.pend||P.tgT>5){P.skipM=m;P.skipT=10;P.target=null;P.tgM=null;P.fatk=false}
+    }else P.tgM=null;
+    if(!P.target){/* dropped by the watchdog: nothing to do this frame, the next frame picks a new target */}
+    else if(inTown())P.target=null; /* v5_90 no attacking inside the hub */
     else if(m.isPl&&(!MP||!NET.peers.has(m.id)||!pvpOk(m)))P.target=null; /* v5_158 a player target is only valid while my PvP mode allows it (outside the hub) */
     else if(dist(m.x,m.y,P.x,P.y)>(m.isPl?900:650)){P.target=null}
     else if(moveToward(m.x,m.y,rng?rng*BASIC_STAND:reach-6,dt,speed)===false){/* chasing */}
@@ -3809,9 +3843,10 @@ function updatePlayer(dt){
       const c=rnd()<critChance(),dd=dist(m.x,m.y,P.x,P.y);let d=Math.round(atkVal()*(.9+rnd()*.2)*(c?critMul():1)*(1+babVal()/100));
       if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));for(let q=1;q<=6;q++)spark(P.x+(m.x-P.x)*q/6,P.y+(m.y-P.y)*q/6,BASIC_COL[P.cls],1,30,.25,2.2)} /* ranged normal attack: damage falloff + a short bolt trail */
       if(m.isPl)hitPeer(m,d,c);else hitMonster(m,d,c);
-      P.qi=Math.min(maxQi(),P.qi+3);P.atkCd=atkCd();P.swing=.18;SFX('swing');fxs({k:'sw',f:+P.face.toFixed(2)});
+      P.qi=Math.min(maxQi(),P.qi+3);P.atkCd=atkCd();P.skT='';P.swing=.18;SFX('swing');fxs({k:'sw',f:+P.face.toFixed(2)});
     }
   }else if(P.mv){
+    P.arMvNow=true; /* v5_311 click / tap to move is a move command too */
     if(moveToward(P.mv.x,P.mv.y,6,dt,speed))P.mv=null;
   }else if(auto&&P.tp<=0&&inTown()&&!pvpOnly()&&curWorld!==ARENA){
     /* v5_100 auto-hunt inside the hub: attacking is blocked there, so walk out of the hub (toward the nearest monster) and fight outside. Not used in PvP. */
@@ -3840,6 +3875,7 @@ function updatePlayer(dt){
     }
   }
   if(P.cast>0)P.cast-=dt;
+  if(P.skipT>0){P.skipT-=dt;if(P.skipT<=0)P.skipM=null} /* v5_315 */
   P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);
   if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1,P.dg)-dashEase(e0,P.dg));P.x+=P.dvx*st;P.y+=P.dvy*st;P.dgU=e1;
     /* v5_142 dash animation: ghost trail left along the path (fades behind you), streak sparks flung backwards, soft landing ring */
@@ -3847,6 +3883,8 @@ function updatePlayer(dt){
     if(P.dashT<=0){ring(P.x,P.y,58,'#bfe9ff');spark(P.x,P.y,'#e8f6ff',12,110,.4,3);P.dg=0}}
   const d=dist(P.x,P.y,C,C);
   if(d>RIM-20){P.x=C+(P.x-C)/d*(RIM-20);P.y=C+(P.y-C)/d*(RIM-20)}
+  /* v5_311 moving by hand during auto-hunt: no clamp while you walk; the zone where you stop becomes the new starting realm (silent, no prompt) */
+  if(auto){if(P.arMvNow)P.arMoving=true;else if(P.arMoving){P.arMoving=false;autoAnchorNow()}}else P.arMoving=false;
   autoRealmClamp(); /* v5_283 auto-hunt stays within 1 zone of where it was started */
   if(solidPush(P)&&P.mv){P.mvBlk=(P.mvBlk||0)+dt;if(P.mvBlk>.35){P.mv=null;P.mvBlk=0}}else P.mvBlk=0; /* v5_167 solid structures; a click-to-move that keeps pressing into a wall is cancelled */
   playerVert(dt);
@@ -4735,6 +4773,7 @@ function addTrailProps(wg,i,wl){
 let MODE3D=true;try{MODE3D=localStorage.getItem('al3d')!=='0'}catch(e){}
 const PRS=[1,1.15,1.3,1.5]; /* phone render scale steps (was a fixed 0.85); auto-lowered if the phone cannot hold ~45 fps */
 const prWant=()=>LOW?Math.min(PRS[T3.lv],Math.max(1,window.devicePixelRatio||1))*(PQ.lock&&PQ.rs?PQ.rs:1):T3.pr0; /* very low: render at 0.5x resolution */
+const ZOOM_MIN=.22; /* v5_319 closest camera (was .55): camera distance = 497 x zoom */
 const T3={r:null,fr:0,zoom:1,mp:new Map(),rp:new Map(),it:new Map(),or:new Map(),pj:new Map(),built:-1,cc:{}};let G3,hfn=()=>0;
 const WMAP=[['hills',40,.0017],['mesas',60,.0013],['ridged',55,.0021],['spires',90,.0011],['isles',50,.0012],['isles',60,.0019],['hills',55,.0015],['spires',100,.0013],['crater',70,.0014],['dunes',45,.0018],['mesas',70,.0017],['ridged',80,.0013]];
 const KITS=[[['Cone',1,3.2,1,1.6,0],['Dodeca',1.2,.8,1.2,.4,2],['Sphere',.9,.6,.9,.3,1]],[['Octa',.8,3,.8,1.5,1],['Octa',1.2,1,1.2,.5,0],['Dodeca',.6,.5,.6,.2,3]],[['Box',.8,3.4,.8,1.7,2],['Box',1.4,.7,1.4,.35,3],['Cyl',.5,1.2,.5,.6,0]],[['Cyl',.35,1.8,.35,.9,3],['Sphere',1.4,.9,1.4,1.6,0],['Sphere',.7,.5,.7,.25,1]],[['Cone',.5,3.8,.5,1.9,0],['Cyl',.45,2.2,.45,1.1,1],['Dodeca',1,.6,1,.3,2]]];
@@ -4783,7 +4822,7 @@ const GSK=[['#a89b84','#8a5a3a','#d9c08a','#6a3a30','#c8b89a'],['#6e6c70','#4a46
  ['#2a2438','#1a1428','#4a3a68','#9a5aff','#120c1c'],['#c8c0a8','#8a6a44','#e8e0c8','#f4f0e0','#d8d0b8'],['#8a7a58','#6a5a38','#d8b868','#f0d070','#b8a070'],['#a89868','#c89a40','#f4e0a0','#fff2b0','#fffbe8']];
 function rebuild3(){
   T3.hg=null;
-  if(T3.world){T3.sc.remove(T3.world);T3.world.traverse(o=>{if(o.geometry&&o.geometry.dispose&&!Object.values(G3).includes(o.geometry))o.geometry.dispose()})}
+  if(T3.world){T3.sc.remove(T3.world);T3.world.traverse(o=>{if(o.geometry&&o.geometry.dispose&&!(o.geometry.userData&&o.geometry.userData.keep)&&!Object.values(G3).includes(o.geometry))o.geometry.dispose()})}
   const wg=new THREE.Group(),i=curWorld,w=W[i];hfn=mkH(i);T3.world=wg;
   const GS=gStats(i),wl=GS.wl; /* v5_261 water level + height statistics of this world */
   const S=RIM+120,N=LOW?(PQ.lock?PQ.terr:150):360,geo=new THREE.PlaneGeometry(S*2,S*2,N,N).rotateX(-Math.PI/2),pos=geo.attributes.position,col=new Float32Array(pos.count*3),zc=ZONES.map(z=>new THREE.Color(z.fill)),tc=new THREE.Color();
@@ -4810,8 +4849,10 @@ function rebuild3(){
   if(i===ARENA){const bg=new THREE.BoxGeometry(12,70,12),bm=new THREE.MeshBasicMaterial({color:0xff5a4a});for(let k=0;k<96;k++){const a=k/96*6.2832,x=Math.cos(a)*(RIM+10),z=Math.sin(a)*(RIM+10),pl=new THREE.Mesh(bg,bm);pl.position.set(x,hfn(x,z)+30,z);wg.add(pl)}}
   const dp=w.dp||['#16241d','#1c2f25','#4d5258','#5d636a'],kp=AL3D.kit(kitOf(i),dp,w.acc),dm=new THREE.MeshLambertMaterial({vertexColors:true});
   for(let k=0;k<DECO_N;k++){const list=deco.filter((d,ix)=>d.k===k&&(!LOW||ix%3===0)&&(wl<-1e4||gh3(d.x,d.y)>wl+1)),im=new THREE.InstancedMesh(kp[k],dm,list.length),du=new THREE.Object3D(),c=new THREE.Color();
-    list.forEach((d,n)=>{const q=d.s*28;du.position.set(d.x-C,gh3(d.x,d.y)-q*.05,d.y-C);du.scale.set(q,q,q);du.rotation.y=n;du.updateMatrix();im.setMatrixAt(n,du.matrix);c.setScalar(.8+((n*37)%10)/22);im.setColorAt(n,c)});
-    im.frustumCulled=false;wg.add(im)}
+    const tm=window.TREES3D&&[],tt=tm&&[]; /* v5_321 real tree models: the matrices + tints are kept for TREES3D.attach (a no-op for props that are not trees) */
+    list.forEach((d,n)=>{const q=d.s*28,tn=.8+((n*37)%10)/22;du.position.set(d.x-C,gh3(d.x,d.y)-q*.05,d.y-C);du.scale.set(q,q,q);du.rotation.y=n;du.updateMatrix();im.setMatrixAt(n,du.matrix);c.setScalar(tn);im.setColorAt(n,c);if(tm){tm.push(du.matrix.clone());tt.push(tn)}});
+    im.frustumCulled=false;wg.add(im);
+    if(tm)try{TREES3D.attach({kit:kitOf(i),k,wg,old:im,mats:tm,tints:tt,alive:()=>T3.world===wg,low:LOW})}catch(e){console.warn('trees',e)}}
   if(bld.length){ /* v5_172 buildings: every part is an instance of one of 9 shared shapes -> 9 draw calls for the whole building layer */
     const wcol=g=>{g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(g.attributes.position.count*3).fill(1),3));return g},
       prism=()=>{const v=[],p=(a,b,c)=>v.push(...a,...b,...c),A=[-.5,0,-.5],B=[-.5,0,.5],Cc=[-.5,1,0],D=[.5,0,-.5],E=[.5,0,.5],F=[.5,1,0];
@@ -5025,10 +5066,16 @@ function sync3(map,list,make,upd,vis){const fr=T3.fr;
   for(const o of list){if(vis&&!vis(o))continue;let m=map.get(o);if(!m){m=make(o);map.set(o,m);T3.sc.add(m)}m.userData.f=fr;upd(m,o)}
   for(const [o,m] of map)if(m.userData.f!==fr){T3.sc.remove(m);if(m.userData.mat)m.userData.mat.dispose();map.delete(o)}}
 function proj3(x,y,h){const v=T3.v.set(x-C,gh3(x,y)+h,y-C).project(T3.cam);return v.z>1?null:{x:(v.x+1)/2*VW,y:(1-v.y)/2*VH}}
-function pick3(e){const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1,.5).unproject(T3.cam),o=T3.cam.position;v.sub(o).normalize();
-  if(v.y>=-.01)return null;let t=(gh3(P.x,P.y)-o.y)/v.y;
-  for(let k=0;k<3;k++){const h=gh3(o.x+v.x*t+C,o.z+v.z*t+C),t2=(h-o.y)/v.y;if(!(t2>0)||t2>9000)break;t=t2} /* v5_276 refine against the real terrain height (was one flat plane at the player's height, so on a slope the click landed beside / short of the spot you pointed at) */
-  return {x:o.x+v.x*t+C,y:o.z+v.z*t+C}}
+function pick3(e){   /* v5_312 the first point where the click ray meets the real terrain: march along the ray, then bisect (the old fixed-point refine could jump on slopes and near the horizon) */
+  const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1,.5).unproject(T3.cam),o=T3.cam.position;v.sub(o).normalize();
+  if(v.y>=-.01)return null;
+  const hh=t=>o.y+v.y*t-gh3(o.x+v.x*t+C,o.z+v.z*t+C);   /* > 0 = the ray is above the ground at distance t */
+  let a=0,b=-1,up=hh(0)>0;
+  for(let t=20;t<=6000;t+=t<800?20:60){const h=hh(t);if(h>0){up=true;a=t}else if(up){b=t;break}}
+  if(b<0)return null;
+  for(let k=0;k<10;k++){const m=(a+b)/2;if(hh(m)>0)a=m;else b=m}
+  const t=(a+b)/2,x=o.x+v.x*t+C,y=o.z+v.z*t+C;
+  return dist(x,y,P.x,P.y)>2600?null:{x,y}}   /* too far away = the horizon: the caller walks 600 units toward that direction instead */
 /* v5_276 the ground direction (unit vector) of a click that hit the sky / horizon, or null */
 function skyHeading(e){const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1,.5).unproject(T3.cam),o=T3.cam.position;v.sub(o).normalize();
   const l=Math.hypot(v.x,v.z);return l>.05?{x:v.x/l,y:v.z/l}:null}
@@ -5040,6 +5087,9 @@ function fx3dFrame(dl){
   try{FXC.T3=T3;FXC.THREE=THREE;FXC.P=P;FXC.C=C;FXC.gh3=gh3;FXC.dl=dl;FXC.time=time;FXC.projs=projs;FXC.mons=mons;FXC.items=items;FXC.ores=ores;FXC.beams=beams;FXC.fx=fx;FXC.LOW=LOW;FXC.PQ=PQ;FXC.world=curWorld;FXC.LK=LK;FX3.frame(FXC)}
   catch(e){FXC.off=true;console.warn('FX3 off:',e);try{FX3.dispose(FXC)}catch(_){}}
 }
+/* v5_327 skill cast effects (web/skillfx3d.js): spell sprites + slash meshes. Same safety as FX3: an error only switches this layer off. Off switch: ?skfx=0 or localStorage woa_skfx='0'. */
+function skfxCast(o){try{if(window.SKFX)SKFX.cast(o)}catch(e){}}
+function skfxFrame(){if(!window.SKFX)return;try{SKFX.frame({THREE,T3,C,gh3,LOW})}catch(e){console.warn('SKFX off:',e);try{SKFX.dispose()}catch(_){}window.SKFX=null}}
 function render3D(){
   try{
     if(!T3.r)init3();
@@ -5062,14 +5112,14 @@ function render3D(){
       const cl=gh3(tx+ox+C,tz+oz+C)+30-(ty+st*D);if(cl>lift)lift=cl;
       T3.lift=lift>(T3.lift||0)?lift:(T3.lift||0)+(lift-(T3.lift||0))*.06;
       T3.cam.position.set(tx+ox+(Math.random()-.5)*sh,ty+st*D+T3.lift,tz+oz)}T3.cam.lookAt(tx,gy+24+(T3.cz||0),tz);if(camView.tilt<CAM_TILT_MIN)T3.cam.rotateX(CAM_TILT_MIN-camView.tilt);T3.cam.updateMatrixWorld();T3.pm.multiplyMatrices(T3.cam.projectionMatrix,T3.cam.matrixWorldInverse);T3.frus.setFromProjectionMatrix(T3.pm);
-    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=smoothYaw(pl,Math.PI/2-P.face);pl.rotation.x=P.dead>0?-1.4:0;if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());P.ft=armorFireTier(P);AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
+    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=smoothYaw(pl,Math.PI/2-P.face);pl.rotation.x=deadTilt(T3.rig,P.dead);if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());P.ft=armorFireTier(P);AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
     let rpl=NONE;
     if(MP&&NET.peers.size){const prg=LOW?800:1200,PMAX=LOW?PQ.peers:14;let nw=0;rpl=[];
       for(const q of NET.peers.values()){const had=T3.rp.has(q),e=prg+(had?150:0);if(Math.abs(q.x-P.x)>e||Math.abs(q.y-P.y)>e)continue;
         if(!had){if(nw>=1)continue;nw++}rpl.push(q)}
       if(rpl.length>PMAX){rpl.sort((a,b)=>Math.hypot(a.x-P.x,a.y-P.y)-Math.hypot(b.x-P.x,b.y-P.y));rpl.length=PMAX}}
     sync3(T3.rp,rpl,q=>{const R=AL3D.makePlayer(q.sk),g=R.root;g.userData.rig=R;g.userData.mat={dispose(){try{Object.values(R.m).forEach(x=>x.dispose&&x.dispose())}catch(e){}}};return g},
-      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=smoothYaw(g,Math.PI/2-q.face);g.rotation.x=q.dead>0?-1.4:0;q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
+      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=smoothYaw(g,Math.PI/2-q.face);g.rotation.x=deadTilt(R,q.dead);q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
       null);
     peerPets3(rpl===NONE?NONE:rpl); /* v5_201 other players' pets */
     {const rg=((LOW?650:900)+(LOW?200:300)*T3.zoom)*(PQ.lock?PQ.mon:1);sync3(T3.mp,mons,mkMon,updMon,m=>(!m.dead||m.dieT>0)&&Math.abs(m.x-P.x)<rg+(T3.mp.has(m)?150:0)&&Math.abs(m.y-P.y)<rg-100+(T3.mp.has(m)?150:0))}
@@ -5083,7 +5133,7 @@ function render3D(){
     const pa=T3.pp.geometry.attributes,np=Math.min(parts.length,LOW?(PQ.lock?PQ.parts:350):1200);
     for(let i=0;i<np;i++){const q=parts[i],k=1-q.life/q.max;pa.position.setXYZ(i,q.x-C,gh3(q.x,q.y)+14+k*26,q.y-C);let c=T3.cc[q.col];if(!c)c=T3.cc[q.col]=new THREE.Color(q.col);pa.color.setXYZ(i,c.r,c.g,c.b)}
     pa.position.needsUpdate=pa.color.needsUpdate=true;T3.pp.geometry.setDrawRange(0,np);
-    fx3dFrame(dl);
+    fx3dFrame(dl);skfxFrame();
     T3.r.render(T3.sc,T3.cam);
     ctx.clearRect(-9,-9,VW+18,VH+18);ctx.textAlign='center';ctx.font='600 11px Figtree,system-ui,sans-serif';
     for(const m of mons){if(m.dead||!(m.boss||m===P.target||m===P.sel)||Math.hypot(m.x-P.x,m.y-P.y)>900)continue;const s=proj3(m.x,m.y,m.r*(m.boss?4.8:3.9)),t='Lv '+m.lvl+' '+m.name+' \u00b7 DEF '+effMonDef(m);if(!s)continue;ctx.fillStyle='#000';ctx.fillText(t,s.x+1,s.y+1);ctx.fillStyle=m.boss?'#e3b559':'#e8e0ca';ctx.fillText(t,s.x,s.y)}
@@ -5100,7 +5150,7 @@ function render3D(){
 }
 function toggle3D(){MODE3D=!MODE3D;try{localStorage.setItem('al3d',MODE3D?'1':'0')}catch(e){}if(!MODE3D)$('g3').style.display='none'}
 $('bPvp').addEventListener('click',togglePvpPanel);$('bView').addEventListener('click',toggle3D);$('bSkin').addEventListener('click',cycleSkin);
-cv.addEventListener('wheel',e=>{T3.zoom=clamp(T3.zoom*(e.deltaY>0?1.1:.9),.55,2.2)},{passive:true});
+cv.addEventListener('wheel',e=>{T3.zoom=clamp(T3.zoom*(e.deltaY>0?1.1:.9),ZOOM_MIN,2.2)},{passive:true});
 
 /* ---------- lighting & atmosphere ---------- */
 function drawMist(){
@@ -5226,7 +5276,7 @@ function hud(){
   statsUpdate();
   st($('coins'),P.coins.toLocaleString());st($('gold'),P.gold.toLocaleString());st($('ore'),P.ore);st($('oreN'),P.ore);
   st($('partyN'),MP?NET.peers.size+1:1);
-  const d=new Date();st($('clk'),pad2(d.getHours())+':'+pad2(d.getMinutes()));
+  const d=new Date();st($('clk'),pad2(d.getHours())+':'+pad2(d.getMinutes()));st($('ign'),AUTH.ign||'');
   /* connection / ping */
   let nt='solo',nc='net off';
   if(NET.joined){if(NET.ping===undefined){nt='online';nc='net'}else{nt=NET.ping+' ms';nc='net'+(NET.ping>250?' bad':NET.ping>100?' mid':'')}}
@@ -5855,6 +5905,7 @@ function onSnap(m){
     if(o.dead){o.dead=false;o.pend=false;o.dieT=0;o.x=e[1];o.y=e[2];o.lx=undefined} /* respawned */
     o.tx=e[1];o.ty=e[2];
     if(!(o.predT>0&&e[3]>o.hp))o.hp=e[3];
+    o.hpAuth=e[3]; /* v5_315 the server's own health value (o.hp also holds the predicted one) */
     if(e[3]>0)o.pend=false;
     const st=e[4]&3;o.state=st===1?'chase':st===2?'return':'idle';
     if((e[4]&8)&&!(o.atkT>0))o.atkT=.25;
@@ -5950,7 +6001,10 @@ function playFx(m){
         ring(p[i+2],p[i+3],40,col);
       }
       break}
-    case 'sw':if(q){q.swing=.18;q.face=+m.f||0}break;
+    case 'sw':if(q){q.swing=.18;q.skT='';q.face=+m.f||0}break;
+    case 'an':if(q){q.skT=String(m.s||'').slice(0,14);q.skTi=(q.skTi|0)+1;q.swing=.2;if(dist(q.x,q.y,P.x,P.y)<1600)skfxCast({t:q.skT,cls:(q.sk>>>21)&7,x:q.x,y:q.y,face:q.face,r:150,col:col})}break;   /* v5_322 another player's skill: its move (anim3d.js) */
+    case 'em':if(q){q.emo={n:String(m.e||'').slice(0,12)||null,id:(q.emo?q.emo.id:0)+1}}break;   /* v5_322 another player's emote (/dance ...) */
+    case 'ac':if(q){q.act={n:String(m.e||'').slice(0,12),id:(q.act?q.act.id:0)+1}}break;   /* v5_322 another player's one-shot move (drinking ...) */
     case 'dg':if(q){q.dg=clamp(m.d|0,1,3);q.dgS=performance.now()/1000;q.dgU=0;q.face=+m.f||0}break; /* v5_304 dodge: 1 forward roll, 2 side roll, 3 back dive */
     case 'jz':if(q){q.jzT=clamp(+m.z||0,0,400);q.jzAt=performance.now()/1000}break; /* v5_170 another player's height above the ground (jumping / standing on a structure) */
     case 'sp':{ /* v5_165 another player's spirits (visual only) */
@@ -6344,6 +6398,8 @@ function cpSend(){
   if(fc){inp.value='';frCmd(fc[1].toLowerCase()==='addfriend'?'friend':fc[1].toLowerCase(),fc[2]);return}
   const pc=t.match(/^\/(invite|accept|decline|leave|kick|leader|promote|disband|party|p)(?:\s+(.*))?$/i);
   if(pc){inp.value='';partyCmd(pc[1].toLowerCase(),(pc[2]||'').trim().replace(/^"(.*)"$/,'$1'));return}
+  const emc=t.match(/^\/(?:emote\s+|e\s+)?([a-z]+)\s*$/i);
+  if(emc&&emoteCmd(emc[1].toLowerCase())){inp.value='';return}
   if(t[0]==='/'){if(online)netSend({t:'chat',m:t});else runCmd(t)}
   else if(NET.on)netSend({t:'chat',m:t});else say('Chat needs the multiplayer server.','#8d9aa2');
   done();
@@ -6604,6 +6660,23 @@ function logout(){
   authForget();
   location.reload();
 }
+/* v5_309 after login: every avatar (5 classes x He/She) is downloaded before the title / game screen is shown. There is no skip: if a file fails the player can only retry. */
+async function loadAvatars(){
+  const box=$('avl'),bar=$('avB'),txt=$('avS'),btn=$('avR');
+  if(!window.VRM3D||!VRM3D.preloadAll)return;
+  box.hidden=false;
+  try{if(!T3.r)init3()}catch(e){}   /* the 3D engine (and VRM3D.init) must exist before the models can be built */
+  for(;;){
+    btn.style.display='none';bar.style.width='0%';txt.textContent='Loading avatars... 0%';
+    let fails=[];
+    try{fails=await VRM3D.preloadAll((d,t)=>{const p=Math.round(d/t*100);bar.style.width=p+'%';txt.textContent='Loading avatars... '+d+'/'+t})}catch(e){fails=['?']}
+    if(!fails.length)break;
+    txt.textContent='Could not load '+fails.length+' avatar'+(fails.length===1?'':'s')+'. Check your connection and retry.';
+    btn.style.display='inline-block';
+    await new Promise(r=>{btn.onclick=r});
+  }
+  bar.style.width='100%';box.hidden=true;
+}
 async function enterAccount(){
   let server=null,got=false,newerLocal=false;
   try{server=await api('/api/load');got=true}catch(e){if(e.status===401){authForget();AUTH.token='';setAuthUI();authMsg('Session expired. Please log in again.');return}
@@ -6623,6 +6696,7 @@ async function enterAccount(){
   else{$('bStart').textContent='Begin ascension'}
   try{const me=await api('/api/me');AUTH.ign=me.ign||''}catch(e){AUTH.ign=''}
   walletLoad();
+  await loadAvatars();
   setAuthUI();applyIgnUI();hud();
 }
 async function doAuth(kind){

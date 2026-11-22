@@ -1,4 +1,4 @@
-WORLD OF ASCENSION - current state (v5_201; ground shader v5_261)
+WORLD OF ASCENSION - current state (v5_201; ground shader v5_261; animations v5_322)
 Full version history: CHANGELOG.txt
 
 RUN / BUILD
@@ -20,8 +20,11 @@ FILES
   web/game.js                GENERATED from the parts above (the whole client game)
   web/fx3d.js                3D sky (clouds, auroras, stars, per-world celestial bodies), fog + ground mist, glow sprites, level-up light pillars (off switch: ?fx3=0)
   web/three-compat.js        keeps a newer Three.js looking like r128 (see THREE_UPGRADE.txt)
+  web/trees3d.js             real tree models (v5_321): swaps the primitive tree props of the 3D scenery for the Quaternius tree pack in web/trees/ (trees.json, trees.bin, tex/); RECIPES = which prop gets which trees; ?trees=0 turns it off; tools/make_trees.py rebuilds the pack from the OBJ files
+  web/skillfx3d.js           (v5_327; spell sprites removed v5_329) skill cast effects: Attack Slashes meshes only (web/skillfx/); ?skfx=0 turns it off; tools/make_skillfx.py rebuilds the slashes
   web/pets3d.js              3D pet models (PET3D.make(species, class)): chicken, dragon, fairy, phoenix, tiger, wolf + class effects
-  web/vrm3d.js              VRM 1.0 loader + rig for the Cultivator avatars (web/Cultivator_He.vrm, web/Cultivator_She.vrm) and the Night Blade avatars (web/NightBlade_He.vrm, web/NightBlade_She.vrm) and the Iron Guardian avatars (web/IronGuardian_He.vrm, web/IronGuardian_She.vrm) and the Storm Archer avatars (web/StormArcher_He.vrm, web/StormArcher_She.vrm) and the Spirit Summoner avatars (web/SpiritSummoner_He.vrm, web/SpiritSummoner_She.vrm); ?vrm=0 hides all avatars (v5_300: the old built-in 3D bodies are deleted, models3d.js keeps only the animation rig)
+  web/vrm3d.js              VRM 1.0 loader + rig for the Cultivator avatars (web/Cultivator_He.vrm, web/Cultivator_She.vrm) and the Night Blade avatars (web/NightBlade_He.vrm, web/NightBlade_She.vrm) and the Iron Guardian avatars (web/IronGuardian_He.vrm, web/IronGuardian_She.vrm) and the Storm Archer avatars (web/StormArcher_He.vrm, web/StormArcher_She.vrm) and the Spirit Summoner avatars (web/SpiritSummoner_He.vrm, web/SpiritSummoner_She.vrm); weapons (v5_317): web/weapons/Sword|Dagger|Hammer|Bow|Staff.glb, mounted on the VRM hands, hold angles in WSPEC; ?vrm=0 hides all avatars (v5_300: the old built-in 3D bodies are deleted, models3d.js keeps only the animation rig)
+  web/anim3d.js + web/anims/   (v5_322) the 82 moves of the Universal Animation Library 1 + 2 (Quaternius, CC0) on the VRM avatars: locomotion, jump, dodge, per-class attacks, skills, hit, death, mining, potion, and /emotes (type /emotes). ?anim=0 = the old procedural moves. (v5_330) every skill and signature skill has its own cast move (SKILL in anim3d.js), all 82 clips are in use. node tools/test_skillmoves.js checks them. tools/bake_anims.py rebuilds web/anims from the two library folders
   web/models3d.js audio.js tutorial.js sw.js manifest.json
 
 CLASSES (passives; skills are in web/game.js: CLB, CLS_GEN, NB_T, SKILLS)

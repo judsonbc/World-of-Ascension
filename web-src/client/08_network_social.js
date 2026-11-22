@@ -466,6 +466,7 @@ function onSnap(m){
     if(o.dead){o.dead=false;o.pend=false;o.dieT=0;o.x=e[1];o.y=e[2];o.lx=undefined} /* respawned */
     o.tx=e[1];o.ty=e[2];
     if(!(o.predT>0&&e[3]>o.hp))o.hp=e[3];
+    o.hpAuth=e[3]; /* v5_315 the server's own health value (o.hp also holds the predicted one) */
     if(e[3]>0)o.pend=false;
     const st=e[4]&3;o.state=st===1?'chase':st===2?'return':'idle';
     if((e[4]&8)&&!(o.atkT>0))o.atkT=.25;
@@ -561,7 +562,10 @@ function playFx(m){
         ring(p[i+2],p[i+3],40,col);
       }
       break}
-    case 'sw':if(q){q.swing=.18;q.face=+m.f||0}break;
+    case 'sw':if(q){q.swing=.18;q.skT='';q.face=+m.f||0}break;
+    case 'an':if(q){q.skT=String(m.s||'').slice(0,14);q.skTi=(q.skTi|0)+1;q.swing=.2;if(dist(q.x,q.y,P.x,P.y)<1600)skfxCast({t:q.skT,cls:(q.sk>>>21)&7,x:q.x,y:q.y,face:q.face,r:150,col:col})}break;   /* v5_322 another player's skill: its move (anim3d.js) */
+    case 'em':if(q){q.emo={n:String(m.e||'').slice(0,12)||null,id:(q.emo?q.emo.id:0)+1}}break;   /* v5_322 another player's emote (/dance ...) */
+    case 'ac':if(q){q.act={n:String(m.e||'').slice(0,12),id:(q.act?q.act.id:0)+1}}break;   /* v5_322 another player's one-shot move (drinking ...) */
     case 'dg':if(q){q.dg=clamp(m.d|0,1,3);q.dgS=performance.now()/1000;q.dgU=0;q.face=+m.f||0}break; /* v5_304 dodge: 1 forward roll, 2 side roll, 3 back dive */
     case 'jz':if(q){q.jzT=clamp(+m.z||0,0,400);q.jzAt=performance.now()/1000}break; /* v5_170 another player's height above the ground (jumping / standing on a structure) */
     case 'sp':{ /* v5_165 another player's spirits (visual only) */

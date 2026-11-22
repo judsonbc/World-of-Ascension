@@ -1,0 +1,2 @@
+Slash textures + mesh: "Attack Slashes" pack (Claw_slash*, Sword_slash*, Slash.fbx), resized to 1024x256.
+Check the pack's own licence before publishing the game.  Rebuild: python3 tools/make_skillfx.py <Attack Slashes dir> web/skillfx

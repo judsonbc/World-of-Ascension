@@ -262,6 +262,17 @@ function finishTp(){
   spark(P.x,P.y,'#ffffff',30,260,1,3.4,120);spark(P.x,P.y,'#9a6bff',24,180,1,3,90);ring(P.x,P.y,100,'#ffffff');ring(P.x,P.y,70,'#b794f4');shake=Math.max(shake,.25);pop(P.x,P.y-40,'Home','#d2b4ff',16);
   bagLog('Used a Home Scroll','#d2b4ff');save();if(!$('bag').hidden)renderBag();
 }
+/* v5_322 Universal Animation Library: the avatar's moves (web/anim3d.js).  deadTilt: the Death01 clip lies the figure down itself, the old -1.4 rad tilt is only used without clips.
+   emoteCmd: /dance /sit /talk /yes /no /kneel ... (/emotes lists them, /stand stops, walking stops them too); others see it through the 'em' fx. */
+function deadTilt(R,d){return d>0&&!(window.ANIM3D&&ANIM3D.ready()&&R.vrmOn)?-1.4:0}
+function emoteCmd(n){
+  const E=window.ANIM3D&&ANIM3D.EMOTES;
+  if(n==='emotes'||n==='emote'){say('Emotes: /'+(E?Object.keys(E).join(' /'):'(not loaded)')+'   \u00b7 /stand stops. Walking stops them too.','#8d9aa2');return true}
+  if(n==='stand'){P.emo={n:null,id:(P.emo?P.emo.id:0)+1};fxs({k:'em',e:''});return true}
+  if(!E||!Object.prototype.hasOwnProperty.call(E,n))return false;
+  if(P.dead>0)return true;
+  P.emo={n,id:(P.emo?P.emo.id:0)+1};fxs({k:'em',e:n});return true;
+}
 function usePot(k,auto){
   if(k==='tp'){useTp();return}
   if(!started||P.dead>0||pot[k]>0)return;
@@ -269,7 +280,7 @@ function usePot(k,auto){
   if(k==='ck'){if(P.hp>=maxHp()){say('HP is already full.','#8d9aa2');return}const h=healP(Math.round(maxHp()*CK_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#f0b25a',17);spark(P.x,P.y,'#f0b25a',16,90,.9,2.8,60);ring(P.x,P.y,60,'#f0b25a')}
   else if(k==='hp'){if(P.hp>=maxHp())return;const h=healP(Math.round(maxHp()*HP_POT_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#ff8a80',15);spark(P.x,P.y,'#ff9a8a',10,70,.8,2.6,50)}
   else{if(P.qi>=maxQi())return;const q=Math.round(maxQi()*MP_POT_PCT);P.qi=Math.min(maxQi(),P.qi+q);pop(P.x,P.y-30,'+'+q+' MP','#8fd0ff',14);spark(P.x,P.y,'#8fd0ff',10,70,.8,2.6,50)}
-  P.pots[k]--;pot[k]=k==='ck'?CK_CD:POT_CD;SFX('potion');save();if(!$('bag').hidden)renderBag();
+  P.pots[k]--;pot[k]=k==='ck'?CK_CD:POT_CD;SFX('potion');P.act={n:'drink',id:(P.act?P.act.id:0)+1};fxs({k:'ac',e:'drink'});save();if(!$('bag').hidden)renderBag();
 }
 function autoPot(){if(!P.autoPot||!started||P.dead>0)return;if(P.hp<maxHp()*(P.apHp||35)/100)usePot('hp',true);if(P.qi<maxQi()*(P.apQi||20)/100)usePot('qi',true)}
 function bagRow(label,val,col){const d=document.createElement('div');d.className='row';const b=document.createElement('b');b.textContent=label;if(col)b.style.color=col;const v=document.createElement('span');v.textContent=val;d.appendChild(b);d.appendChild(v);return d}

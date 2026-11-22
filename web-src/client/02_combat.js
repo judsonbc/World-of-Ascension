@@ -388,7 +388,8 @@ function useSkill(i,auto){
     if(t==='mend'){P.sh=Math.round(maxHp()*(.1+tr*.03));P.shT=8;P.qi=Math.min(maxQi(),P.qi+maxQi()*.1)}
     ring(P.x,P.y,70,'#5fd3a5');fxs({k:'ri',x:P.x,y:P.y,r:70,c:'#5fd3a5'});pop(P.x,P.y-30,'+'+h,'#5fd3a5',15);spark(P.x,P.y,'#f4b3c8',14,70,1,3,60);spark(P.x,P.y,'#8ff0c4',10,60,1,2.4,50);
   }
-  skPay(s,hpc);SCD[id]=s.cd;P.swing=.2;P.skLock=SKILL_GCD;sfxSkill(t);
+  skPay(s,hpc);SCD[id]=s.cd;P.skT=t;P.skTi=(P.skTi|0)+1;fxs({k:'an',s:t});P.swing=.2;P.skLock=SKILL_GCD;sfxSkill(t);
+  {const rc=skillReach(t,tr,mel,mr),tp=aimT();skfxCast({t,cls:P.cls,x:P.x,y:P.y,face:P.face,tx:tp?tp.x:null,ty:tp?tp.y:null,r:rc?rc[0]:150,col:s.col})} /* v5_327 spell sprites + slash meshes of the skill (web/skillfx3d.js) */
   /* v5_109 CASTING: casting a skill stops you for a moment and plays a cast pose (arms raised). Dash skills (CAST_NOROOT) keep moving you instead. Tune CAST_T / CAST_T_LONG. */
   if(!CAST_NOROOT[t]){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null} /* v5_153 casting roots you again (v5_152 removed the root while moving); v5_154 a move input does NOT cancel it, you move when the pose ends */
   return true;
@@ -631,7 +632,8 @@ function switchClass(c){
 /* v5_283 AUTO-HUNT REALM LIMIT. The "realms" here are the 9 zones of a world (ZONES, rings of distance from the hub; the hub itself counts as zone 0).
    The zone you are in when you switch Auto-hunt on is the ANCHOR; while it is on you may only be in the anchor zone, one zone above it or one zone below it (AUTO_REALM_SPAN = 1).
    Auto-hunt never ends because of this: if you end up outside (you walked, dashed, chased, got pushed), you are put back at the nearest edge of the allowed range (autoRealmClamp, called from updatePlayer),
-   and auto-hunt / F / skills do not pick monsters outside the range (nearest below). Switching Auto-hunt off and on again sets a new anchor; arriving in another world also sets a new one. */
+   and auto-hunt / F / skills do not pick monsters outside the range (nearest below). Switching Auto-hunt off and on again sets a new anchor; arriving in another world also sets a new one.
+   v5_311: moving by hand (keys / joystick / tap to move) while auto-hunt is on is free; the zone where you stop becomes the new anchor (no prompt). */
 const AUTO_REALM_SPAN=1;let autoAnc=null; /* {w:world, z:zone index} while auto-hunt is on */
 function zoneIdxAt(x,y){const d=dist(x,y,C,C);for(let k=0;k<ZONES.length-1;k++)if(d<ZONES[k].d)return k;return ZONES.length-1}
 function autoAnchorNow(){autoAnc={w:curWorld,z:zoneIdxAt(P.x,P.y)}}
@@ -641,6 +643,7 @@ function autoRealmLimits(){ /* [lowest, highest] allowed zone index, or null = n
   return [Math.max(0,autoAnc.z-AUTO_REALM_SPAN),Math.min(ZONES.length-1,autoAnc.z+AUTO_REALM_SPAN)];
 }
 function autoRealmClamp(){
+  if(P.arMoving)return; /* v5_311 walking by hand: free until you stop, then autoAnchorNow() sets the new starting realm (05_render2d.js) */
   const L=autoRealmLimits();if(!L)return;
   const z=zoneIdxAt(P.x,P.y);if(z>=L[0]&&z<=L[1])return;
   const d=dist(P.x,P.y,C,C),a=d>1?Math.atan2(P.y-C,P.x-C):0;
@@ -655,6 +658,7 @@ function nearest(maxd){
   const L=autoRealmLimits();
   for(const m of mons){
     if(m.dead||m.pend)continue;
+    if(m===P.skipM&&P.skipT>0)continue; /* v5_315 the stuck-target watchdog skips a monster that took no damage for 5 s */
     if(L){const z=zoneIdxAt(m.x,m.y);if(z<L[0]||z>L[1])continue} /* v5_283 auto-hunt: only monsters inside the allowed zones */
     const d=dist(m.x,m.y,P.x,P.y);
     if(d<bd){bd=d;best=m}

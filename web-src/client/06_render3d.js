@@ -2,6 +2,7 @@
 let MODE3D=true;try{MODE3D=localStorage.getItem('al3d')!=='0'}catch(e){}
 const PRS=[1,1.15,1.3,1.5]; /* phone render scale steps (was a fixed 0.85); auto-lowered if the phone cannot hold ~45 fps */
 const prWant=()=>LOW?Math.min(PRS[T3.lv],Math.max(1,window.devicePixelRatio||1))*(PQ.lock&&PQ.rs?PQ.rs:1):T3.pr0; /* very low: render at 0.5x resolution */
+const ZOOM_MIN=.22; /* v5_319 closest camera (was .55): camera distance = 497 x zoom */
 const T3={r:null,fr:0,zoom:1,mp:new Map(),rp:new Map(),it:new Map(),or:new Map(),pj:new Map(),built:-1,cc:{}};let G3,hfn=()=>0;
 const WMAP=[['hills',40,.0017],['mesas',60,.0013],['ridged',55,.0021],['spires',90,.0011],['isles',50,.0012],['isles',60,.0019],['hills',55,.0015],['spires',100,.0013],['crater',70,.0014],['dunes',45,.0018],['mesas',70,.0017],['ridged',80,.0013]];
 const KITS=[[['Cone',1,3.2,1,1.6,0],['Dodeca',1.2,.8,1.2,.4,2],['Sphere',.9,.6,.9,.3,1]],[['Octa',.8,3,.8,1.5,1],['Octa',1.2,1,1.2,.5,0],['Dodeca',.6,.5,.6,.2,3]],[['Box',.8,3.4,.8,1.7,2],['Box',1.4,.7,1.4,.35,3],['Cyl',.5,1.2,.5,.6,0]],[['Cyl',.35,1.8,.35,.9,3],['Sphere',1.4,.9,1.4,1.6,0],['Sphere',.7,.5,.7,.25,1]],[['Cone',.5,3.8,.5,1.9,0],['Cyl',.45,2.2,.45,1.1,1],['Dodeca',1,.6,1,.3,2]]];
@@ -50,7 +51,7 @@ const GSK=[['#a89b84','#8a5a3a','#d9c08a','#6a3a30','#c8b89a'],['#6e6c70','#4a46
  ['#2a2438','#1a1428','#4a3a68','#9a5aff','#120c1c'],['#c8c0a8','#8a6a44','#e8e0c8','#f4f0e0','#d8d0b8'],['#8a7a58','#6a5a38','#d8b868','#f0d070','#b8a070'],['#a89868','#c89a40','#f4e0a0','#fff2b0','#fffbe8']];
 function rebuild3(){
   T3.hg=null;
-  if(T3.world){T3.sc.remove(T3.world);T3.world.traverse(o=>{if(o.geometry&&o.geometry.dispose&&!Object.values(G3).includes(o.geometry))o.geometry.dispose()})}
+  if(T3.world){T3.sc.remove(T3.world);T3.world.traverse(o=>{if(o.geometry&&o.geometry.dispose&&!(o.geometry.userData&&o.geometry.userData.keep)&&!Object.values(G3).includes(o.geometry))o.geometry.dispose()})}
   const wg=new THREE.Group(),i=curWorld,w=W[i];hfn=mkH(i);T3.world=wg;
   const GS=gStats(i),wl=GS.wl; /* v5_261 water level + height statistics of this world */
   const S=RIM+120,N=LOW?(PQ.lock?PQ.terr:150):360,geo=new THREE.PlaneGeometry(S*2,S*2,N,N).rotateX(-Math.PI/2),pos=geo.attributes.position,col=new Float32Array(pos.count*3),zc=ZONES.map(z=>new THREE.Color(z.fill)),tc=new THREE.Color();
@@ -77,8 +78,10 @@ function rebuild3(){
   if(i===ARENA){const bg=new THREE.BoxGeometry(12,70,12),bm=new THREE.MeshBasicMaterial({color:0xff5a4a});for(let k=0;k<96;k++){const a=k/96*6.2832,x=Math.cos(a)*(RIM+10),z=Math.sin(a)*(RIM+10),pl=new THREE.Mesh(bg,bm);pl.position.set(x,hfn(x,z)+30,z);wg.add(pl)}}
   const dp=w.dp||['#16241d','#1c2f25','#4d5258','#5d636a'],kp=AL3D.kit(kitOf(i),dp,w.acc),dm=new THREE.MeshLambertMaterial({vertexColors:true});
   for(let k=0;k<DECO_N;k++){const list=deco.filter((d,ix)=>d.k===k&&(!LOW||ix%3===0)&&(wl<-1e4||gh3(d.x,d.y)>wl+1)),im=new THREE.InstancedMesh(kp[k],dm,list.length),du=new THREE.Object3D(),c=new THREE.Color();
-    list.forEach((d,n)=>{const q=d.s*28;du.position.set(d.x-C,gh3(d.x,d.y)-q*.05,d.y-C);du.scale.set(q,q,q);du.rotation.y=n;du.updateMatrix();im.setMatrixAt(n,du.matrix);c.setScalar(.8+((n*37)%10)/22);im.setColorAt(n,c)});
-    im.frustumCulled=false;wg.add(im)}
+    const tm=window.TREES3D&&[],tt=tm&&[]; /* v5_321 real tree models: the matrices + tints are kept for TREES3D.attach (a no-op for props that are not trees) */
+    list.forEach((d,n)=>{const q=d.s*28,tn=.8+((n*37)%10)/22;du.position.set(d.x-C,gh3(d.x,d.y)-q*.05,d.y-C);du.scale.set(q,q,q);du.rotation.y=n;du.updateMatrix();im.setMatrixAt(n,du.matrix);c.setScalar(tn);im.setColorAt(n,c);if(tm){tm.push(du.matrix.clone());tt.push(tn)}});
+    im.frustumCulled=false;wg.add(im);
+    if(tm)try{TREES3D.attach({kit:kitOf(i),k,wg,old:im,mats:tm,tints:tt,alive:()=>T3.world===wg,low:LOW})}catch(e){console.warn('trees',e)}}
   if(bld.length){ /* v5_172 buildings: every part is an instance of one of 9 shared shapes -> 9 draw calls for the whole building layer */
     const wcol=g=>{g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(g.attributes.position.count*3).fill(1),3));return g},
       prism=()=>{const v=[],p=(a,b,c)=>v.push(...a,...b,...c),A=[-.5,0,-.5],B=[-.5,0,.5],Cc=[-.5,1,0],D=[.5,0,-.5],E=[.5,0,.5],F=[.5,1,0];
@@ -292,10 +295,16 @@ function sync3(map,list,make,upd,vis){const fr=T3.fr;
   for(const o of list){if(vis&&!vis(o))continue;let m=map.get(o);if(!m){m=make(o);map.set(o,m);T3.sc.add(m)}m.userData.f=fr;upd(m,o)}
   for(const [o,m] of map)if(m.userData.f!==fr){T3.sc.remove(m);if(m.userData.mat)m.userData.mat.dispose();map.delete(o)}}
 function proj3(x,y,h){const v=T3.v.set(x-C,gh3(x,y)+h,y-C).project(T3.cam);return v.z>1?null:{x:(v.x+1)/2*VW,y:(1-v.y)/2*VH}}
-function pick3(e){const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1,.5).unproject(T3.cam),o=T3.cam.position;v.sub(o).normalize();
-  if(v.y>=-.01)return null;let t=(gh3(P.x,P.y)-o.y)/v.y;
-  for(let k=0;k<3;k++){const h=gh3(o.x+v.x*t+C,o.z+v.z*t+C),t2=(h-o.y)/v.y;if(!(t2>0)||t2>9000)break;t=t2} /* v5_276 refine against the real terrain height (was one flat plane at the player's height, so on a slope the click landed beside / short of the spot you pointed at) */
-  return {x:o.x+v.x*t+C,y:o.z+v.z*t+C}}
+function pick3(e){   /* v5_312 the first point where the click ray meets the real terrain: march along the ray, then bisect (the old fixed-point refine could jump on slopes and near the horizon) */
+  const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1,.5).unproject(T3.cam),o=T3.cam.position;v.sub(o).normalize();
+  if(v.y>=-.01)return null;
+  const hh=t=>o.y+v.y*t-gh3(o.x+v.x*t+C,o.z+v.z*t+C);   /* > 0 = the ray is above the ground at distance t */
+  let a=0,b=-1,up=hh(0)>0;
+  for(let t=20;t<=6000;t+=t<800?20:60){const h=hh(t);if(h>0){up=true;a=t}else if(up){b=t;break}}
+  if(b<0)return null;
+  for(let k=0;k<10;k++){const m=(a+b)/2;if(hh(m)>0)a=m;else b=m}
+  const t=(a+b)/2,x=o.x+v.x*t+C,y=o.z+v.z*t+C;
+  return dist(x,y,P.x,P.y)>2600?null:{x,y}}   /* too far away = the horizon: the caller walks 600 units toward that direction instead */
 /* v5_276 the ground direction (unit vector) of a click that hit the sky / horizon, or null */
 function skyHeading(e){const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1,.5).unproject(T3.cam),o=T3.cam.position;v.sub(o).normalize();
   const l=Math.hypot(v.x,v.z);return l>.05?{x:v.x/l,y:v.z/l}:null}
@@ -307,6 +316,9 @@ function fx3dFrame(dl){
   try{FXC.T3=T3;FXC.THREE=THREE;FXC.P=P;FXC.C=C;FXC.gh3=gh3;FXC.dl=dl;FXC.time=time;FXC.projs=projs;FXC.mons=mons;FXC.items=items;FXC.ores=ores;FXC.beams=beams;FXC.fx=fx;FXC.LOW=LOW;FXC.PQ=PQ;FXC.world=curWorld;FXC.LK=LK;FX3.frame(FXC)}
   catch(e){FXC.off=true;console.warn('FX3 off:',e);try{FX3.dispose(FXC)}catch(_){}}
 }
+/* v5_327 skill cast effects (web/skillfx3d.js): spell sprites + slash meshes. Same safety as FX3: an error only switches this layer off. Off switch: ?skfx=0 or localStorage woa_skfx='0'. */
+function skfxCast(o){try{if(window.SKFX)SKFX.cast(o)}catch(e){}}
+function skfxFrame(){if(!window.SKFX)return;try{SKFX.frame({THREE,T3,C,gh3,LOW})}catch(e){console.warn('SKFX off:',e);try{SKFX.dispose()}catch(_){}window.SKFX=null}}
 function render3D(){
   try{
     if(!T3.r)init3();
@@ -329,14 +341,14 @@ function render3D(){
       const cl=gh3(tx+ox+C,tz+oz+C)+30-(ty+st*D);if(cl>lift)lift=cl;
       T3.lift=lift>(T3.lift||0)?lift:(T3.lift||0)+(lift-(T3.lift||0))*.06;
       T3.cam.position.set(tx+ox+(Math.random()-.5)*sh,ty+st*D+T3.lift,tz+oz)}T3.cam.lookAt(tx,gy+24+(T3.cz||0),tz);if(camView.tilt<CAM_TILT_MIN)T3.cam.rotateX(CAM_TILT_MIN-camView.tilt);T3.cam.updateMatrixWorld();T3.pm.multiplyMatrices(T3.cam.projectionMatrix,T3.cam.matrixWorldInverse);T3.frus.setFromProjectionMatrix(T3.pm);
-    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=smoothYaw(pl,Math.PI/2-P.face);pl.rotation.x=P.dead>0?-1.4:0;if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());P.ft=armorFireTier(P);AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
+    const pl=T3.pl;pl.position.set(tx,gy+(P.jz||0),tz);pl.rotation.y=smoothYaw(pl,Math.PI/2-P.face);pl.rotation.x=deadTilt(T3.rig,P.dead);if(T3.rig.skin!==SKW())AL3D.setSkin(T3.rig,SKW());P.ft=armorFireTier(P);AL3D.animPlayer(T3.rig,P,time,realmIdx());jumpRings(T3.rig,P.jz||0);AL3D.hubUpdate(T3.hub,time);petRender3();
     let rpl=NONE;
     if(MP&&NET.peers.size){const prg=LOW?800:1200,PMAX=LOW?PQ.peers:14;let nw=0;rpl=[];
       for(const q of NET.peers.values()){const had=T3.rp.has(q),e=prg+(had?150:0);if(Math.abs(q.x-P.x)>e||Math.abs(q.y-P.y)>e)continue;
         if(!had){if(nw>=1)continue;nw++}rpl.push(q)}
       if(rpl.length>PMAX){rpl.sort((a,b)=>Math.hypot(a.x-P.x,a.y-P.y)-Math.hypot(b.x-P.x,b.y-P.y));rpl.length=PMAX}}
     sync3(T3.rp,rpl,q=>{const R=AL3D.makePlayer(q.sk),g=R.root;g.userData.rig=R;g.userData.mat={dispose(){try{Object.values(R.m).forEach(x=>x.dispose&&x.dispose())}catch(e){}}};return g},
-      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=smoothYaw(g,Math.PI/2-q.face);g.rotation.x=q.dead>0?-1.4:0;q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
+      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=smoothYaw(g,Math.PI/2-q.face);g.rotation.x=deadTilt(R,q.dead);q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
       null);
     peerPets3(rpl===NONE?NONE:rpl); /* v5_201 other players' pets */
     {const rg=((LOW?650:900)+(LOW?200:300)*T3.zoom)*(PQ.lock?PQ.mon:1);sync3(T3.mp,mons,mkMon,updMon,m=>(!m.dead||m.dieT>0)&&Math.abs(m.x-P.x)<rg+(T3.mp.has(m)?150:0)&&Math.abs(m.y-P.y)<rg-100+(T3.mp.has(m)?150:0))}
@@ -350,7 +362,7 @@ function render3D(){
     const pa=T3.pp.geometry.attributes,np=Math.min(parts.length,LOW?(PQ.lock?PQ.parts:350):1200);
     for(let i=0;i<np;i++){const q=parts[i],k=1-q.life/q.max;pa.position.setXYZ(i,q.x-C,gh3(q.x,q.y)+14+k*26,q.y-C);let c=T3.cc[q.col];if(!c)c=T3.cc[q.col]=new THREE.Color(q.col);pa.color.setXYZ(i,c.r,c.g,c.b)}
     pa.position.needsUpdate=pa.color.needsUpdate=true;T3.pp.geometry.setDrawRange(0,np);
-    fx3dFrame(dl);
+    fx3dFrame(dl);skfxFrame();
     T3.r.render(T3.sc,T3.cam);
     ctx.clearRect(-9,-9,VW+18,VH+18);ctx.textAlign='center';ctx.font='600 11px Figtree,system-ui,sans-serif';
     for(const m of mons){if(m.dead||!(m.boss||m===P.target||m===P.sel)||Math.hypot(m.x-P.x,m.y-P.y)>900)continue;const s=proj3(m.x,m.y,m.r*(m.boss?4.8:3.9)),t='Lv '+m.lvl+' '+m.name+' \u00b7 DEF '+effMonDef(m);if(!s)continue;ctx.fillStyle='#000';ctx.fillText(t,s.x+1,s.y+1);ctx.fillStyle=m.boss?'#e3b559':'#e8e0ca';ctx.fillText(t,s.x,s.y)}
@@ -367,7 +379,7 @@ function render3D(){
 }
 function toggle3D(){MODE3D=!MODE3D;try{localStorage.setItem('al3d',MODE3D?'1':'0')}catch(e){}if(!MODE3D)$('g3').style.display='none'}
 $('bPvp').addEventListener('click',togglePvpPanel);$('bView').addEventListener('click',toggle3D);$('bSkin').addEventListener('click',cycleSkin);
-cv.addEventListener('wheel',e=>{T3.zoom=clamp(T3.zoom*(e.deltaY>0?1.1:.9),.55,2.2)},{passive:true});
+cv.addEventListener('wheel',e=>{T3.zoom=clamp(T3.zoom*(e.deltaY>0?1.1:.9),ZOOM_MIN,2.2)},{passive:true});
 
 /* ---------- lighting & atmosphere ---------- */
 function drawMist(){

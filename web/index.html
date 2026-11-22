@@ -5,7 +5,7 @@
 #ldr .lr{height:8px;border-radius:5px;background:rgba(232,224,202,.14);overflow:hidden}#ldr .lr i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#5fd3a5,#e3b559);transition:width .25s}
 #ldr .ls{margin-top:12px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:#8d9aa2;min-height:18px}
 #ldr button{margin:14px 6px 0;padding:8px 16px;border:1px solid rgba(232,224,202,.3);border-radius:8px;background:rgba(232,224,202,.08);color:#e8e0ca;font:13px -apple-system,BlinkMacSystemFont,sans-serif}</style>
-<div id="ldr"><div class="lb"><div class="lt">World of Ascension</div><div class="lr"><i id="ldB"></i></div><div class="ls" id="ldS">Starting...</div><div id="ldX" style="display:none"><button id="ldR">Retry</button><button id="ldC">Continue anyway</button></div><div><button id="ldK" style="display:none">Continue now (sound will follow)</button></div></div></div>
+<div id="ldr"><div class="lb"><div class="lt">World of Ascension</div><div class="lr"><i id="ldB"></i></div><div class="ls" id="ldS">Starting...</div><div id="ldX" style="display:none"><button id="ldR">Retry</button></div></div></div>
 <script>
 /* Preloader: downloads/caches the game files (service worker keeps them on the device), waits for fonts and the 3D engine, then lifts the screen. */
 (function(){
@@ -14,27 +14,24 @@
   function done(){if(fin)return;fin=true;bar.style.width='100%';box.style.opacity='0';setTimeout(function(){if(box.parentNode)box.parentNode.removeChild(box)},320)}
   function trouble(m){txt.textContent=m;x.style.display='block'}
   document.getElementById('ldR').onclick=function(){location.reload()};
-  document.getElementById('ldC').onclick=done;
   var sw='serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1');
   if(sw)navigator.serviceWorker.register('sw.js').catch(function(){});
   /* 1) game files (cache hit = instant; first visit downloads and the service worker stores them) */
-  var files=['models3d.js','pets3d.js','audio.js','tutorial.js','three-compat.js','fx3d.js','manifest.json'],got=0;
+  var files=['models3d.js','pets3d.js','audio.js','tutorial.js','three-compat.js','fx3d.js','skillfx3d.js','manifest.json'],got=0;
   set(4,'Downloading game files...');
   files.forEach(function(f){fetch(f).then(function(r){return r.arrayBuffer()}).catch(function(){}).then(function(){got++;set(4+got/files.length*50,'Downloading game files... '+got+'/'+files.length)})});
   var wait=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
-  var sndBusy=false,sndSkip=false;
+  var sndBusy=false;
   var sndWait=function(){return new Promise(function(res){
     var S=window.SND;if(!S||!S.progress){res();return}
-    var t0=Date.now(),k2=document.getElementById('ldK');sndBusy=true;
-    k2.onclick=function(){sndSkip=true};
-    var out=function(){sndBusy=false;k2.style.display='none';res()};
+    var t0=Date.now();sndBusy=true;
+    var out=function(){sndBusy=false;res()};
     (function k(){
       var p=S.progress(),el=Date.now()-t0;
       if(p.ready){set(92);out();return}
       var f=p.total?p.done/p.total:0;
       set(74+f*18,(p.cached?'Preparing sounds... ':'Preparing sounds (first start only)... ')+Math.min(99,Math.round(f*100))+'%');
-      if(el>15000)k2.style.display='inline-block';           /* slow phone: let the player go in without waiting */
-      if(sndSkip||el>90000){out();return}                      /* the rest keeps finishing in the background */
+      if(el>90000){out();return}                               /* safety net: sounds that are still loading finish in the background */
       setTimeout(k,120);
     })();
   })};
@@ -451,6 +448,9 @@ html.phone #finv button{min-height:36px;padding:6px 12px;font-size:13px}
 #log div{font:600 calc(13*var(--u))/1.3 var(--body);padding:0;background:none;text-shadow:0 0 calc(3*var(--u)) #000,0 calc(1*var(--u)) calc(2*var(--u)) #000,0 0 calc(6*var(--u)) #000;animation:fade 6s forwards}
 @keyframes fade{0%,80%{opacity:1}100%{opacity:0}}
 #sb{position:absolute;left:calc(8*var(--u));bottom:calc(5*var(--u));display:flex;gap:calc(14*var(--u));align-items:center;font:600 calc(13*var(--u)) var(--body);font-variant-numeric:tabular-nums}
+/* v5_313 the player's IGN sits right above the clock */
+#ign{position:absolute;left:calc(8*var(--u));bottom:calc(23*var(--u));max-width:calc(220*var(--u));overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;font:600 calc(13*var(--u)) var(--body);color:#e3b559}
+#ign:empty{display:none}
 #sb .clk{color:#d8dde0}#sb .xpt{color:#4fe3e8}
 #sb .net{display:flex;align-items:center;gap:calc(5*var(--u));color:#b7e04a}
 #sb .net.mid{color:#ffd54a}#sb .net.bad{color:#ff6a5a}#sb .net.off{color:#8d9aa2}
@@ -1216,6 +1216,7 @@ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padd
       </div>
       <div id="cpPop" hidden></div>
     </div>
+    <div id="ign" class="tx"></div>
     <div id="sb" class="tx"><span class="clk" id="clk">00:00</span><span class="xpt" id="xpt">EXP 0%</span><span class="net off" id="net"><s><i style="height:calc(4*var(--u))"></i><i style="height:calc(7*var(--u))"></i><i style="height:calc(11*var(--u))"></i></s><span id="ping">solo</span></span></div>
 
     <!-- bottom-centre -->
@@ -1389,6 +1390,13 @@ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padd
     </div>
   </div>
 
+<!-- v5_309 AVATAR LOADING (after login): all 10 avatars are downloaded before the title / game screen; no skip button -->
+<style>#avl{position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147482000;background:#0d1114;color:#e8e0ca;display:flex;align-items:center;justify-content:center;font-family:'Marcellus SC',Georgia,serif}
+#avl[hidden]{display:none}#avl .lb{width:min(78vw,340px);text-align:center}#avl .lt{font-size:22px;letter-spacing:.06em;margin-bottom:22px;color:#e3b559}
+#avl .lr{height:8px;border-radius:5px;background:rgba(232,224,202,.14);overflow:hidden}#avl .lr i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#5fd3a5,#e3b559);transition:width .25s}
+#avl .ls{margin-top:12px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:#8d9aa2;min-height:18px}
+#avl button{margin:14px 6px 0;padding:8px 16px;border:1px solid rgba(232,224,202,.3);border-radius:8px;background:rgba(232,224,202,.08);color:#e8e0ca;font:13px -apple-system,BlinkMacSystemFont,sans-serif}</style>
+<div id="avl" hidden><div class="lb"><div class="lt">Loading avatars</div><div class="lr"><i id="avB"></i></div><div class="ls" id="avS">Starting...</div><div><button id="avR" style="display:none">Retry</button></div></div></div>
   <div class="modal" id="title">
     <div class="card panel" style="background:transparent;border:0;backdrop-filter:none;text-align:left;gap:16px;width:min(460px,100%)">
       <h1>World of <em>Ascension</em></h1>
@@ -1443,9 +1451,12 @@ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padd
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="var q=document.createElement('script');q.src='three.min.js';document.head.appendChild(q)"></script>
 <script src="three-compat.js"></script>
 <script src="models3d.js"></script>
+<script src="anim3d.js"></script>
 <script src="vrm3d.js"></script>
 <script src="pets3d.js"></script>
 <script src="fx3d.js"></script>
+<script src="skillfx3d.js"></script>
+<script src="trees3d.js"></script>
 <script src="audio.js"></script>
 <script src="game.js"></script>
 <script src="tutorial.js"></script>

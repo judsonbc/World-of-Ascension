@@ -38,7 +38,7 @@ function hud(){
   statsUpdate();
   st($('coins'),P.coins.toLocaleString());st($('gold'),P.gold.toLocaleString());st($('ore'),P.ore);st($('oreN'),P.ore);
   st($('partyN'),MP?NET.peers.size+1:1);
-  const d=new Date();st($('clk'),pad2(d.getHours())+':'+pad2(d.getMinutes()));
+  const d=new Date();st($('clk'),pad2(d.getHours())+':'+pad2(d.getMinutes()));st($('ign'),AUTH.ign||'');
   /* connection / ping */
   let nt='solo',nc='net off';
   if(NET.joined){if(NET.ping===undefined){nt='online';nc='net'}else{nt=NET.ping+' ms';nc='net'+(NET.ping>250?' bad':NET.ping>100?' mid':'')}}

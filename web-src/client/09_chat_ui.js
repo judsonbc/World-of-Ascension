@@ -329,6 +329,8 @@ function cpSend(){
   if(fc){inp.value='';frCmd(fc[1].toLowerCase()==='addfriend'?'friend':fc[1].toLowerCase(),fc[2]);return}
   const pc=t.match(/^\/(invite|accept|decline|leave|kick|leader|promote|disband|party|p)(?:\s+(.*))?$/i);
   if(pc){inp.value='';partyCmd(pc[1].toLowerCase(),(pc[2]||'').trim().replace(/^"(.*)"$/,'$1'));return}
+  const emc=t.match(/^\/(?:emote\s+|e\s+)?([a-z]+)\s*$/i);
+  if(emc&&emoteCmd(emc[1].toLowerCase())){inp.value='';return}
   if(t[0]==='/'){if(online)netSend({t:'chat',m:t});else runCmd(t)}
   else if(NET.on)netSend({t:'chat',m:t});else say('Chat needs the multiplayer server.','#8d9aa2');
   done();

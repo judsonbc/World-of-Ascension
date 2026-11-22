@@ -309,6 +309,7 @@ function updatePlayer(dt){
   }
   {const rd=Math.hypot(P.x-(P.rlx===undefined?P.x:P.rlx),P.y-(P.rly===undefined?P.y:P.rly));P.rlx=P.x;P.rly=P.y; /* v5_278 how long you have been running without stopping (teleports / knock-backs are ignored) */
    if(rd>dt*40&&rd<dt*moveSpd()*4)P.runT=(P.runT||0)+dt;else if(rd<=dt*40)P.runT=0}
+  P.arMvNow=false;
   const speed=P.cast>0?0:moveSpd(); /* rooted while casting */
   let ix=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0)+joy.x;
   let iy=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0)+joy.y;
@@ -322,7 +323,7 @@ function updatePlayer(dt){
     {const r=camRot(ix,iy);ix=r[0];iy=r[1]}
     const l=Math.max(.001,Math.hypot(ix,iy));   /* v5_307 unit direction: the speed no longer follows the push, only the walk zone slows it (sf) */
     P.x+=ix/l*speed*sf*dt;P.y+=iy/l*speed*sf*dt;if(!(P.dashT>0&&P.dg===3))P.face=Math.atan2(iy,ix);   /* v5_304 a back dive keeps facing the front */
-    P.mv=null;P.task=null;P.mine=0;P.fatk=false;stopMine('Auto-mine off.');
+    P.mv=null;P.task=null;P.mine=0;P.fatk=false;stopMine('Auto-mine off.');P.arMvNow=true; /* v5_311 you are steering by hand */
   }else if(P.task){
     const o=P.task;
     if(o.cd>0){P.task=null;P.mine=0}
@@ -336,7 +337,16 @@ function updatePlayer(dt){
     }else P.mine=0;
   }else if(P.target&&!P.target.dead){
     const m=P.target,rng=BASIC_RANGE[P.cls]||0,reach=rng?rng+m.r:P.r+m.r+30;
-    if(inTown())P.target=null; /* v5_90 no attacking inside the hub */
+    /* v5_315 STUCK-TARGET WATCHDOG (auto-hunt): a target that never loses health is dropped and skipped for 10 s, so the character looks for another monster instead of swinging at nothing for hours.
+       Causes: the server already killed it but the client missed the kill message (ghost), a predicted kill that was never confirmed (pend), a monster that cannot be reached or hit. */
+    if(auto&&!m.isPl){
+      const cur=MP&&m.hpAuth!==undefined?m.hpAuth:m.hp;
+      if(P.tgM!==m){P.tgM=m;P.tgHp=cur;P.tgT=0}
+      else if(cur<P.tgHp-.5){P.tgT=0;P.tgHp=cur}else{P.tgT+=dt;P.tgHp=Math.min(P.tgHp,cur)}
+      if(m.pend||P.tgT>5){P.skipM=m;P.skipT=10;P.target=null;P.tgM=null;P.fatk=false}
+    }else P.tgM=null;
+    if(!P.target){/* dropped by the watchdog: nothing to do this frame, the next frame picks a new target */}
+    else if(inTown())P.target=null; /* v5_90 no attacking inside the hub */
     else if(m.isPl&&(!MP||!NET.peers.has(m.id)||!pvpOk(m)))P.target=null; /* v5_158 a player target is only valid while my PvP mode allows it (outside the hub) */
     else if(dist(m.x,m.y,P.x,P.y)>(m.isPl?900:650)){P.target=null}
     else if(moveToward(m.x,m.y,rng?rng*BASIC_STAND:reach-6,dt,speed)===false){/* chasing */}
@@ -345,9 +355,10 @@ function updatePlayer(dt){
       const c=rnd()<critChance(),dd=dist(m.x,m.y,P.x,P.y);let d=Math.round(atkVal()*(.9+rnd()*.2)*(c?critMul():1)*(1+babVal()/100));
       if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));for(let q=1;q<=6;q++)spark(P.x+(m.x-P.x)*q/6,P.y+(m.y-P.y)*q/6,BASIC_COL[P.cls],1,30,.25,2.2)} /* ranged normal attack: damage falloff + a short bolt trail */
       if(m.isPl)hitPeer(m,d,c);else hitMonster(m,d,c);
-      P.qi=Math.min(maxQi(),P.qi+3);P.atkCd=atkCd();P.swing=.18;SFX('swing');fxs({k:'sw',f:+P.face.toFixed(2)});
+      P.qi=Math.min(maxQi(),P.qi+3);P.atkCd=atkCd();P.skT='';P.swing=.18;SFX('swing');fxs({k:'sw',f:+P.face.toFixed(2)});
     }
   }else if(P.mv){
+    P.arMvNow=true; /* v5_311 click / tap to move is a move command too */
     if(moveToward(P.mv.x,P.mv.y,6,dt,speed))P.mv=null;
   }else if(auto&&P.tp<=0&&inTown()&&!pvpOnly()&&curWorld!==ARENA){
     /* v5_100 auto-hunt inside the hub: attacking is blocked there, so walk out of the hub (toward the nearest monster) and fight outside. Not used in PvP. */
@@ -376,6 +387,7 @@ function updatePlayer(dt){
     }
   }
   if(P.cast>0)P.cast-=dt;
+  if(P.skipT>0){P.skipT-=dt;if(P.skipT<=0)P.skipM=null} /* v5_315 */
   P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);
   if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1,P.dg)-dashEase(e0,P.dg));P.x+=P.dvx*st;P.y+=P.dvy*st;P.dgU=e1;
     /* v5_142 dash animation: ghost trail left along the path (fades behind you), streak sparks flung backwards, soft landing ring */
@@ -383,6 +395,8 @@ function updatePlayer(dt){
     if(P.dashT<=0){ring(P.x,P.y,58,'#bfe9ff');spark(P.x,P.y,'#e8f6ff',12,110,.4,3);P.dg=0}}
   const d=dist(P.x,P.y,C,C);
   if(d>RIM-20){P.x=C+(P.x-C)/d*(RIM-20);P.y=C+(P.y-C)/d*(RIM-20)}
+  /* v5_311 moving by hand during auto-hunt: no clamp while you walk; the zone where you stop becomes the new starting realm (silent, no prompt) */
+  if(auto){if(P.arMvNow)P.arMoving=true;else if(P.arMoving){P.arMoving=false;autoAnchorNow()}}else P.arMoving=false;
   autoRealmClamp(); /* v5_283 auto-hunt stays within 1 zone of where it was started */
   if(solidPush(P)&&P.mv){P.mvBlk=(P.mvBlk||0)+dt;if(P.mvBlk>.35){P.mv=null;P.mvBlk=0}}else P.mvBlk=0; /* v5_167 solid structures; a click-to-move that keeps pressing into a wall is cancelled */
   playerVert(dt);

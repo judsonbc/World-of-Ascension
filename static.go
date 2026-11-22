@@ -71,7 +71,7 @@ func newStaticHandler(sub fs.FS) http.Handler {
 			f.ctype = "application/json; charset=utf-8"
 		}
 		switch path.Ext(n) {
-		case ".html", ".js", ".json", ".css", ".svg", ".txt", ".vrm":
+		case ".html", ".js", ".json", ".css", ".svg", ".txt", ".vrm", ".glb":
 			var buf bytes.Buffer
 			zw, _ := gzip.NewWriterLevel(&buf, gzip.BestCompression)
 			zw.Write(f.raw)
