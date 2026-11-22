@@ -453,8 +453,9 @@ function lockWeapon(o){
   _D.invert().multiply(o.hold);                                                                    /* the mount turn that gives the wanted hold angle with the hand as it is now */
   o.m1.quaternion.copy(o.fol).slerp(_D,o.lock);
 }
-function pose(R,P){
-  const v=R.vrm,t=tmp,tr=R.torso.rotation,hd=R.head.rotation,tk=R.dgTuck||0;   /* tk = dodge tuck 0..1: knees and elbows bend */
+/* the old procedural pose (arms / legs / torso angles of the built-in rig): the fallback while the clips load, with ?anim=0, or if a clip frame throws */
+function procPose(R,v){
+  const t=tmp,tr=R.torso.rotation,hd=R.head.rotation,tk=R.dgTuck||0;   /* tk = dodge tuck 0..1: knees and elbows bend */
   t.eu.set(tr.x*.4,tr.y*.4,0);setB(v,'spine',t.q1.setFromEuler(t.eu));
   t.eu.set(tr.x*.3,tr.y*.3,0);t.q1.setFromEuler(t.eu);setB(v,'chest',t.q1);setB(v,'upperChest',t.q1);
   {const mv=R.walk||0,ph=R.walkPh||0;   /* v5_301 walk: hips turn and roll a little with each small step */
@@ -469,14 +470,25 @@ function pose(R,P){
     const a=leg.rotation.x;t.q1.setFromAxisAngle(t.X,a);setB(v,side+'UpperLeg',t.q1);
     t.q2.setFromAxisAngle(t.X,Math.max(0,a)*.9+Math.abs(a)*.15+.04+tk*1.9);setB(v,side+'LowerLeg',t.q2);   /* knee bends on the back swing */
   }
-  if(window.ANIM3D&&ANIM3D.ready()){try{ANIM3D.apply(R,P,v)}catch(e){console.warn('ANIM3D: '+e.message);R.an=null}}   /* v5_322 Universal Animation Library moves: overwrite the bones set above (the procedural pose stays as the fallback) */
+}
+/* weapon shown / on the back + hurt / burning flash: cheap, runs every frame even when the pose of a distant avatar is skipped */
+function poseTail(R,P,v){
+  if(v.wpn&&v.wOut!==!!R.wOut){v.wOut=!!R.wOut;for(const o of v.wpn){o.hand.visible=v.wOut;if(o.carry)o.carry.visible=!v.wOut;if(!o.carry)o.hand.visible=true}}   /* v5_318 drawn only while fighting (R.wOut is set in animPlayer), otherwise on the back */
+  const k=P.hurt>0?2:P.bfT>0?1:0;                    /* hurt flash (red) / burning (amber), like the old body */
+  if(k!==v.fk){v.fk=k;const c=k===2?[.62,.12,.12]:k===1?[.45,.28,.1]:[.22,.22,.22];v.mats.forEach(m=>m.emissive.setRGB(c[0],c[1],c[2]))}
+}
+function pose(R,P){
+  const v=R.vrm,A=window.ANIM3D,clips=!!(A&&A.ready());
+  /* v5_331 LEVEL OF DETAIL: a distant avatar is posed only every R.lodS-th frame (ANIM3D.due; always when it is busy attacking / hit / dodging): it keeps its last pose in between */
+  if(clips&&!A.due(R,P)){if(R.an)R.body.position.y=R.an.lift||0;poseTail(R,P,v);return}   /* animPlayer wrote its procedural body bob again this frame; a posed frame replaces it with the clip's height (an.lift), so a skipped frame must too or the avatar flips between two heights every frame = shivering */
+  let done=false;
+  if(clips){try{done=A.apply(R,P,v)}catch(e){console.warn('ANIM3D: '+e.message);R.an=null}}   /* v5_322 Universal Animation Library moves set all 20 bones */
+  if(!done)procPose(R,v);   /* v5_331 the procedural pose is only the fallback now: with clips it was computed for nothing, every bone was overwritten */
   const dw=v.wpn&&DRAW[v.key]&&v.wOut?(R.drawW||0):0;
   if(dw>.001)drawPose(v,dw,DRAW[v.key]);   /* v5_323 archer: draw the bow in an attack / skill (R.drawW comes from anim3d.js) */
   if(v.wpn&&v.wOut)for(const o of v.wpn)if(o.lock>0)lockWeapon(o);   /* v5_323 bow / staff keep their hold angle while the clip moves the hand */
   if(v.wpn&&DRAW[v.key])bowDraw(v,dw,!!R.arrowGone&&v.wOut);          /* v5_325 after the lock: the arrow tail is put on the hand with the bow in its final place */
-  if(v.wpn&&v.wOut!==!!R.wOut){v.wOut=!!R.wOut;for(const o of v.wpn){o.hand.visible=v.wOut;if(o.carry)o.carry.visible=!v.wOut;if(!o.carry)o.hand.visible=true}}   /* v5_318 drawn only while fighting (R.wOut is set in animPlayer), otherwise on the back */
-  const k=P.hurt>0?2:P.bfT>0?1:0;                    /* hurt flash (red) / burning (amber), like the old body */
-  if(k!==v.fk){v.fk=k;const c=k===2?[.62,.12,.12]:k===1?[.45,.28,.1]:[.22,.22,.22];v.mats.forEach(m=>m.emissive.setRGB(c[0],c[1],c[2]))}
+  poseTail(R,P,v);
 }
 
 window.VRM3D={init,sync,pose,setB,parseGLB,preloadAll,WSPEC,_draw:{drawPose,bowDraw,DRAW},_weapons:{load:loadWeapon,tpl:WTPL,mount:mountWeapons},isReady:k=>ST[k||'he']===2,_build:(k,b)=>build(b).then(g=>{TPL[k]=g;ST[k]=2;return g}),_instance:k=>instance(k)};

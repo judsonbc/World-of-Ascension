@@ -10,6 +10,8 @@
        A clip starts a little before its strike moment (the moment the hand is fastest, baked as "hits"), so the hit lands when the game applies it.
    v5_330: every skill type and all 40 signature skills have their own move (SKILL), using clips that were never played before (Sword_Attack, Spell_Simple_Exit, Pistol_Aim_*, Slide_Exit, Melee_Hook_Rec,
            Sword_Regular_A_Rec / B_Rec) and clips that only the /emote command used (OverhandThrow, Zombie_Scratch, Farm_*, Consume, Idle_Rail_Call, Push_Loop, Idle_Shield_Loop, Idle_Lantern_Loop ...).
+   v5_331: cheaper maths (sqrt, nlerp for small turns, no blend maths for fully weighted bones) + level of detail: ANIM3D.due(R,P) lets the game thin out the poses of OTHER players (R.lodS = stride,
+           distance / device / frame-time dependent; busy rigs are never skipped). VRM3D.pose no longer computes the procedural pose when the clips drive the rig. node tools/test_anim_lod.js, test_vrm_lod.js, bench_anim3d.js.
    v5_326: attack moves are eased (smoothstep in/out, blends between the parts of a move and between combo hits).
    Off switch: ?anim=0 in the URL.   Tune: CLASS, SKILL, EMOTES and the constants below. */
 (function(){
@@ -17,7 +19,7 @@
 const off=typeof location!=='undefined'&&/[?&]anim=0(&|$)/.test(location.search);
 let T=null,D=null,FR=null,ST=0,PRM=null;   /* ST 0 not started, 1 loading, 2 ready, 3 failed */
 const NB=20,SF=83,Q4=NB*4;
-const SCR=new Float32Array(SF),SEGFADE=.09,XFADE=.15;   /* v5_326 scratch pose, fade between the parts of one move, fade from one move to the next */                  /* bones, floats per frame (80 rotation + 3 hips position) */
+const SCR=new Float32Array(SF),SEGFADE=.09,XFADE=.15,NLERP=.98;   /* v5_326 scratch pose, fade between the parts of one move, fade from one move to the next */                  /* bones, floats per frame (80 rotation + 3 hips position) */
 let BN=[],tq=null;
 const clamp=(x,a,b)=>x<a?a:x>b?b:x,sm=x=>{x=clamp(x,0,1);return x*x*(3-2*x)};
 
@@ -105,7 +107,7 @@ function sample(n,t,out){
   for(let k=0;k<NB;k++){
     const o=k*4;let x0=FR[a+o],y0=FR[a+o+1],z0=FR[a+o+2],w0=FR[a+o+3],x1=FR[b+o],y1=FR[b+o+1],z1=FR[b+o+2],w1=FR[b+o+3];
     if(x0*x1+y0*y1+z0*z1+w0*w1<0){x1=-x1;y1=-y1;z1=-z1;w1=-w1}
-    const x=x0+(x1-x0)*f,y=y0+(y1-y0)*f,z=z0+(z1-z0)*f,w=w0+(w1-w0)*f,l=1/(Math.hypot(x,y,z,w)||1);
+    const x=x0+(x1-x0)*f,y=y0+(y1-y0)*f,z=z0+(z1-z0)*f,w=w0+(w1-w0)*f,l=1/(Math.sqrt(x*x+y*y+z*z+w*w)||1);   /* v5_331 sqrt, not Math.hypot (hypot is several times slower) */
     out[o]=x*l;out[o+1]=y*l;out[o+2]=z*l;out[o+3]=w*l;
   }
   for(let m=0;m<3;m++)out[Q4+m]=(FR[a+Q4+m]+(FR[b+Q4+m]-FR[a+Q4+m])*f)/8192;
@@ -119,23 +121,22 @@ function slerpB(d,a,b,o,w,xl){
     if(c<-.9995){c=-.9995}
   }else if(c<0){bx=-bx;by=-by;bz=-bz;bw=-bw;c=-c}
   let k0,k1;
-  if(c>.9995){k0=1-w;k1=w}else{const th=Math.acos(c),sn=Math.sin(th);k0=Math.sin((1-w)*th)/sn;k1=Math.sin(w*th)/sn}
-  const x=ax*k0+bx*k1,y=ay*k0+by*k1,z=az*k0+bz*k1,q=aw*k0+bw*k1,l=1/(Math.hypot(x,y,z,q)||1);
+  if(c>NLERP){k0=1-w;k1=w}else{const th=Math.acos(c),sn=Math.sin(th);k0=Math.sin((1-w)*th)/sn;k1=Math.sin(w*th)/sn}   /* v5_331 plain nlerp up to 23 degrees apart (speed error < .5 %), acos / sin only for the big turns */
+  const x=ax*k0+bx*k1,y=ay*k0+by*k1,z=az*k0+bz*k1,q=aw*k0+bw*k1,l=1/(Math.sqrt(x*x+y*y+z*z+q*q)||1);
   d[o]=x*l;d[o+1]=y*l;d[o+2]=z*l;d[o+3]=q*l;
 }
 /* dst = a -> b by w (per bone slerp); dst may be a or b */
 function mix(dst,a,b,w,xl){
   if(w<=0){if(dst!==a)dst.set(a);return}if(w>=1){if(dst!==b)dst.set(b);return}
-  for(let k=0;k<NB;k++){
-    slerpB(dst,a,b,k*4,w,xl);
-  }
+  for(let k=0;k<NB;k++)slerpB(dst,a,b,k*4,w,xl);
   for(let m=0;m<3;m++)dst[Q4+m]=a[Q4+m]+(b[Q4+m]-a[Q4+m])*w;
 }
 /* the action layer on top of the base: upper-body bones (index 1-13) with weight wu, hips + legs (0, 14-19) with weight wl */
 function mixAct(dst,base,act,wu,wl){
   for(let k=0;k<NB;k++){
     const w=(k===0||k>=14)?wl:wu,o=k*4;
-    if(w<=0){dst[o]=base[o];dst[o+1]=base[o+1];dst[o+2]=base[o+2];dst[o+3]=base[o+3];continue}
+    if(w<=.001){dst[o]=base[o];dst[o+1]=base[o+1];dst[o+2]=base[o+2];dst[o+3]=base[o+3];continue}
+    if(w>=.999){dst[o]=act[o];dst[o+1]=act[o+1];dst[o+2]=act[o+2];dst[o+3]=act[o+3];continue}   /* v5_331 fully weighted bone: no blend maths */
     slerpB(dst,base,act,o,w);
   }
   for(let m=0;m<3;m++)dst[Q4+m]=base[Q4+m]+(act[Q4+m]-base[Q4+m])*wl;
@@ -175,15 +176,34 @@ function evalAct(a,out){   /* samples the action layer into out, returns its wei
   return w;
 }
 
+/* ---------------------------------------------------------------- v5_331 level of detail: should this rig be posed this frame?
+   The game sets R.lodS (animation stride) on OTHER players only: 1 / undefined = every frame, 2 = every 2nd frame, ... Rigs are staggered (R.lodO) so the work is spread over the frames.
+   A rig that is busy (swing, cast, hit, dodge, one-shot, emote change, bow draw, death / revive, an action still blending) is ALWAYS posed, so no attack or hit is ever missed or delayed;
+   the stride only thins out walking, standing and idling, which look the same at 30 or 20 poses per second. R.dtQ carries the skipped time so the clip phase stays right. */
+function busy(an,P){
+  return P.swing>0||P.cast>0||P.hurt>0||an.swp||an.cp||an.hp||an.act||an.ao||(P.dg|0)>0||an.drT>=0||an.dr>0||(P.dead>0)!==an.dead||
+    (P.emo&&P.emo.id!==an.emId)||(P.act&&P.act.id!==an.actId);
+}
+function due(R,P){
+  R.dtQ=(R.dtQ||0)+(R.dtA||0);
+  const s=R.lodS|0;if(s<2||ST!==2||off)return true;
+  const an=R.an;if(!an)return true;
+  if(R.lodO===undefined)R.lodO=Math.floor(Math.random()*12);
+  R.lodK=(R.lodK|0)+1;
+  if((R.lodK+R.lodO)%s===0||R.dtQ>.1)return true;   /* .1 s cap: even a very slow phone poses a rig at least 10 times a second */
+  return busy(an,P);
+}
 /* ---------------------------------------------------------------- one frame for one avatar */
 function apply(R,P,v){
   if(ST!==2||!v)return false;
-  const an=R.an||(R.an=mk());an.R=R;const dt=clamp(R.dtA||.016,.001,.05),time=R.lt||0,cl=R.cls|0,CF=CLASS[cl]||CLASS[0];
+  const an=R.an||(R.an=mk());an.R=R;
+  /* v5_331 R.dtQ = time since this rig was last posed (due() adds up the frames it skipped); a rig that is not throttled gets the plain frame time as before */
+  const thr=R.lodS>1,dt=clamp(R.dtQ>0?R.dtQ:(R.dtA||.016),.001,.15);R.dtQ=0;   /* v5_331 .05 -> .15 s: a slow phone's frame (or a thinned rig's step) is longer than .05 s and the moves would play in slow motion */const time=R.lt||0,cl=R.cls|0,CF=CLASS[cl]||CLASS[0];
   an.tm+=dt;
   const mv=P.mvAmt||0,dead=P.dead>0;
   /* ---- movement: distance moved this frame (the game adds .07 per unit to P.anim), smoothed speed in units per second */
   const pa=P.anim||0;if(an.la===undefined)an.la=pa;
-  const dist=Math.max(0,(pa-an.la)/.07);an.la=pa;
+  const dist=Math.min(Math.max(0,(pa-an.la)/.07),900*dt);an.la=pa;   /* v5_331 capped at a sane speed: a rig that was not updated while far away / off screen must not read its whole walk as one sprint step */
   an.spd+=(dist/dt-an.spd)*Math.min(1,dt*6);
   an.moving=mv>.4?true:mv<.12?false:an.moving;
   /* ---- height above the ground: jumping (own player: P.air; others: from the height change) */
@@ -355,6 +375,6 @@ function write(R,v,q,sc){
   const h=v.bones.hips;
   if(h&&v.hipsRest){const r=v.hipsRest.y/D.pelvisH;h.position.set(v.hipsRest.x+q[Q4]*r,v.hipsRest.y+q[Q4+1]*r,v.hipsRest.z+q[Q4+2]*r)}
 }
-window.ANIM3D={init,load,ready,apply,EMOTES,SKILL,names:()=>D?Object.keys(D.clips):[],
+window.ANIM3D={init,load,ready,apply,due,EMOTES,SKILL,names:()=>D?Object.keys(D.clips):[],
   _clip:n=>D&&D.clips[n]};
 })();

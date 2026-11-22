@@ -12,8 +12,9 @@ function stepGame(dt){
 function frame(now){
   if(rafPrev){const d=now-rafPrev;if(d>0&&d<100)rafAvg+=(d-rafAvg)*.05}rafPrev=now;
   if(PHONE&&rafAvg<9.6&&now-last<14.5){requestAnimationFrame(frame);return} /* display runs at 120Hz+: render every other refresh (~60 fps) */
-  const dt=Math.min(.05,(now-last)/1000);last=now;
-  stepGame(dt);
+  /* v5_331 REAL-TIME ON SLOW PHONES: the game used to take ONE step of at most .05 s per frame, so below 20 fps everything (walking, combat, animation) ran in slow motion. Now the elapsed time (up to .15 s) is played as several steps of at most .05 s: same step size as before, but the clock keeps up with the real one. */
+  const el=Math.min(.15,(now-last)/1000);last=now;
+  {const n=Math.max(1,Math.ceil(el/.05-1e-6)),dt=el/n;for(let i=0;i<n;i++)stepGame(dt);if(MP)peerMotion()}   /* equal steps (no tiny left-over step), never more than .05 s each */
   drawFrame();
   requestAnimationFrame(frame);
 }
@@ -30,6 +31,7 @@ function frame(now){
     if(!document.hidden)return;
     const now=performance.now();let el=Math.min(120,(now-last)/1000);last=now;
     while(el>0){const dt=Math.min(.05,el);el-=dt;try{stepGame(dt)}catch(e){console.error(e);break}}
+    if(MP)try{peerMotion()}catch(e){}
   };
   document.addEventListener('visibilitychange',()=>{last=performance.now()});
 })();

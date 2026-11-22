@@ -1,4 +1,4 @@
-WORLD OF ASCENSION - current state (v5_201; ground shader v5_261; animations v5_322)
+WORLD OF ASCENSION - current state (v5_201; ground shader v5_261; animations v5_322; animation level of detail v5_331)
 Full version history: CHANGELOG.txt
 
 RUN / BUILD
@@ -25,6 +25,7 @@ FILES
   web/pets3d.js              3D pet models (PET3D.make(species, class)): chicken, dragon, fairy, phoenix, tiger, wolf + class effects
   web/vrm3d.js              VRM 1.0 loader + rig for the Cultivator avatars (web/Cultivator_He.vrm, web/Cultivator_She.vrm) and the Night Blade avatars (web/NightBlade_He.vrm, web/NightBlade_She.vrm) and the Iron Guardian avatars (web/IronGuardian_He.vrm, web/IronGuardian_She.vrm) and the Storm Archer avatars (web/StormArcher_He.vrm, web/StormArcher_She.vrm) and the Spirit Summoner avatars (web/SpiritSummoner_He.vrm, web/SpiritSummoner_She.vrm); weapons (v5_317): web/weapons/Sword|Dagger|Hammer|Bow|Staff.glb, mounted on the VRM hands, hold angles in WSPEC; ?vrm=0 hides all avatars (v5_300: the old built-in 3D bodies are deleted, models3d.js keeps only the animation rig)
   web/anim3d.js + web/anims/   (v5_322) the 82 moves of the Universal Animation Library 1 + 2 (Quaternius, CC0) on the VRM avatars: locomotion, jump, dodge, per-class attacks, skills, hit, death, mining, potion, and /emotes (type /emotes). ?anim=0 = the old procedural moves. (v5_330) every skill and signature skill has its own cast move (SKILL in anim3d.js), all 82 clips are in use. node tools/test_skillmoves.js checks them. tools/bake_anims.py rebuilds web/anims from the two library folders
+                             (v5_331) slower phones: cheaper maths + ANIM3D.due() thins out the poses of OTHER players (stride by distance / device / frame time; attacks, hits and dodges are never thinned), off-screen players are hidden, far monsters and peer pets animate every 2nd frame on a weak device. ?alod=0 turns the thinning off. node tools/test_anim_lod.js, test_vrm_lod.js, bench_anim3d.js
   web/models3d.js audio.js tutorial.js sw.js manifest.json
 
 CLASSES (passives; skills are in web/game.js: CLB, CLS_GEN, NB_T, SKILLS)

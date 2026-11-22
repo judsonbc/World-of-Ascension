@@ -511,6 +511,8 @@ function peerSample(q,x,y){
   }
   b.push({t:tt,x,y});if(b.length>16)b.shift();
 }
+/* v5_331 once per drawn frame, after all the game steps of that frame: moving = faster than 3 units per second over the whole frame (before: more than .05 units in one step) */
+function peerMotion(){for(const q of NET.peers.values()){const t=q.accT||0;if(t>0)q.mvAmt+=((q.accD/t>3?1:0)-q.mvAmt)*Math.min(1,t*10);q.accD=0;q.accT=0}}
 function updatePeers(dt){
   const k=Math.min(1,dt*12),rt=performance.now()/1000-PEER_DELAY;
   for(const q of NET.peers.values()){
@@ -527,7 +529,7 @@ function updatePeers(dt){
     }else{const dx=q.tx-q.x,dy=q.ty-q.y;
       if(dx*dx+dy*dy>160000){q.x=q.tx;q.y=q.ty}else{q.x+=dx*k;q.y+=dy*k}}
     const mvd=Math.hypot(q.x-ox,q.y-oy);
-    q.mvAmt+=((mvd>.05?1:0)-q.mvAmt)*Math.min(1,dt*10);q.anim+=mvd*.07;
+    q.accD=(q.accD||0)+mvd;q.accT=(q.accT||0)+dt;q.anim+=mvd*.07;   /* v5_331 'is it moving' is judged once per drawn frame in peerMotion(), not per game step: with several steps in a frame the smoothing above moves them 78 % / 17 % / 4 % of the gap, which made walk / idle flicker (shivering) */
     if(q.dg){const u=(performance.now()/1000-q.dgS)/DASH_T;if(u>=1||q.dead)q.dg=0;else q.dgU=u}   /* v5_304 another player's dodge animation */
     q.swing-=dt;q.hurt-=dt;
     {if(q.jzAt&&performance.now()/1000-q.jzAt>5)q.jzT=0;q.jz=(q.jz||0)+((q.jzT||0)-(q.jz||0))*Math.min(1,dt*18)} /* v5_170 their height, from 'jz' messages */

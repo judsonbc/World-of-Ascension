@@ -284,7 +284,9 @@ function updMon(g,m){const u=g.userData,k=m.dead?Math.max(0,Math.min(1,m.dieT*2.
   const inV=T3.frus.intersectsSphere(T3.sph);if(g.visible!==inV)g.visible=inV;
   /* wide test: also keep animating just outside the screen so nothing pops in mid-pose */
   if(!inV){T3.sph.radius=sc*1.25+30+150;if(!T3.frus.intersectsSphere(T3.sph))return}
-  AL3D.animMonster(g,m,time,Math.hypot(dx,dy));
+  {const md=Math.hypot(dx,dy),al=T3.al|0;let ms=1;
+    if(ALOD&&!u.boss){const am=PQ.lock?PQ.am:(LOW?2:1);ms=(md>420?Math.max(am,al?2:1):1)+(al>1?1:0)}   /* v5_331 far monsters pose every 2nd (3rd) frame on a weak device / slow frame; near ones and bosses every frame (the pose is a function of time, so nothing is missed) */
+    if(ms<2||((T3.fr+((u.seed*977)|0))%ms)===0)AL3D.animMonster(g,m,time,md)}
   const f=m.hp/m.maxhp,v=!m.dead&&f<.999;u.bar.forEach(b=>b.visible=v);u.fg.scale.x=2.4*Math.max(.001,f)}
 /* v5_170 hide the ground rings (level aura + forge ring/band) of a 3D character while it is off the ground; restores them on landing */
 function jumpRings(R,jz){
@@ -326,7 +328,9 @@ function render3D(){
       if(LOW&&started&&nt>(T3.nx||0)){ /* adaptive resolution: step down when slow, step back up after 30 s without trouble */
         if(T3.ft>23&&T3.lv>0){T3.lv--;T3.nx=nt+3000;T3.bad=nt;T3.ft=16.7}
         else if(T3.ft<19&&T3.lv<(PQ.lock?PQ.lv:PRS.length-1)&&nt-(T3.bad||0)>30000){T3.lv++;T3.nx=nt+8000}
-        else T3.nx=nt+1000}}
+        else T3.nx=nt+1000}
+      /* v5_331 animation LOD level from the measured frame time (T3.al 0 / 1 / 2): up at once when the frame takes > 26 ms (< 38 fps) or > 38 ms, back down one step after 8 s of calm. Works on every device, LOW or not. */
+      {const wl=T3.ft>38?2:T3.ft>26?1:0,al=T3.al|0;if(wl>al){T3.al=wl;T3.alB=nt}else if(wl<al&&nt-(T3.alB||0)>8000){T3.al=al-1;T3.alB=nt}}}
     const want=prWant();
     if(T3.w!==VW||T3.h!==VH||T3.cpr!==want){T3.r.setPixelRatio(want);T3.cpr=want;T3.r.setSize(VW,VH,false);T3.cam.aspect=VW/VH;T3.cam.updateProjectionMatrix();T3.w=VW;T3.h=VH;$('g3').style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block'}
     $('g3').style.display='block';
@@ -348,7 +352,12 @@ function render3D(){
         if(!had){if(nw>=1)continue;nw++}rpl.push(q)}
       if(rpl.length>PMAX){rpl.sort((a,b)=>Math.hypot(a.x-P.x,a.y-P.y)-Math.hypot(b.x-P.x,b.y-P.y));rpl.length=PMAX}}
     sync3(T3.rp,rpl,q=>{const R=AL3D.makePlayer(q.sk),g=R.root;g.userData.rig=R;g.userData.mat={dispose(){try{Object.values(R.m).forEach(x=>x.dispose&&x.dispose())}catch(e){}}};return g},
-      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=smoothYaw(g,Math.PI/2-q.face);g.rotation.x=deadTilt(R,q.dead);q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
+      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);const gy=gh3(q.x,q.y)+(q.jz||0);g.position.set(q.x-C,gy,q.y-C);g.rotation.y=smoothYaw(g,Math.PI/2-q.face);g.rotation.x=deadTilt(R,q.dead);
+      /* v5_331 other players: off screen = hidden (zero draw calls; the VRM meshes are not frustum culled), well off screen = not animated at all (as monsters do); the rest are posed at a stride that grows with distance, a slow device and a slow frame */
+      T3.sph.center.set(q.x-C,gy+45,q.y-C);T3.sph.radius=110;const inV=T3.frus.intersectsSphere(T3.sph);if(g.visible!==inV)g.visible=inV;
+      if(!inV){T3.sph.radius=260;if(!T3.frus.intersectsSphere(T3.sph))return}
+      {const pd=Math.hypot(q.x-P.x,q.y-P.y),am=PQ.lock?PQ.am:(LOW?2:1);R.lodS=ALOD?Math.min(4,(am>1?(pd<260?am-1:am):1)+(pd>520?1:0)+(T3.al|0)):1}
+      q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
       null);
     peerPets3(rpl===NONE?NONE:rpl); /* v5_201 other players' pets */
     {const rg=((LOW?650:900)+(LOW?200:300)*T3.zoom)*(PQ.lock?PQ.mon:1);sync3(T3.mp,mons,mkMon,updMon,m=>(!m.dead||m.dieT>0)&&Math.abs(m.x-P.x)<rg+(T3.mp.has(m)?150:0)&&Math.abs(m.y-P.y)<rg-100+(T3.mp.has(m)?150:0))}

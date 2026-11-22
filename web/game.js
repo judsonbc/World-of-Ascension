@@ -12,8 +12,10 @@ const PHONE=matchMedia('(pointer:coarse)').matches||/Android|iPhone|iPad|Mobi/i.
 const PERF=(()=>{try{const v=localStorage.getItem('alperf');return v==='vlow'||v==='low'||v==='med'||v==='high'?v:'auto'}catch(e){return 'auto'}})();
 const LOW=(()=>{const q=location.search;if(/[?&]hq=1/.test(q))return false;if(/[?&]lq=1/.test(q))return true;if(PERF==='high')return false;if(PERF==='vlow'||PERF==='low'||PERF==='med')return true;return matchMedia('(pointer:coarse)').matches||/Android|iPhone|iPad|Mobi/i.test(navigator.userAgent)})();
 /* quality knobs: lv = starting / maximum render-scale step (index into PRS), parts = max spark particles, rings = max effect rings, mon = monster draw-range factor,
-   mini = minimap redraw every N frames, peers = max other players drawn, aa = antialiasing, terr = terrain mesh detail. 'auto' / 'high' keep the previous values. */
-const PQ=PERF==='vlow'?{lv:0,rs:.5,parts:60,rings:6,mon:.55,mini:12,peers:2,aa:false,terr:70,lock:true}:PERF==='low'?{lv:0,parts:150,rings:12,mon:.75,mini:6,peers:4,aa:false,terr:100,lock:true}:PERF==='med'?{lv:1,parts:300,rings:24,mon:.9,mini:4,peers:6,aa:false,terr:130,lock:true}:{lv:3,parts:350,rings:40,mon:1,mini:4,peers:6,aa:true,terr:150,lock:false};
+   mini = minimap redraw every N frames, peers = max other players drawn, aa = antialiasing, terr = terrain mesh detail,
+   am (v5_331) = animation stride of far-away players / monsters / pets (pose every Nth frame; 1 = every frame; walking and idling only, attacks and hits are never thinned). 'auto' / 'high' keep the previous values. */
+const ALOD=!/[?&]alod=0(&|$)/.test(location.search);   /* v5_331 animation level of detail on / off (?alod=0 = every avatar, monster and pet is posed every frame, as before) */
+const PQ=PERF==='vlow'?{lv:0,rs:.5,parts:60,rings:6,mon:.55,mini:12,peers:2,aa:false,terr:70,am:3,lock:true}:PERF==='low'?{lv:0,parts:150,rings:12,mon:.75,mini:6,peers:4,aa:false,terr:100,am:2,lock:true}:PERF==='med'?{lv:1,parts:300,rings:24,mon:.9,mini:4,peers:6,aa:false,terr:130,am:2,lock:true}:{lv:3,parts:350,rings:40,mon:1,mini:4,peers:6,aa:true,terr:150,am:1,lock:false};
 function resize(){
   const d=LOW?Math.min(1.5,Math.max(1,window.devicePixelRatio||1)):Math.min(2,window.devicePixelRatio||1);
   VW=stage.clientWidth;VH=stage.clientHeight;
@@ -2713,7 +2715,7 @@ function peerPetStep(q,is3){
 }
 /* 3D: list = the peers drawn this frame (rpl). Pets of peers that left, were dismissed or are out of range are removed. */
 function peerPets3(list){
-  const T=T3,map=T.rpt||(T.rpt=new Map()),seen=new Set();
+  const T=T3,map=T.rpt||(T.rpt=new Map()),seen=new Set();let pn=0;
   for(const q of list){
     if(!q.pet)continue;
     peerPetStep(q,true);
@@ -2728,7 +2730,7 @@ function peerPets3(list){
     rig.root.position.set(f.x-C,gh3(f.x,f.y),f.y-C);rig.root.rotation.y=f.yaw;
     if(q.swing>0||q.hurt>0)q.fightUntil=time+5;   /* v5_221 a peer is fighting while it swings / gets hurt (+5 s): its dragon flies */
     if(q.swing>.1&&time-(q.petAtkAt||-99)>1.2){q.petAtkAt=time;q.petAtkN=(q.petAtkN|0)+1}   /* v5_222 their pet strikes along with each of their swings (at most every 1.2 s) */
-    rig.anim(time,f.mv,time<(q.fightUntil||0),q.petAtkAt,q.petAtkN);
+    {const ps=ALOD&&(LOW||T.al)?(PQ.lock?PQ.am:2)+(T.al>1?1:0):1;if(ps<2||(T.fr+pn++)%ps===0||time<(q.fightUntil||0))rig.anim(time,f.mv,time<(q.fightUntil||0),q.petAtkAt,q.petAtkN)}   /* v5_331 a peer's pet moves every 2nd frame on a weak device (its pose is a function of time); never while it fights */
   }
   for(const [q,h] of map)if(!seen.has(q)){
     if(h.pr){T.sc.remove(h.pr.root);try{h.pr.dispose()}catch(e){}h.pr=null}
@@ -5055,7 +5057,9 @@ function updMon(g,m){const u=g.userData,k=m.dead?Math.max(0,Math.min(1,m.dieT*2.
   const inV=T3.frus.intersectsSphere(T3.sph);if(g.visible!==inV)g.visible=inV;
   /* wide test: also keep animating just outside the screen so nothing pops in mid-pose */
   if(!inV){T3.sph.radius=sc*1.25+30+150;if(!T3.frus.intersectsSphere(T3.sph))return}
-  AL3D.animMonster(g,m,time,Math.hypot(dx,dy));
+  {const md=Math.hypot(dx,dy),al=T3.al|0;let ms=1;
+    if(ALOD&&!u.boss){const am=PQ.lock?PQ.am:(LOW?2:1);ms=(md>420?Math.max(am,al?2:1):1)+(al>1?1:0)}   /* v5_331 far monsters pose every 2nd (3rd) frame on a weak device / slow frame; near ones and bosses every frame (the pose is a function of time, so nothing is missed) */
+    if(ms<2||((T3.fr+((u.seed*977)|0))%ms)===0)AL3D.animMonster(g,m,time,md)}
   const f=m.hp/m.maxhp,v=!m.dead&&f<.999;u.bar.forEach(b=>b.visible=v);u.fg.scale.x=2.4*Math.max(.001,f)}
 /* v5_170 hide the ground rings (level aura + forge ring/band) of a 3D character while it is off the ground; restores them on landing */
 function jumpRings(R,jz){
@@ -5097,7 +5101,9 @@ function render3D(){
       if(LOW&&started&&nt>(T3.nx||0)){ /* adaptive resolution: step down when slow, step back up after 30 s without trouble */
         if(T3.ft>23&&T3.lv>0){T3.lv--;T3.nx=nt+3000;T3.bad=nt;T3.ft=16.7}
         else if(T3.ft<19&&T3.lv<(PQ.lock?PQ.lv:PRS.length-1)&&nt-(T3.bad||0)>30000){T3.lv++;T3.nx=nt+8000}
-        else T3.nx=nt+1000}}
+        else T3.nx=nt+1000}
+      /* v5_331 animation LOD level from the measured frame time (T3.al 0 / 1 / 2): up at once when the frame takes > 26 ms (< 38 fps) or > 38 ms, back down one step after 8 s of calm. Works on every device, LOW or not. */
+      {const wl=T3.ft>38?2:T3.ft>26?1:0,al=T3.al|0;if(wl>al){T3.al=wl;T3.alB=nt}else if(wl<al&&nt-(T3.alB||0)>8000){T3.al=al-1;T3.alB=nt}}}
     const want=prWant();
     if(T3.w!==VW||T3.h!==VH||T3.cpr!==want){T3.r.setPixelRatio(want);T3.cpr=want;T3.r.setSize(VW,VH,false);T3.cam.aspect=VW/VH;T3.cam.updateProjectionMatrix();T3.w=VW;T3.h=VH;$('g3').style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block'}
     $('g3').style.display='block';
@@ -5119,7 +5125,12 @@ function render3D(){
         if(!had){if(nw>=1)continue;nw++}rpl.push(q)}
       if(rpl.length>PMAX){rpl.sort((a,b)=>Math.hypot(a.x-P.x,a.y-P.y)-Math.hypot(b.x-P.x,b.y-P.y));rpl.length=PMAX}}
     sync3(T3.rp,rpl,q=>{const R=AL3D.makePlayer(q.sk),g=R.root;g.userData.rig=R;g.userData.mat={dispose(){try{Object.values(R.m).forEach(x=>x.dispose&&x.dispose())}catch(e){}}};return g},
-      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);g.position.set(q.x-C,gh3(q.x,q.y)+(q.jz||0),q.y-C);g.rotation.y=smoothYaw(g,Math.PI/2-q.face);g.rotation.x=deadTilt(R,q.dead);q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
+      (g,q)=>{const R=g.userData.rig;if(R.skin!==q.sk)AL3D.setSkin(R,q.sk);const gy=gh3(q.x,q.y)+(q.jz||0);g.position.set(q.x-C,gy,q.y-C);g.rotation.y=smoothYaw(g,Math.PI/2-q.face);g.rotation.x=deadTilt(R,q.dead);
+      /* v5_331 other players: off screen = hidden (zero draw calls; the VRM meshes are not frustum culled), well off screen = not animated at all (as monsters do); the rest are posed at a stride that grows with distance, a slow device and a slow frame */
+      T3.sph.center.set(q.x-C,gy+45,q.y-C);T3.sph.radius=110;const inV=T3.frus.intersectsSphere(T3.sph);if(g.visible!==inV)g.visible=inV;
+      if(!inV){T3.sph.radius=260;if(!T3.frus.intersectsSphere(T3.sph))return}
+      {const pd=Math.hypot(q.x-P.x,q.y-P.y),am=PQ.lock?PQ.am:(LOW?2:1);R.lodS=ALOD?Math.min(4,(am>1?(pd<260?am-1:am):1)+(pd>520?1:0)+(T3.al|0)):1}
+      q.ft=armorFireTier(q);AL3D.animPlayer(R,q,time,Math.floor((q.lvl-1)/10));jumpRings(R,q.jz||0)},
       null);
     peerPets3(rpl===NONE?NONE:rpl); /* v5_201 other players' pets */
     {const rg=((LOW?650:900)+(LOW?200:300)*T3.zoom)*(PQ.lock?PQ.mon:1);sync3(T3.mp,mons,mkMon,updMon,m=>(!m.dead||m.dieT>0)&&Math.abs(m.x-P.x)<rg+(T3.mp.has(m)?150:0)&&Math.abs(m.y-P.y)<rg-100+(T3.mp.has(m)?150:0))}
@@ -5950,6 +5961,8 @@ function peerSample(q,x,y){
   }
   b.push({t:tt,x,y});if(b.length>16)b.shift();
 }
+/* v5_331 once per drawn frame, after all the game steps of that frame: moving = faster than 3 units per second over the whole frame (before: more than .05 units in one step) */
+function peerMotion(){for(const q of NET.peers.values()){const t=q.accT||0;if(t>0)q.mvAmt+=((q.accD/t>3?1:0)-q.mvAmt)*Math.min(1,t*10);q.accD=0;q.accT=0}}
 function updatePeers(dt){
   const k=Math.min(1,dt*12),rt=performance.now()/1000-PEER_DELAY;
   for(const q of NET.peers.values()){
@@ -5966,7 +5979,7 @@ function updatePeers(dt){
     }else{const dx=q.tx-q.x,dy=q.ty-q.y;
       if(dx*dx+dy*dy>160000){q.x=q.tx;q.y=q.ty}else{q.x+=dx*k;q.y+=dy*k}}
     const mvd=Math.hypot(q.x-ox,q.y-oy);
-    q.mvAmt+=((mvd>.05?1:0)-q.mvAmt)*Math.min(1,dt*10);q.anim+=mvd*.07;
+    q.accD=(q.accD||0)+mvd;q.accT=(q.accT||0)+dt;q.anim+=mvd*.07;   /* v5_331 'is it moving' is judged once per drawn frame in peerMotion(), not per game step: with several steps in a frame the smoothing above moves them 78 % / 17 % / 4 % of the gap, which made walk / idle flicker (shivering) */
     if(q.dg){const u=(performance.now()/1000-q.dgS)/DASH_T;if(u>=1||q.dead)q.dg=0;else q.dgU=u}   /* v5_304 another player's dodge animation */
     q.swing-=dt;q.hurt-=dt;
     {if(q.jzAt&&performance.now()/1000-q.jzAt>5)q.jzT=0;q.jz=(q.jz||0)+((q.jzT||0)-(q.jz||0))*Math.min(1,dt*18)} /* v5_170 their height, from 'jz' messages */
@@ -6560,8 +6573,9 @@ function stepGame(dt){
 function frame(now){
   if(rafPrev){const d=now-rafPrev;if(d>0&&d<100)rafAvg+=(d-rafAvg)*.05}rafPrev=now;
   if(PHONE&&rafAvg<9.6&&now-last<14.5){requestAnimationFrame(frame);return} /* display runs at 120Hz+: render every other refresh (~60 fps) */
-  const dt=Math.min(.05,(now-last)/1000);last=now;
-  stepGame(dt);
+  /* v5_331 REAL-TIME ON SLOW PHONES: the game used to take ONE step of at most .05 s per frame, so below 20 fps everything (walking, combat, animation) ran in slow motion. Now the elapsed time (up to .15 s) is played as several steps of at most .05 s: same step size as before, but the clock keeps up with the real one. */
+  const el=Math.min(.15,(now-last)/1000);last=now;
+  {const n=Math.max(1,Math.ceil(el/.05-1e-6)),dt=el/n;for(let i=0;i<n;i++)stepGame(dt);if(MP)peerMotion()}   /* equal steps (no tiny left-over step), never more than .05 s each */
   drawFrame();
   requestAnimationFrame(frame);
 }
@@ -6578,6 +6592,7 @@ function frame(now){
     if(!document.hidden)return;
     const now=performance.now();let el=Math.min(120,(now-last)/1000);last=now;
     while(el>0){const dt=Math.min(.05,el);el-=dt;try{stepGame(dt)}catch(e){console.error(e);break}}
+    if(MP)try{peerMotion()}catch(e){}
   };
   document.addEventListener('visibilitychange',()=>{last=performance.now()});
 })();

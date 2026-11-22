@@ -373,7 +373,7 @@ function peerPetStep(q,is3){
 }
 /* 3D: list = the peers drawn this frame (rpl). Pets of peers that left, were dismissed or are out of range are removed. */
 function peerPets3(list){
-  const T=T3,map=T.rpt||(T.rpt=new Map()),seen=new Set();
+  const T=T3,map=T.rpt||(T.rpt=new Map()),seen=new Set();let pn=0;
   for(const q of list){
     if(!q.pet)continue;
     peerPetStep(q,true);
@@ -388,7 +388,7 @@ function peerPets3(list){
     rig.root.position.set(f.x-C,gh3(f.x,f.y),f.y-C);rig.root.rotation.y=f.yaw;
     if(q.swing>0||q.hurt>0)q.fightUntil=time+5;   /* v5_221 a peer is fighting while it swings / gets hurt (+5 s): its dragon flies */
     if(q.swing>.1&&time-(q.petAtkAt||-99)>1.2){q.petAtkAt=time;q.petAtkN=(q.petAtkN|0)+1}   /* v5_222 their pet strikes along with each of their swings (at most every 1.2 s) */
-    rig.anim(time,f.mv,time<(q.fightUntil||0),q.petAtkAt,q.petAtkN);
+    {const ps=ALOD&&(LOW||T.al)?(PQ.lock?PQ.am:2)+(T.al>1?1:0):1;if(ps<2||(T.fr+pn++)%ps===0||time<(q.fightUntil||0))rig.anim(time,f.mv,time<(q.fightUntil||0),q.petAtkAt,q.petAtkN)}   /* v5_331 a peer's pet moves every 2nd frame on a weak device (its pose is a function of time); never while it fights */
   }
   for(const [q,h] of map)if(!seen.has(q)){
     if(h.pr){T.sc.remove(h.pr.root);try{h.pr.dispose()}catch(e){}h.pr=null}

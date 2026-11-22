@@ -315,7 +315,7 @@ function setGear(R,wlv,alv,ft){
 }
 /* P = game player state, ri = realm index */
 function animPlayer(R,P,time,ri){
-  const dt=clamp(time-R.lt,0,.05);R.lt=time;R.dtA=dt;
+  const dt=clamp(time-R.lt,0,.15);R.lt=time;R.dtA=dt;   /* v5_331 .05 -> .15: on a slow phone a frame takes longer than .05 s and the moves ran in slow motion */
   const CL=!!(R.vrmOn&&window.ANIM3D&&ANIM3D.ready());   /* v5_322 Universal Animation Library moves are driving the VRM bones (vrm3d.js -> anim3d.js): no procedural dodge */
   const mv=P.mvAmt;
   /* v5_302 two walk paces. Normal (PC, tap-to-move, joystick fully pushed) = the old pace. Small steps only while P.walkSm is set (phone joystick pushed part way):

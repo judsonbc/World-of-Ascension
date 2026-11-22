@@ -10,8 +10,10 @@ const PHONE=matchMedia('(pointer:coarse)').matches||/Android|iPhone|iPad|Mobi/i.
 const PERF=(()=>{try{const v=localStorage.getItem('alperf');return v==='vlow'||v==='low'||v==='med'||v==='high'?v:'auto'}catch(e){return 'auto'}})();
 const LOW=(()=>{const q=location.search;if(/[?&]hq=1/.test(q))return false;if(/[?&]lq=1/.test(q))return true;if(PERF==='high')return false;if(PERF==='vlow'||PERF==='low'||PERF==='med')return true;return matchMedia('(pointer:coarse)').matches||/Android|iPhone|iPad|Mobi/i.test(navigator.userAgent)})();
 /* quality knobs: lv = starting / maximum render-scale step (index into PRS), parts = max spark particles, rings = max effect rings, mon = monster draw-range factor,
-   mini = minimap redraw every N frames, peers = max other players drawn, aa = antialiasing, terr = terrain mesh detail. 'auto' / 'high' keep the previous values. */
-const PQ=PERF==='vlow'?{lv:0,rs:.5,parts:60,rings:6,mon:.55,mini:12,peers:2,aa:false,terr:70,lock:true}:PERF==='low'?{lv:0,parts:150,rings:12,mon:.75,mini:6,peers:4,aa:false,terr:100,lock:true}:PERF==='med'?{lv:1,parts:300,rings:24,mon:.9,mini:4,peers:6,aa:false,terr:130,lock:true}:{lv:3,parts:350,rings:40,mon:1,mini:4,peers:6,aa:true,terr:150,lock:false};
+   mini = minimap redraw every N frames, peers = max other players drawn, aa = antialiasing, terr = terrain mesh detail,
+   am (v5_331) = animation stride of far-away players / monsters / pets (pose every Nth frame; 1 = every frame; walking and idling only, attacks and hits are never thinned). 'auto' / 'high' keep the previous values. */
+const ALOD=!/[?&]alod=0(&|$)/.test(location.search);   /* v5_331 animation level of detail on / off (?alod=0 = every avatar, monster and pet is posed every frame, as before) */
+const PQ=PERF==='vlow'?{lv:0,rs:.5,parts:60,rings:6,mon:.55,mini:12,peers:2,aa:false,terr:70,am:3,lock:true}:PERF==='low'?{lv:0,parts:150,rings:12,mon:.75,mini:6,peers:4,aa:false,terr:100,am:2,lock:true}:PERF==='med'?{lv:1,parts:300,rings:24,mon:.9,mini:4,peers:6,aa:false,terr:130,am:2,lock:true}:{lv:3,parts:350,rings:40,mon:1,mini:4,peers:6,aa:true,terr:150,am:1,lock:false};
 function resize(){
   const d=LOW?Math.min(1.5,Math.max(1,window.devicePixelRatio||1)):Math.min(2,window.devicePixelRatio||1);
   VW=stage.clientWidth;VH=stage.clientHeight;
