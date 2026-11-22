@@ -22,6 +22,18 @@ function forgePop(ok,nm,lv){ /* big SUCCESS / FAILED popup over the forge window
 }
 /* v5_131 Forge window = bag layout: the avatar with the equipped gear around it; tap a piece and its stats + Forge button show on the right. */
 let fgSel='wpn';
+/* v5_227 ARMOR FIRE TIER = the LOWEST forge tier of ALL gear slots (weapon, secondary weapon, gloves, bracelet, ring, belt, earrings, necklace, robe, legguards, boots).
+   tier = floor(forge level / 10), 1..10 (tier 10 = rainbow fire). An empty slot (nothing equipped) counts as tier 0, so every slot must hold a piece at that level.
+   The starting weapon / robe count with their core forge level (wlv / alv). src = P (yours) or a peer (its equipment comes from the network, q.eq). */
+function armorFireTier(src){
+  let m=10;
+  for(const s of GEAR){
+    let lv=0;
+    if(s.core)lv=s.core==='wlv'?src.wlv:src.alv;
+    else{const o=src===P?P.gear[s.k]:(src.eq&&src.eq[s.k]);if(o&&o.g>0)lv=o.lv}
+    lv|=0;m=Math.min(m,lv>=10?Math.min(10,Math.floor(lv/10)):0);
+    if(!m)return 0}
+  return m}
 const FG_L=['wpn','wpn2','glove','brace','ring','belt'],FG_R=['ear','neck','robe','legs','boot'];
 function fgTarget(k){ /* what the forge levels for this slot, or null when the slot is empty */
   const q=GEAR.find(z=>z.k===k),o=P.gear[k];if(!q)return null;
@@ -67,12 +79,14 @@ function renderForge(){
   };
   fill($('fgEqL'),FG_L);fill($('fgEqR'),FG_R);
   const info=$('fgInfo');info.innerHTML='';
-  const add=(cls,html)=>{const d=document.createElement('div');d.className=cls;d.innerHTML=html;info.appendChild(d);return d};
+  /* v5_240: three zones so a phone in portrait can keep the title / level / bar and the cost + Forge button fixed and scroll only the description */
+  const zn={};for(const z of ['top','desc','bot']){const e=document.createElement('div');e.className='fg'+z;info.appendChild(e);zn[z]=e}
+  const add=(cls,html,z)=>{const d=document.createElement('div');d.className=cls;d.innerHTML=html;zn[z||'top'].appendChild(d);return d};
   const t=fgTarget(fgSel);
-  if(!GEAR.some(z=>z.k===fgSel)){add('fgs','Tap a piece of gear to see its stats and forge it.')}
+  if(!GEAR.some(z=>z.k===fgSel)){add('fgs','Tap a piece of gear to see its stats and forge it.','desc')}
   else if(!t){
     const q=GEAR.find(z=>z.k===fgSel);
-    add('fgn',q.n);add('fgs','<b>Not found.</b> Random world boss drop \u00b7 '+Object.keys(q.st).map(k=>STAT_LBL[k].replace(/^[% ]+/,'')).join(' &amp; '));
+    add('fgn',q.n);add('fgs','<b>Not found.</b> Random world boss drop \u00b7 '+Object.keys(q.st).map(k=>STAT_LBL[k].replace(/^[% ]+/,'')).join(' &amp; '),'desc');
   }else{
     const lv=t.obj[t.key],q=t.q,o=t.o;
     const bar=()=>{if(lv>=FORGE_MAX)return;const busy=fgBusy&&fgBusy.k===t.k,el=busy?Math.min(FG_TIME,performance.now()-fgBusy.t0)/1000:0;
@@ -82,24 +96,24 @@ function renderForge(){
       add('fgs',RAR[o.r].n+' \u00b7 Grade '+o.g);
       add('fgl','+'+lv+(lv<FORGE_MAX?' \u2192 +'+(lv+1):' MAX'));
       bar();
-      add('fgs','<b>Now:</b> '+statTxt(o.st,lv,q));
-      if(lv<FORGE_MAX)add('fgs','<b>Next level:</b> '+statTxt(o.st,lv+1,q));
-      if(lv<FORGE_MAX){const d=forgeGain(lv);add('fgs','<b>Forge gain:</b> <span class="fgg">'+Object.keys(q.st).map(k=>FLAT_STATS[k]?'+'+fg2(slotFlatPctF(q,k,d)*100)+'% '+STAT_LBL[k].trim():'+'+fg2(d*FORGE_PCT_REF*q.st[k][1])+STAT_LBL[k]).join(', ')+'</span>');if(lv>=10)add('fgs','Higher forge levels give more than lower ones.')}
+      add('fgs','<b>Now:</b> '+statTxt(o.st,lv,q),'desc');
+      if(lv<FORGE_MAX)add('fgs','<b>Next level:</b> '+statTxt(o.st,lv+1,q),'desc');
+      if(lv<FORGE_MAX){const d=forgeGain(lv);add('fgs','<b>Forge gain:</b> <span class="fgg">'+Object.keys(q.st).map(k=>FLAT_STATS[k]?'+'+fg2(slotFlatPctF(q,k,d)*100)+'% '+STAT_LBL[k].trim():'+'+fg2(d*FORGE_PCT_REF*q.st[k][1])+STAT_LBL[k]).join(', ')+'</span>','desc');if(lv>=10)add('fgs','Higher forge levels give more than lower ones.','desc')}
     }else{
       const lvTxt=add('fgl','+'+lv+(lv<FORGE_MAX?' \u2192 +'+(lv+1):' MAX'));
       bar();
       const now=corePctArr(q,forgeFrac(lv)).join(', ');
       const nxt=corePctArr(q,forgeFrac(lv+1)).join(', ');
-      add('fgs','Your starting '+(t.k==='wpn'?'Blade':'Robe')+'. A boss drop can replace it.');
-      add('fgs','<b>Now:</b> '+now);if(lv<FORGE_MAX)add('fgs','<b>Next level:</b> '+nxt);
-      if(lv<FORGE_MAX){const d=forgeGain(lv);add('fgs','<b>Forge gain:</b> <span class="fgg">'+corePctArr(q,d).join(', ')+'</span>');if(lv>=10)add('fgs','Higher forge levels give more than lower ones.')}
+      add('fgs','Your starting '+(t.k==='wpn'?'Blade':'Robe')+'. A boss drop can replace it.','desc');
+      add('fgs','<b>Now:</b> '+now,'desc');if(lv<FORGE_MAX)add('fgs','<b>Next level:</b> '+nxt,'desc');
+      if(lv<FORGE_MAX){const d=forgeGain(lv);add('fgs','<b>Forge gain:</b> <span class="fgg">'+corePctArr(q,d).join(', ')+'</span>','desc');if(lv>=10)add('fgs','Higher forge levels give more than lower ones.','desc')}
     }
     if(lv<FORGE_MAX){
       const c=forgeCost(lv,t.armor),okO=P.ore>=c.ore,okC=P.coins>=c.coins;
-      add('fgc','<span class="'+(okO?'':'no')+'">'+c.ore.toLocaleString()+' ore</span><span class="'+(okC?'':'no')+'">'+c.coins.toLocaleString()+' coins</span><span>'+c.chance+'% success</span>');
-      add('fgs','A failed strike burns the materials but keeps your level.');
+      add('fgc','<span class="'+(okO?'':'no')+'">'+c.ore.toLocaleString()+' ore</span><span class="'+(okC?'':'no')+'">'+c.coins.toLocaleString()+' coins</span><span>'+c.chance+'% success</span>','bot');
+      add('fgs','A failed strike burns the materials but keeps your level.','desc');
       const b=document.createElement('button');b.type='button';b.className='btn pri fgb';b.textContent='Forge '+c.chance+'%';
-      b.disabled=!!fgBusy||!(okO&&okC);if(fgBusy&&fgBusy.k===t.k)b.textContent='Forging...';b.addEventListener('click',()=>fgDo(t));info.appendChild(b);
+      b.disabled=!!fgBusy||!(okO&&okC);if(fgBusy&&fgBusy.k===t.k)b.textContent='Forging...';b.addEventListener('click',()=>fgDo(t));zn.bot.appendChild(b);
     }
   }
   if(!FGV.raf)FGV.raf=requestAnimationFrame(fgPreview);
@@ -145,10 +159,11 @@ $('forge').addEventListener('click',e=>{if(e.target===$('forge')){$('forge').hid
 $('worlds').addEventListener('click',e=>{if(e.target===$('worlds'))$('worlds').hidden=true});
 
 /* ---------- bag, potions and the Potion Merchant ---------- */
-const POTS={hp:{n:'Health Potion',c:'#ff8a80',d:'Restores 5% of your max HP (5 s cooldown)'},qi:{n:'Mana Potion',c:'#8fd0ff',d:'Restores 10% of your max mana'},tp:{n:'Home Scroll',c:'#d2b4ff',d:'Teleports you to your hub after a 3s channel (moving or taking damage cancels it)'}};
-const POT_SH={hp:'HP potion',qi:'MP potion',tp:'Home Scroll'};
+const POTS={hp:{n:'Health Potion',c:'#ff8a80',d:'Restores 5% of your max HP (5 s cooldown)'},qi:{n:'Mana Potion',c:'#8fd0ff',d:'Restores 10% of your max mana'},tp:{n:'Home Scroll',c:'#d2b4ff',d:'Teleports you to your hub after a 3s channel (moving or taking damage cancels it)'},ck:{n:'Fried Chicken',c:'#f0b25a',d:'Instantly restores 50% of your max HP (60 s cooldown). Made by frying a Chicken pet in the bag'}};
+const POT_SH={hp:'HP potion',qi:'MP potion',tp:'Home Scroll',ck:'Fried Chicken'};
 const TP_DROP=.03,TP_CHANNEL=3,TP_CD=10,tpPrice=()=>Math.max(50,Math.round(P.lvl*8)),priceOf=k=>k==='tp'?tpPrice():potPrice();
 const MP_POT_PCT=.1; /* v5_139 Mana Potion restores 10% of max Qi (v5_138: 5%, originally 40%) */
+const CK_PCT=.5,CK_CD=60; /* Fried Chicken: instant 50% max HP, own 60 s cooldown (separate from the HP potion's 5 s). Made from a Chicken pet (fryChicken in 03_pets.js) */
 const HP_POT_PCT=.05,POT_CD=5; /* v5_72: Health Potion heals 5% of max HP (was 35%), shared 5 s cooldown */
 const POT_MAX=9999,POT_DROP=.1,potPrice=()=>Math.max(10,Math.round(P.lvl*4));
 const NPC={x:C-165,y:C-105}; /* behind the pagoda (hub is 1.5x) */
@@ -169,22 +184,27 @@ function lootIcon(key,icon,n,col){
 function bagLog(t,c){P.recent.unshift({t,c});if(P.recent.length>20)P.recent.pop();saveSoon();if(!$('bag').hidden)renderBag()}
 function addPot(k,n){if(n<=0)return;lootIcon('p'+k,k==='tp'?'&#10162;':'&#9879;',n,POTS[k].c);P.pots[k]=Math.min(POT_MAX,P.pots[k]+n);pop(P.x-14,P.y-58,'+'+n+' '+POT_SH[k],POTS[k].c,12);bagLog('+'+n+' '+POTS[k].n+(n>1?'s':''),POTS[k].c)}
 /* ---------- dodge: quick dash with a brief invulnerable window, aimed by dragging the small pad ---------- */
-const DASH_DIST=210,DASH_T=.34,DASH_CD=1.6,DODGE_INV=.35; /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
+const DASH_DIST=210,DASH_T=.45,DASH_CD=5,DODGE_INV=.35; /* v5_304 DASH_T .34 -> .45 s (same distance) so the roll / dive animation has time; invulnerability stays .35 s */ /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
 function doDodge(dx,dy){
   if(!started||P.dead>0||P.dcd>0)return;
   P.cast=0; /* dodging cancels a cast */
   let l=Math.hypot(dx,dy);
-  if(l<.01){dx=Math.cos(P.face);dy=Math.sin(P.face);l=1}
-  P.dvx=dx/l;P.dvy=dy/l;P.dashT=DASH_T;P.dcd=DASH_CD;P.inv=Math.max(P.inv>0?P.inv:0,DODGE_INV);P.skLock=Math.max(P.skLock||0,DODGE_INV);P.atkCd=Math.max(P.atkCd||0,DODGE_INV);
-  P.face=Math.atan2(P.dvy,P.dvx);P.mv=null;P.task=null;P.mine=0;
+  if(l<.01){dx=-Math.cos(P.face);dy=-Math.sin(P.face);l=1}   /* v5_305 no direction held (Shift alone, dodge button tapped without a swipe) = BACK DIVE away from where the character looks */
+  P.dvx=dx/l;P.dvy=dy/l;
+  /* v5_304 DODGE TYPE, relative to where the character faces right now: 1 forward (+-45 deg) = roll and run, 2 left / right = turn to that side and roll, 3 back (more than 135 deg) = back dive AND ROLL (v5_308), the character keeps facing the front */
+  {let da=Math.atan2(P.dvy,P.dvx)-P.face;da=Math.atan2(Math.sin(da),Math.cos(da));const ad=Math.abs(da);P.dg=ad<.7854?1:ad>2.356?3:2;P.dgU=0}
+  P.dashT=DASH_T;P.dcd=DASH_CD;P.inv=Math.max(P.inv>0?P.inv:0,DODGE_INV);P.skLock=Math.max(P.skLock||0,DODGE_INV);P.atkCd=Math.max(P.atkCd||0,DODGE_INV);
+  if(P.dg!==3)P.face=Math.atan2(P.dvy,P.dvx);P.mv=null;P.task=null;P.mine=0;
+  fxs({k:'dg',d:P.dg,f:+P.face.toFixed(2),x:Math.round(P.x),y:Math.round(P.y)}); /* other players play the same dodge animation */
   ring(P.x,P.y,48,'#bfe9ff');ring(P.x,P.y,80,'#ffffff');
   spark(P.x,P.y,'#e8f6ff',14,150,.45,3.4);spark(P.x,P.y,'#9fd8ff',10,90,.55,4.2); /* v5_142 launch burst */
 }
-const dashEase=u=>1-Math.pow(1-Math.min(1,Math.max(0,u)),3);
+const dashEase=(u,g)=>1-Math.pow(1-Math.min(1,Math.max(0,u)),g===3?1.6:g===1?1.25:g?1.5:3); /* v5_304 g = dodge type: forward roll + run travels most evenly (1.25), side roll 1.5, the back dive + roll leaps first (1.6) */
 /* v5_99 ROTATABLE / TILTABLE CAMERA (3D mode). yaw rotates the view around the player, tilt is the camera pitch (radians above the ground; below CAM_TILT_MIN the camera looks up at the sky, v5_174).
    Controls: hold RIGHT or MIDDLE mouse and drag (left/right = rotate, up/down = tilt), or [ and ] to rotate, PageUp / PageDown to tilt, Home to reset;
    phone: drag with TWO fingers (sideways = rotate, up/down = tilt, pinch = zoom). Movement, joystick, dodge and the hub arrow follow the view. */
-const CAM_TILT0=Math.atan2(380,320),CAM_TILT_MIN=.3, /* v5_105 wider tilt range (about 17 to 87 degrees) */ CAM_TILT_MAX=1.52,
+const CAM_TILT0=.093, /* v5_278 default view = 40% sky / 60% ground. The camera orbits at its lowest elevation (CAM_TILT_MIN) and pitches up (the v5_174 look-up) until its axis points 0.093 rad (5.3 deg) below the horizon: with the 50 deg field of view that puts the horizon 40% of the screen height from the top. Home key / reset use it too. */
+CAM_TILT_MIN=.3, /* v5_105 wider tilt range (about 17 to 87 degrees) */ CAM_TILT_MAX=1.52,
   CAM_LOOK_MAX=1.0, CAM_TILT_LOW=CAM_TILT_MIN-CAM_LOOK_MAX; /* v5_174 LOOK UP: tilt keeps going below CAM_TILT_MIN; the camera then stays at its lowest orbit and pitches up by the difference (up to 1.0 rad = 57 degrees) to show the sky */
 const camView={yaw:0,tilt:CAM_TILT0};
 function camRot(ix,iy){if(!MODE3D||!camView.yaw)return [ix,iy];const c=Math.cos(camView.yaw),sn=Math.sin(camView.yaw);return [ix*c+iy*sn,-ix*sn+iy*c]} /* screen direction -> world direction */
@@ -245,10 +265,11 @@ function finishTp(){
 function usePot(k,auto){
   if(k==='tp'){useTp();return}
   if(!started||P.dead>0||pot[k]>0)return;
-  if(P.pots[k]<=0){if(!auto)say('No '+POTS[k].n+'s left. Buy some from the Potion Merchant (N in your hub).','#8d9aa2');return}
-  if(k==='hp'){if(P.hp>=maxHp())return;const h=healP(Math.round(maxHp()*HP_POT_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#ff8a80',15);spark(P.x,P.y,'#ff9a8a',10,70,.8,2.6,50)}
+  if(P.pots[k]<=0){if(!auto)say(k==='ck'?'No Fried Chicken. Fry a Chicken pet in your bag (Bag > Chicken > Fry).':'No '+POTS[k].n+'s left. Buy some from the Potion Merchant (N in your hub).','#8d9aa2');return}
+  if(k==='ck'){if(P.hp>=maxHp()){say('HP is already full.','#8d9aa2');return}const h=healP(Math.round(maxHp()*CK_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#f0b25a',17);spark(P.x,P.y,'#f0b25a',16,90,.9,2.8,60);ring(P.x,P.y,60,'#f0b25a')}
+  else if(k==='hp'){if(P.hp>=maxHp())return;const h=healP(Math.round(maxHp()*HP_POT_PCT));P.hp=Math.min(maxHp(),P.hp+h);pop(P.x,P.y-30,'+'+h,'#ff8a80',15);spark(P.x,P.y,'#ff9a8a',10,70,.8,2.6,50)}
   else{if(P.qi>=maxQi())return;const q=Math.round(maxQi()*MP_POT_PCT);P.qi=Math.min(maxQi(),P.qi+q);pop(P.x,P.y-30,'+'+q+' MP','#8fd0ff',14);spark(P.x,P.y,'#8fd0ff',10,70,.8,2.6,50)}
-  P.pots[k]--;pot[k]=POT_CD;SFX('potion');save();if(!$('bag').hidden)renderBag();
+  P.pots[k]--;pot[k]=k==='ck'?CK_CD:POT_CD;SFX('potion');save();if(!$('bag').hidden)renderBag();
 }
 function autoPot(){if(!P.autoPot||!started||P.dead>0)return;if(P.hp<maxHp()*(P.apHp||35)/100)usePot('hp',true);if(P.qi<maxQi()*(P.apQi||20)/100)usePot('qi',true)}
 function bagRow(label,val,col){const d=document.createElement('div');d.className='row';const b=document.createElement('b');b.textContent=label;if(col)b.style.color=col;const v=document.createElement('span');v.textContent=val;d.appendChild(b);d.appendChild(v);return d}
@@ -260,6 +281,7 @@ function flaskSvg(a,b){const id='fg'+a.slice(1);return '<svg viewBox="0 0 64 64"
 const ICONS={
   hp:()=>flaskSvg('#ff5a5a','#7a0b12'),qi:()=>flaskSvg('#4aa0ff','#12348a'),
   tp:()=>svgW('<rect x="14" y="8" width="36" height="48" rx="4" fill="#f1e4c3" stroke="#8a5a2b" stroke-width="2"/><rect x="10" y="5" width="44" height="7" rx="3" fill="#b3302c"/><rect x="10" y="52" width="44" height="7" rx="3" fill="#b3302c"/><path d="M32 20l10 8h-4v12H26V28h-4z" fill="#7a4fd0"/><circle cx="32" cy="46" r="3" fill="#7a4fd0"/>'),
+  ck:()=>svgW('<ellipse cx="26" cy="34" rx="20" ry="17" transform="rotate(-35 26 34)" fill="#c9772b" stroke="#6b3410" stroke-width="2"/><ellipse cx="22" cy="28" rx="9" ry="5" transform="rotate(-35 22 28)" fill="#f0b25a" fill-opacity=".7"/><path d="M38 40 L50 52" stroke="#f1e4c3" stroke-width="6" stroke-linecap="round"/><circle cx="48" cy="50" r="5" fill="#f1e4c3" stroke="#8a8a7a" stroke-width="1.5"/><circle cx="53" cy="55" r="5" fill="#f1e4c3" stroke="#8a8a7a" stroke-width="1.5"/>'),
   coin:()=>svgW('<g fill="#e3b559" stroke="#7a5a10" stroke-width="2"><ellipse cx="32" cy="46" rx="20" ry="8"/><rect x="12" y="38" width="40" height="8" stroke="none"/><ellipse cx="32" cy="38" rx="20" ry="8"/><rect x="12" y="30" width="40" height="8" stroke="none"/><ellipse cx="32" cy="30" rx="20" ry="8" fill="#f6d27a"/></g>'),
   ore:()=>svgW('<polygon points="32,6 44,26 38,56 24,56 18,26" fill="#4fc3d9"/><polygon points="32,6 44,26 32,30" fill="#a8f0ff"/><polygon points="32,30 44,26 38,56" fill="#2a8aa0"/><polygon points="12,34 20,30 24,56 8,56" fill="#3aa8bf"/><polygon points="52,38 58,56 42,56" fill="#2a8aa0"/>'),
   ear:c=>svgW('<circle cx="32" cy="16" r="7" fill="none" stroke="{c}" stroke-width="4"/><path d="M32 26 L41 44 L32 58 L23 44Z" fill="{c}" stroke="#fff" stroke-width="1.5"/>',c),
@@ -279,7 +301,7 @@ function bagItems(){
   const a=[];
   if(P.coins>0)a.push({id:'coins',n:'Coins',v:P.coins,t:fmtQ(P.coins),r:'leg',ic:ICONS.coin(),d:'Spend them at the Potion Merchant.'});
   if(P.ore>0)a.push({id:'ore',n:'Darksteel Ore',v:P.ore,t:fmtQ(P.ore),r:'leg',ic:ICONS.ore(),d:'Temper your gear at the Lotus Forge (O in a hub).'});
-  for(const k of ['hp','qi','tp'])if(P.pots[k]>0)a.push({id:k,n:POTS[k].n,v:P.pots[k],t:fmtQ(P.pots[k]),r:k==='hp'?'epic':(k==='tp'?'leg':''),ic:ICONS[k](),d:POTS[k].d+'.',pot:k});
+  for(const k of ['hp','ck','qi','tp'])if(P.pots[k]>0)a.push({id:k,n:POTS[k].n,v:P.pots[k],t:fmtQ(P.pots[k]),r:k==='hp'||k==='ck'?'epic':(k==='tp'?'leg':''),ic:ICONS[k](),d:POTS[k].d+'.',pot:k});
   if(P.wlv>0&&P.gear.wpn.g===0)a.push({id:'blade',n:'Primary Weapon (Blade)',v:P.wlv,t:'+'+P.wlv,r:'epic',eq:1,ic:ICONS.blade('#e3b559'),d:'Your starting Blade, forge level +'+P.wlv+'. A boss-dropped Primary Weapon can replace it. Temper it at the Lotus Forge.'});
   if(P.alv>0&&P.gear.robe.g===0)a.push({id:'robe',n:'Robe',v:P.alv,t:'+'+P.alv,r:'epic',eq:1,ic:ICONS.robe(skinOf(SKIN).robe),d:'Your starting Robe, forge level +'+P.alv+'. A boss-dropped Robe can replace it. Temper it at the Lotus Forge.'});
   for(const q of GEAR){const o=P.gear[q.k];if(o.g>0)a.push({id:'g_'+q.k,n:gearName(q,o),v:o.r*1e6+Math.round(gearScore(o)*100)+o.lv,t:'+'+o.lv,r:RAR[o.r].cls||'rare',eq:1,ic:ICONS[q.k](RAR[o.r].c),d:gearDesc(q,o)})}
@@ -369,6 +391,7 @@ function renderBag(){
   if(!BAGV.raf)BAGV.raf=requestAnimationFrame(bagPreview);
   const info=$('bagInfo');info.innerHTML='';
   const sel=items.find(i=>i.id===bagSel);
+  info.classList.toggle('pinf',!!(sel&&(sel.egg||sel.pet||sel.stored||(sel.eq&&sel.id.slice(0,2)==='g_'))&&!petComb&&!bagMulti)); /* v5_241: egg / pet selected = description scrolls on the left, buttons fixed on the right */
   $('bagMulti').classList.toggle('on',bagMulti);$('bagMulti').textContent=bagMulti?'Done selecting':'Sell multiple';
   if(petComb&&!bagMulti)petCombPanel(info);else
   if(bagMulti){
@@ -406,6 +429,7 @@ function renderBag(){
       info.appendChild(w)}
     if(sel.eq&&sel.id.slice(0,2)==='g_'){const k=sel.id.slice(2),w=document.createElement('div'),b=document.createElement('button');w.className='bagact';b.type='button';b.className='btn';b.textContent='Unequip';b.addEventListener('click',()=>unequipGear(k));w.appendChild(b);info.appendChild(w)}
     if(sel.egg||sel.pet)petBagActions(sel,info);
+    {const ba=info.querySelector('.bagact'),cb=$('bagClose'),wd=cb&&cb.offsetWidth;if(ba&&wd)ba.style.flexBasis='min('+wd+'px,55%)'} /* v5_243: buttons right of the description, as wide as Close */
     if(sel.pot){const k=sel.pot,b=document.createElement('button');b.type='button';b.className='btn pri';b.textContent=pot[k]>0?Math.ceil(pot[k])+'s':(k==='tp'&&P.tp>0?'...':'Use');b.disabled=pot[k]>0;b.addEventListener('click',()=>{usePot(k);renderBag()});info.appendChild(b)}
   }
 }
@@ -464,6 +488,7 @@ $('autoPot').addEventListener('change',e=>{P.autoPot=e.target.checked;save()});
 $('apHp').addEventListener('input',e=>{P.apHp=clamp(+e.target.value||35,5,95);$('apHpV').textContent=P.apHp+'%'});$('apHp').addEventListener('change',()=>save());
 $('apQi').addEventListener('input',e=>{P.apQi=clamp(+e.target.value||20,5,95);$('apQiV').textContent=P.apQi+'%'});$('apQi').addEventListener('change',()=>save());
 $('fightBack').addEventListener('change',e=>{P.fightBack=e.target.checked;save()});
+$('joySmall').addEventListener('change',e=>{P.joySmall=e.target.checked;applyJoySize();save()}); /* v5_279 menu option: joystick 10% smaller */
 $('tapMove').addEventListener('change',e=>{P.tapMove=e.target.checked;if(!P.tapMove)P.mv=null;save()}); /* v5_134 phone: tapping the ground only walks when this is on */
 $('perfSel').value=PERF;
 $('perfSel').addEventListener('change',e=>{const v=e.target.value;try{localStorage.setItem('alperf',v)}catch(_){}say('Performance mode: '+v+' \u2014 reloading\u2026','#e3b559');try{saveNow()}catch(_){}setTimeout(()=>location.reload(),700)});

@@ -326,7 +326,8 @@ type Player struct {
 }
 
 func (p *Player) hunted() bool {
-	return p.joined && p.fl&17 == 0 && dist(p.x, p.y, worldCentre, worldCentre) >= townR
+	// v5_314: the 'tab hidden' flag (16) no longer protects a player: monsters keep attacking while the browser is minimized / inactive (background run).
+	return p.joined && p.fl&1 == 0 && dist(p.x, p.y, worldCentre, worldCentre) >= townR
 }
 
 func (p *Player) send(b []byte) {
@@ -337,6 +338,7 @@ func (p *Player) send(b []byte) {
 	case p.out <- b:
 	default:
 		// client cannot keep up: drop the connection, the read loop will report the leave
+		p.conn.setWhy("the server's send queue for this player was full (the connection was too slow to keep up)")
 		p.conn.close()
 	}
 }
@@ -352,6 +354,7 @@ func (p *Player) writer() {
 				return
 			}
 			if err := p.conn.writeText(b); err != nil {
+				p.conn.setWhy("write to the client failed: " + err.Error())
 				p.conn.close()
 				for range p.out {
 				}
@@ -359,6 +362,7 @@ func (p *Player) writer() {
 			}
 		case <-t.C:
 			if err := p.conn.ping(); err != nil {
+				p.conn.setWhy("ping to the client failed: " + err.Error())
 				p.conn.close()
 			}
 		}
@@ -851,6 +855,7 @@ func (h *Hub) run() {
 						// v5_186 a login on another device signs this session out NOW (it saves first, see the client's kick handler), so it cannot keep
 						// playing on progress that the new device never sees
 						q.send([]byte(`{"t":"kick","m":"This account was logged in on another device. Your progress was saved and you have been signed out."}`))
+						q.conn.setWhy("signed out: the account logged in on another device")
 						h.onLeave(q)
 						found = true
 					}
@@ -905,6 +910,9 @@ func (h *Hub) step(dt float64, tick int) {
 				p.send(r.snapshot(p, extra, tm, dead))
 			}
 		}
+	}
+	if extra {
+		h.partySweep() // v5_316 kept party seats that ran out
 	}
 	if tick%(tickHz/3) == 0 { // party HP/level/world refresh, ~3 times a second, only sent when something changed
 		for _, pt := range h.parties {
@@ -1003,6 +1011,7 @@ func (h *Hub) enterRealm(p *Player, wi int) {
 	p.joined = true
 	p.send(r.worldMsg())
 	r.sendAll(jsonBytes(map[string]interface{}{"t": "pj", "p": p.info()}), p)
+	h.partyRejoin(p) // v5_316 a seat kept for this account (after a disconnect) is taken back
 }
 
 func (h *Hub) onLeave(p *Player) {
@@ -1010,14 +1019,20 @@ func (h *Hub) onLeave(p *Player) {
 		return
 	}
 	h.leaveRealm(p)
-	h.partyLeave(p, "")
+	h.partyDrop(p) // v5_316 keeps the party seat for partyGraceSecs instead of leaving the party at once
 	p.inv = nil
 	p.gone = true
 	delete(h.players, p.id)
 	h.friendOffline(p)
 	close(p.out)
 	if p.joined {
-		log.Printf("%s left (%d online)", p.name, h.joinedCount())
+		why := "reason unknown"
+		if p.conn != nil {
+			if w := p.conn.getWhy(); w != "" {
+				why = w
+			}
+		}
+		log.Printf("%s left (%d online) - %s", p.name, h.joinedCount(), why)
 	}
 	h.broadcastOnline()
 }
@@ -1172,6 +1187,7 @@ func (h *Hub) onMsg(p *Player, raw []byte) {
 		for _, q := range h.players {
 			if q != p && q.joined && !q.gone && strings.EqualFold(q.email, email) {
 				q.send([]byte(`{"t":"kick","m":"This account was logged in somewhere else. You have been signed out."}`))
+				q.conn.setWhy("signed out: a newer session of the same account logged in")
 				h.onLeave(q)
 			}
 		}
@@ -1441,6 +1457,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	for {
 		msg, err := c.readMessage()
 		if err != nil {
+			c.setWhy(readWhy(err))
 			break
 		}
 		h.in <- evt{kind: evMsg, p: p, msg: msg}

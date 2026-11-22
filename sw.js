@@ -4,7 +4,7 @@
    /api and /ws are never touched. Needs https or localhost (browsers do not allow service workers on plain http LAN addresses). */
 const BUILD='__BUILD__';
 const CACHE='woa-'+BUILD, EXT='woa-ext';
-const CORE=['./','index.html','game.js','models3d.js','pets3d.js','audio.js','tutorial.js','three-compat.js','fx3d.js','manifest.json'];
+const CORE=['./','index.html','game.js','models3d.js','vrm3d.js','pets3d.js','audio.js','tutorial.js','three-compat.js','fx3d.js','manifest.json'];
 const LOCAL_OPT=['three.min.js'];  /* optional local copy of three.js (used when you drop it into web/) */
 const CROSS=['https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js','https://fonts.googleapis.com/css2?family=Marcellus+SC&family=Figtree:wght@400;600;700&display=swap'];
 const CROSS_HOSTS=['cdnjs.cloudflare.com','fonts.googleapis.com','fonts.gstatic.com'];

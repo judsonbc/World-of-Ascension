@@ -38,7 +38,7 @@ function hud(){
   statsUpdate();
   st($('coins'),P.coins.toLocaleString());st($('gold'),P.gold.toLocaleString());st($('ore'),P.ore);st($('oreN'),P.ore);
   st($('partyN'),MP?NET.peers.size+1:1);
-  const d=new Date();st($('clk'),pad2(d.getHours())+':'+pad2(d.getMinutes()));
+  const d=new Date();st($('clk'),pad2(d.getHours())+':'+pad2(d.getMinutes()));st($('ign'),AUTH.ign||'');
   /* connection / ping */
   let nt='solo',nc='net off';
   if(NET.joined){if(NET.ping===undefined){nt='online';nc='net'}else{nt=NET.ping+' ms';nc='net'+(NET.ping>250?' bad':NET.ping>100?' mid':'')}}
@@ -82,7 +82,7 @@ function hud(){
   if(bk!==buffKey){buffKey=bk;const bx=$('buffs');bx.innerHTML='';for(const x of bs){const e=document.createElement('div');e.className='bf';e.dataset.n=x[3];e.style.color=x[2];e.textContent=x[0];const em=document.createElement('em');em.textContent=x[1];e.appendChild(em);bx.appendChild(e)}}
   bfTipRefresh(bs);
   /* potions */
-  st($('potN'),kfmt(P.pots.hp));st($('potQN'),kfmt(P.pots.qi));
+  st($('potN'),kfmt(P.pots.hp));st($('ckN'),kfmt(P.pots.ck));$('ckCd').hidden=pot.ck<=0;st($('ckCd'),fmtT(pot.ck)+'s');$('bCk').style.opacity=P.pots.ck>0?1:.5;st($('potQN'),kfmt(P.pots.qi));
   $('potCd').hidden=pot.hp<=0;st($('potCd'),fmtT(pot.hp)+'s');$('potQCd').hidden=pot.qi<=0;st($('potQCd'),fmtT(pot.qi)+'s');
   {const tb=$('tpBar');tb.hidden=!(P.tp>0);if(P.tp>0)sw($('tpFill'),Math.round((1-P.tp/TP_CHANNEL)*100)+'%')}
   st($('tpN'),kfmt(P.pots.tp));$('tpCd').hidden=!(pot.tp>0||P.tp>0);st($('tpCd'),P.tp>0?fmtT(P.tp)+'s':fmtT(pot.tp)+'s');$('bTp').style.opacity=P.pots.tp>0?1:.5;
@@ -91,6 +91,7 @@ function hud(){
   renderOnline();
   if(rsvEl){const ri=P.rsv>=0?P.rsv:P.rsvA,rk=ri>=0?SKILLS[EQ[ri]]:null,key=rk?EQ[ri]+(P.rsv>=0?'m':'a'):'';
     if(key!==rsvKey){rsvKey=key;rsvEl.hidden=!rk;if(rk){rsvEl.style.borderColor=rk.col;rsvEl.classList.toggle('man',P.rsv>=0);rsvEl.innerHTML='<b style="color:'+rk.col+'">'+(GLYPH[rk.t]||'\u2726')+'</b><u>Reserved</u>'}}} /* v5_189 */
+  if(sprEl){const vis=P.runT>=SPRINT_SHOW_T||P.sprT>0;if(vis!==sprEl._vis){sprEl._vis=vis;sprEl.style.display=vis?'':'none'}const on=P.sprT>0;if(on!==sprEl._on){sprEl._on=on;sprEl.classList.toggle('on',on)}const t=on?String(Math.ceil(P.sprT)):'';if(t!==sprEl._t){sprEl._t=t;sprEl.children[2].textContent=t}} /* v5_277 */
   skBtns.forEach((b,i)=>{const id=EQ[i],k=SKILLS[id],cd=k?Math.max(0,SCD[id]):0;
     sh(b.lastElementChild,k?(cd/k.cd*100)+'%':'0');
     st(b.children[2],cd>0?fmtT(cd):'');
@@ -120,7 +121,7 @@ onlineApply();
 $('bMap').addEventListener('click',toggleMap);
 $('bBell').classList.add('on');
 $('bBell').addEventListener('click',()=>{const l=$('log');l.hidden=!l.hidden;$('bBell').classList.toggle('on',!l.hidden)});
-function syncMenuOpts(){$('autoPot').checked=!!P.autoPot;$('apHp').value=P.apHp||35;$('apHpV').textContent=(P.apHp||35)+'%';$('apQi').value=P.apQi||20;$('apQiV').textContent=(P.apQi||20)+'%';$('fightBack').checked=!!P.fightBack;$('tapMove').checked=P.tapMove!==false;$('perfSel').value=PERF}
+function syncMenuOpts(){$('autoPot').checked=!!P.autoPot;$('apHp').value=P.apHp||35;$('apHpV').textContent=(P.apHp||35)+'%';$('apQi').value=P.apQi||20;$('apQiV').textContent=(P.apQi||20)+'%';$('fightBack').checked=!!P.fightBack;$('tapMove').checked=P.tapMove!==false;$('joySmall').checked=!!P.joySmall;$('perfSel').value=PERF}
 $('bGear').addEventListener('click',()=>{const m=$('menu');m.hidden=!m.hidden;if(!m.hidden)syncMenuOpts()});
 $('bSaver').addEventListener('click',()=>{if(!started)return;$('menu').hidden=true;saverOn(true)});
 /* volume sliders (menu): music and sound effects are separate and remembered */
@@ -170,8 +171,31 @@ $('bLogoutGame').addEventListener('click',()=>{if(!confirm('Log out? Your progre
 $('bOre').addEventListener('click',()=>{if(started)openForge()});
 $('bPot').addEventListener('pointerdown',e=>{e.preventDefault();usePot('hp')});
 $('bPotQ').addEventListener('pointerdown',e=>{e.preventDefault();usePot('qi')});
+$('bCk').addEventListener('pointerdown',e=>{e.preventDefault();usePot('ck')});
 $('bTp').addEventListener('pointerdown',e=>{e.preventDefault();useTp()});
 /* the HUD is laid out on a 1000x534 canvas and scaled to fit the window */
 function fitHud(){if(!$('hud'))return;$('hud').style.setProperty('--u',Math.max(.55,Math.min(innerWidth/1000,innerHeight/534,2.6))+'px')}
 window.addEventListener('resize',fitHud);fitHud();
 
+
+/* v5_240 CLOSE (X) BUTTONS: every pop-up window gets a round X at its top right. Windows (modals) click their own Close / Cancel button, so the same cleanup runs. */
+(function(){
+  const MAP={forge:'forgeClose',worlds:'worldClose',wardrobe:'wdClose',book:'bookClose',bag:'bagClose',wh:'whClose',nest:'nestClose',shop:'shopClose',buyDlg:'buyCancel',xcDlg:'xcCancel'};
+  for(const id in MAP){
+    const m=$(id),c=m&&m.querySelector('.card');if(!c)continue;
+    const x=document.createElement('button');x.type='button';x.className='wx';x.textContent='\u2715';x.title='Close';x.setAttribute('aria-label','Close');
+    x.addEventListener('click',e=>{e.stopPropagation();const b=$(MAP[id]);if(b)b.click();else m.hidden=true});
+    c.insertBefore(x,c.firstChild);
+  }
+  const sx=$('swX');if(sx)sx.addEventListener('click',e=>{e.stopPropagation();statsToggle(false)});
+  const mx=$('menuX');if(mx)mx.addEventListener('click',e=>{e.stopPropagation();$('menu').hidden=true});
+})();
+
+/* v5_245 top-right buttons collapse: the arrow hides every icon except Menu (remembered) */
+(function(){
+  const tr=$('tr'),t=$('bTrT');if(!tr||!t)return;
+  const ap=c=>{tr.classList.toggle('col',c);t.firstChild.textContent=c?'\u2039':'\u203a';t.setAttribute('aria-expanded',c?'false':'true')};
+  let c=false;try{c=localStorage.getItem('al_trcol2')==='1'}catch(e){}
+  ap(c);
+  t.addEventListener('click',()=>{c=!c;try{localStorage.setItem('al_trcol2',c?'1':'0')}catch(e){}ap(c)});
+})();

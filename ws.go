@@ -25,6 +25,39 @@ type wsConn struct {
 	c   net.Conn
 	br  *bufio.Reader
 	wmu sync.Mutex
+
+	whyMu sync.Mutex // v5_316 why this connection ended (shown in the "left" line of the server log); the first reason wins
+	why   string
+}
+
+func (w *wsConn) setWhy(s string) {
+	w.whyMu.Lock()
+	if w.why == "" {
+		w.why = s
+	}
+	w.whyMu.Unlock()
+}
+
+func (w *wsConn) getWhy() string {
+	w.whyMu.Lock()
+	defer w.whyMu.Unlock()
+	return w.why
+}
+
+// readWhy (v5_316) turns a read error into a sentence for the server log.
+func readWhy(err error) string {
+	var ne net.Error
+	switch {
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return "the connection was closed from the other side (tab closed, reload, client watchdog, or the tunnel / network dropped it)"
+	case errors.As(err, &ne) && ne.Timeout():
+		return "no data from the client for 40 s (read timeout)"
+	}
+	s := err.Error()
+	if len(s) > 120 {
+		s = s[:120]
+	}
+	return "connection error: " + s
 }
 
 func headerHas(h http.Header, key, token string) bool {

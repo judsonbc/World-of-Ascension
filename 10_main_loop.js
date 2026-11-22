@@ -112,6 +112,23 @@ function logout(){
   authForget();
   location.reload();
 }
+/* v5_309 after login: every avatar (5 classes x He/She) is downloaded before the title / game screen is shown. There is no skip: if a file fails the player can only retry. */
+async function loadAvatars(){
+  const box=$('avl'),bar=$('avB'),txt=$('avS'),btn=$('avR');
+  if(!window.VRM3D||!VRM3D.preloadAll)return;
+  box.hidden=false;
+  try{if(!T3.r)init3()}catch(e){}   /* the 3D engine (and VRM3D.init) must exist before the models can be built */
+  for(;;){
+    btn.style.display='none';bar.style.width='0%';txt.textContent='Loading avatars... 0%';
+    let fails=[];
+    try{fails=await VRM3D.preloadAll((d,t)=>{const p=Math.round(d/t*100);bar.style.width=p+'%';txt.textContent='Loading avatars... '+d+'/'+t})}catch(e){fails=['?']}
+    if(!fails.length)break;
+    txt.textContent='Could not load '+fails.length+' avatar'+(fails.length===1?'':'s')+'. Check your connection and retry.';
+    btn.style.display='inline-block';
+    await new Promise(r=>{btn.onclick=r});
+  }
+  bar.style.width='100%';box.hidden=true;
+}
 async function enterAccount(){
   let server=null,got=false,newerLocal=false;
   try{server=await api('/api/load');got=true}catch(e){if(e.status===401){authForget();AUTH.token='';setAuthUI();authMsg('Session expired. Please log in again.');return}
@@ -131,6 +148,7 @@ async function enterAccount(){
   else{$('bStart').textContent='Begin ascension'}
   try{const me=await api('/api/me');AUTH.ign=me.ign||''}catch(e){AUTH.ign=''}
   walletLoad();
+  await loadAvatars();
   setAuthUI();applyIgnUI();hud();
 }
 async function doAuth(kind){
@@ -192,6 +210,8 @@ if(AUTH.token)api('/api/me').then(enterAccount).catch(e=>{
 });
 hud();
 try{$('nameIn').value=authGet('al_name')||''}catch(e){}
+/* v5_235 iPhone Safari: no pinch / double-tap page zoom (viewport max-scale + touch-action:manipulation do most of it; gesture events are the iOS pinch). The game's own two-finger camera uses pointer events and is not affected. */
+for(const g of ['gesturestart','gesturechange','gestureend'])document.addEventListener(g,e=>e.preventDefault(),{passive:false});
 netConnect();
 /* v5_120 read-only bridge for tutorial.js (the guided tutorial). It only exposes state for reading; nothing here changes the game. */
 window.WOA_API={get P(){return P},get SCD(){return SCD},get EQ(){return EQ},get AUTH(){return AUTH},get started(){return started},get MP(){return MP},PHONE:PHONE,

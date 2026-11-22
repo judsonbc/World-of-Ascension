@@ -9,6 +9,9 @@ package main
 //    members get nothing. Members who did damage it get full EXP as usual.
 //  - PvP: party members can never flag or hit each other (see game.go "pvp"/"phit").
 // When the leader leaves, leadership passes to the next member. With one member left the party disbands.
+// v5_316 DISCONNECT GRACE: a member who only loses the connection keeps the seat for partyGraceSecs (Party.off). Logging in again as the same
+//   account (also from another tab / device) puts them back into the party, as leader again if they led it. A manual /leave, a kick or a disband
+//   is final. The seats still count towards partyMax. Expired seats are swept once a second (partySweep).
 //
 // Client -> server:  {"t":"party","m":"invite","name":"Player"} | "accept" | "decline" | "leave" | "disband"
 //                    {"t":"party","m":"kick"|"leader","name":"Player"} | {"t":"party","m":"chat","tx":"hello"}
@@ -25,6 +28,7 @@ import (
 
 const (
 	partyMax     = 4
+	partyGraceSecs = 600 // v5_316 how long a disconnected member keeps the seat
 	partyInvSecs = 30
 	partyXPRange = 2500.0
 
@@ -40,6 +44,15 @@ type Party struct {
 	leader  *Player
 	members []*Player
 	last    []byte // last update sent, so unchanged parties cost nothing
+	off     []partyOff // v5_316 members that lost the connection and may still return
+	leadOff string     // v5_316 account (email) of a leader that lost the connection: gets the leadership back when returning
+}
+
+// partyOff is a seat that is kept for a member who is offline right now.
+type partyOff struct {
+	email string // lower case
+	name  string
+	until time.Time
 }
 
 type partyInvite struct {
@@ -134,6 +147,142 @@ func (h *Hub) partyPush(pt *Party, force bool) {
 
 var partyNone = []byte(`{"t":"party","m":[]}`)
 
+// partyDrop (v5_316) is used when p LOSES THE CONNECTION: instead of leaving for good, p keeps the seat for partyGraceSecs.
+func (h *Hub) partyDrop(p *Player) {
+	pt := p.party
+	if pt == nil {
+		return
+	}
+	email := strings.ToLower(p.email)
+	if email == "" {
+		h.partyLeave(p, "")
+		return
+	}
+	// the same account is already signed in again (another tab / device took over): that session simply inherits the seat
+	for _, q := range h.players {
+		if q != p && !q.gone && q.joined && q.party == nil && strings.EqualFold(q.email, p.email) {
+			for i, m := range pt.members {
+				if m == p {
+					pt.members[i] = q
+				}
+			}
+			if pt.leader == p {
+				pt.leader = q
+			}
+			p.party = nil
+			q.party = pt
+			h.partyPush(pt, true)
+			return
+		}
+	}
+	p.party = nil
+	for i, m := range pt.members {
+		if m == p {
+			pt.members = append(pt.members[:i], pt.members[i+1:]...)
+			break
+		}
+	}
+	pt.off = append(pt.off, partyOff{email: email, name: p.name, until: time.Now().Add(partyGraceSecs * time.Second)})
+	if pt.leader == p {
+		if pt.leadOff == "" { // the first leader to drop keeps the claim, even if the leadership is passed on while they are away
+			pt.leadOff = email
+		}
+		pt.leader = nil
+		if len(pt.members) > 0 {
+			pt.leader = pt.members[0]
+		}
+	}
+	for _, m := range pt.members {
+		m.sysMsg(p.name + " lost the connection and keeps a seat in the party for " + itoa(partyGraceSecs/60) + " minutes.")
+		if pt.leader == m && pt.leadOff == email {
+			m.sysMsg("You are the party leader until " + p.name + " returns.")
+		}
+	}
+	if len(pt.members) > 0 {
+		h.partyPush(pt, true)
+	}
+}
+
+// partyRejoin (v5_316) runs when p enters a world: if p's account holds a kept seat in a party, p takes it back.
+func (h *Hub) partyRejoin(p *Player) {
+	if p.party != nil || p.email == "" {
+		return
+	}
+	email := strings.ToLower(p.email)
+	now := time.Now()
+	for _, pt := range h.parties {
+		for i, o := range pt.off {
+			if o.email != email || now.After(o.until) || len(pt.members) >= partyMax {
+				continue
+			}
+			pt.off = append(pt.off[:i], pt.off[i+1:]...)
+			pt.members = append(pt.members, p)
+			p.party = pt
+			if pt.leader == nil || pt.leadOff == email {
+				pt.leader = p
+				pt.leadOff = ""
+			}
+			for _, m := range pt.members {
+				if m != p {
+					m.sysMsg(p.name + " is back in the party.")
+				}
+			}
+			p.sysMsg("You are back in your party.")
+			h.partyPush(pt, true)
+			return
+		}
+	}
+}
+
+// partySweep (v5_316), once a second: drops kept seats whose time ran out; a party that is left with fewer than two seats is disbanded.
+func (h *Hub) partySweep() {
+	now := time.Now()
+	for id, pt := range h.parties {
+		if len(pt.off) == 0 {
+			continue
+		}
+		kept := make([]partyOff, 0, len(pt.off))
+		var gone []string
+		for _, o := range pt.off {
+			if now.After(o.until) {
+				gone = append(gone, o.name)
+			} else {
+				kept = append(kept, o)
+			}
+		}
+		if len(gone) == 0 {
+			continue
+		}
+		pt.off = kept
+		still := false
+		for _, o := range kept {
+			if o.email == pt.leadOff {
+				still = true
+			}
+		}
+		if !still {
+			pt.leadOff = ""
+		}
+		for _, n := range gone {
+			for _, m := range pt.members {
+				m.sysMsg(n + " did not return and was removed from the party.")
+			}
+		}
+		if len(pt.members)+len(pt.off) < 2 {
+			for _, m := range pt.members {
+				m.party = nil
+				m.send(partyNone)
+				m.sysMsg("The party was disbanded.")
+			}
+			delete(h.parties, id)
+			continue
+		}
+		if len(pt.members) > 0 {
+			h.partyPush(pt, true)
+		}
+	}
+}
+
 func (h *Hub) partyLeave(p *Player, reason string) {
 	h.partyRemove(p, reason, p.name+" left the party.")
 }
@@ -196,7 +345,7 @@ func (h *Hub) partyInvite(p *Player, name string) {
 	case q.party != nil:
 		p.sysMsg(q.name + " is already in a party.")
 		return
-	case p.party != nil && len(p.party.members) >= partyMax:
+	case p.party != nil && len(p.party.members)+len(p.party.off) >= partyMax:
 		p.sysMsg("Your party is full (" + itoa(partyMax) + " players).")
 		return
 	}
@@ -223,7 +372,7 @@ func (h *Hub) partyAccept(p *Player) {
 	case f.gone || !f.joined:
 		p.sysMsg(f.name + " is no longer online.")
 		return
-	case f.party != nil && len(f.party.members) >= partyMax:
+	case f.party != nil && len(f.party.members)+len(f.party.off) >= partyMax:
 		p.sysMsg(f.name + "'s party is full.")
 		return
 	}
@@ -349,6 +498,7 @@ func (h *Hub) partyLeaderAct(p *Player, act, name string) {
 		return
 	}
 	pt.leader = q
+	pt.leadOff = "" // v5_316
 	for _, m := range pt.members {
 		m.sysMsg(q.name + " is now the party leader.")
 	}

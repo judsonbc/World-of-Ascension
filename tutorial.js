@@ -96,6 +96,7 @@ const STEPS=[
  {id:'potions',title:'Potions and Home Scroll',kind:'info',target:['#qb'],
   text:()=>'Top-left under the hero:<br>'
    +'&bull; '+kb('Q')+' <b>Health Potion</b> heals 5% HP (5 s cooldown).<br>'
+   +'&bull; '+kb('Y')+' <b>Fried Chicken</b> instantly heals 50% HP (60 s cooldown). Fry a Chicken pet in the bag to make it.<br>'
    +'&bull; '+kb('Z')+' <b>Mana Potion</b> restores 10% Qi.<br>'
    +'&bull; '+kb('X')+' <b>Home Scroll</b> teleports you back to the hub.<br>'
    +'Buy them from the <b>Potion Merchant</b> in the hub (walk up to him and '+(phone()?'tap':'click')+' him'+(phone()?'':' or press '+kb('N'))+'). '

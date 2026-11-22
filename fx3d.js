@@ -74,7 +74,8 @@ const WP=[
 ].map(p=>Object.assign({},D,p));
 
 /* ---------------- shaders ---------------- */
-const NOISE='float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n'+
+const NOISE='float h2(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}\n'+ /* v5_273 sin-free hash: the old fract(sin()*43758) hash showed streaks / grid lines on phone GPUs */
+ 
  'float vn2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h2(i),h2(i+vec2(1.,0.)),f.x),mix(h2(i+vec2(0.,1.)),h2(i+vec2(1.,1.)),f.x),f.y);}\n'+
  'float fbm(vec2 p){float a=.5,s=0.;for(int i=0;i<OCT;i++){s+=a*vn2(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return s;}\n';
 const DOME_V='varying vec3 vd;void main(){vd=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
@@ -89,20 +90,20 @@ const DOME_F=oct=>'#define OCT '+oct+'\nvarying vec3 vd;uniform vec3 top,mid,hor
  ' if(night>.05&&gal>0.){vec3 gn=normalize(vec3(.35,.85,.4));float gd=dot(v,gn);float band=exp(-gd*gd*14.);float dust=fbm(hv*1.5+vec2(v.y*6.,v.y*3.));\n'+
  '  c+=galC*band*(.15+1.1*dust*dust)*gal*night*smoothstep(.02,.25,h);}\n'+
  ' c+=vec3(.55,.65,1.)*flash*.3*smoothstep(-.1,.6,h);\n'+
- ' gl_FragColor=vec4(c,1.);}';
+ ' c+=(h2(gl_FragCoord.xy)+h2(gl_FragCoord.yx+17.3)-1.)/255.;gl_FragColor=vec4(c,1.);}'; /* v5_273 dither: no colour banding */
 const CLOUD_F=oct=>'#define OCT '+oct+'\nvarying vec3 vd;uniform vec3 cc,horC,sunDir,sunCol,twiCol,aurA,aurB;uniform float cloud,t,flash,aur,night,twi;\n'+NOISE+
  'void main(){vec3 v=normalize(vd);float h=v.y;if(h<.005){gl_FragColor=vec4(0.);return;}\n'+
  ' float mA=0.;vec3 mc=cc;\n'+
- ' if(cloud>.01){vec2 q=v.xz/(h+.22)*1.5+vec2(t*.006,t*.0025);float dn=fbm(q)*.65+fbm(q*2.4+vec2(t*.012,3.1))*.35;\n'+
+ ' if(cloud>.01){vec2 q=v.xz/(h+.34)*1.5+vec2(t*.006,t*.0025);float dn=fbm(q)*.65+fbm(q*2.4+vec2(t*.012,3.1))*.35;\n'+
  '  float thr=.74-cloud*.42;mA=smoothstep(thr,thr+.17,dn);float dark=smoothstep(thr,thr+.4,dn);\n'+
  '  float sd=max(dot(v,sunDir),0.);mc=cc*(1.-.4*dark)+sunCol*pow(sd,3.)*.35*(1.-dark*.5);\n'+
  '  mc+=vec3(.6,.7,1.)*flash*(.5+.5*dn);\n'+
  '  vec2 hv=normalize(v.xz+vec2(1e-4)),sv=normalize(sunDir.xz+vec2(1e-4));\n'+
  '  mc=mix(mc,twiCol,twi*.55*pow(max(dot(hv,sv),0.),2.)*(1.-dark*.3));\n'+
- '  mc=mix(horC,mc,smoothstep(.01,.28,h));mA*=smoothstep(.005,.1,h);}\n'+
+ '  mc=mix(horC,mc,smoothstep(.01,.28,h));mA*=smoothstep(.005,.16,h);}\n'+
  ' float aA=0.;vec3 ac=aurA;\n'+
  ' if(aur>.01&&night>.05){float u=atan(v.z,v.x);float ah=.3+.1*sin(u*2.+t*.07)+.05*sin(u*5.-t*.11);float y=h-ah;\n'+
- '  float band=exp(-max(y,0.)*5.)*smoothstep(-.12,0.,y);float cur=.55+.45*sin(u*18.+fbm(normalize(v.xz+vec2(1e-4))*1.5+vec2(t*.1,0.))*6.+t*.4);\n'+
+ '  float band=exp(-max(y,0.)*5.)*smoothstep(-.12,0.,y);float cur=.62+.38*sin(u*9.+fbm(normalize(v.xz+vec2(1e-4))*1.5+vec2(t*.1,0.))*5.+t*.4)*(.65+.35*sin(u*5.-t*.2));\n'+
  '  float fd=smoothstep(.04,.2,h)*(1.-smoothstep(.55,.85,h));aA=clamp(band*cur*fd*aur*night*1.1,0.,1.)*.75;ac=mix(aurA,aurB,smoothstep(-.15,.3,y))*(1.+.5*band);}\n'+
  ' float m=mA*.93;float a=m+aA*(1.-m);vec3 col=(mc*m+ac*aA*(1.-m))/max(a,.001);gl_FragColor=vec4(col,a);}';
 const STAR_V='attribute float aS;attribute float aP;attribute vec3 aC;uniform float t,vis,pr;uniform vec3 tint;varying vec3 vc;varying float va;\n'+

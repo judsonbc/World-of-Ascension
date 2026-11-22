@@ -1,11 +1,11 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="World of Ascension"><meta name="theme-color" content="#0d1114"><link rel="manifest" href="manifest.json"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="World of Ascension"><meta name="theme-color" content="#0d1114"><link rel="manifest" href="manifest.json"><style>html,body{touch-action:manipulation} /* v5_235 no double-tap zoom (iOS) */:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <!-- LOADING SCREEN (v5_57): covers the page until all game files, fonts and the 3D engine are ready -->
 <style>#ldr{position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147483000;background:#0d1114;color:#e8e0ca;display:flex;align-items:center;justify-content:center;font-family:'Marcellus SC',Georgia,serif;transition:opacity .3s}
 #ldr .lb{width:min(78vw,340px);text-align:center}#ldr .lt{font-size:26px;letter-spacing:.06em;margin-bottom:22px;color:#e3b559}
 #ldr .lr{height:8px;border-radius:5px;background:rgba(232,224,202,.14);overflow:hidden}#ldr .lr i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#5fd3a5,#e3b559);transition:width .25s}
 #ldr .ls{margin-top:12px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:#8d9aa2;min-height:18px}
 #ldr button{margin:14px 6px 0;padding:8px 16px;border:1px solid rgba(232,224,202,.3);border-radius:8px;background:rgba(232,224,202,.08);color:#e8e0ca;font:13px -apple-system,BlinkMacSystemFont,sans-serif}</style>
-<div id="ldr"><div class="lb"><div class="lt">World of Ascension</div><div class="lr"><i id="ldB"></i></div><div class="ls" id="ldS">Starting...</div><div id="ldX" style="display:none"><button id="ldR">Retry</button><button id="ldC">Continue anyway</button></div><div><button id="ldK" style="display:none">Continue now (sound will follow)</button></div></div></div>
+<div id="ldr"><div class="lb"><div class="lt">World of Ascension</div><div class="lr"><i id="ldB"></i></div><div class="ls" id="ldS">Starting...</div><div id="ldX" style="display:none"><button id="ldR">Retry</button></div></div></div>
 <script>
 /* Preloader: downloads/caches the game files (service worker keeps them on the device), waits for fonts and the 3D engine, then lifts the screen. */
 (function(){
@@ -14,7 +14,6 @@
   function done(){if(fin)return;fin=true;bar.style.width='100%';box.style.opacity='0';setTimeout(function(){if(box.parentNode)box.parentNode.removeChild(box)},320)}
   function trouble(m){txt.textContent=m;x.style.display='block'}
   document.getElementById('ldR').onclick=function(){location.reload()};
-  document.getElementById('ldC').onclick=done;
   var sw='serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1');
   if(sw)navigator.serviceWorker.register('sw.js').catch(function(){});
   /* 1) game files (cache hit = instant; first visit downloads and the service worker stores them) */
@@ -22,19 +21,17 @@
   set(4,'Downloading game files...');
   files.forEach(function(f){fetch(f).then(function(r){return r.arrayBuffer()}).catch(function(){}).then(function(){got++;set(4+got/files.length*50,'Downloading game files... '+got+'/'+files.length)})});
   var wait=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
-  var sndBusy=false,sndSkip=false;
+  var sndBusy=false;
   var sndWait=function(){return new Promise(function(res){
     var S=window.SND;if(!S||!S.progress){res();return}
-    var t0=Date.now(),k2=document.getElementById('ldK');sndBusy=true;
-    k2.onclick=function(){sndSkip=true};
-    var out=function(){sndBusy=false;k2.style.display='none';res()};
+    var t0=Date.now();sndBusy=true;
+    var out=function(){sndBusy=false;res()};
     (function k(){
       var p=S.progress(),el=Date.now()-t0;
       if(p.ready){set(92);out();return}
       var f=p.total?p.done/p.total:0;
       set(74+f*18,(p.cached?'Preparing sounds... ':'Preparing sounds (first start only)... ')+Math.min(99,Math.round(f*100))+'%');
-      if(el>15000)k2.style.display='inline-block';           /* slow phone: let the player go in without waiting */
-      if(sndSkip||el>90000){out();return}                      /* the rest keeps finishing in the background */
+      if(el>90000){out();return}                               /* safety net: sounds that are still loading finish in the background */
       setTimeout(k,120);
     })();
   })};
@@ -288,13 +285,60 @@ html.phone #pgear .pgn{font-size:9.5px;line-height:1.15}html.phone #pgear .pgr{f
 /* zone banner (appears when you enter a new area) */
 #banner{position:absolute;left:50%;top:calc(118*var(--u));transform:translateX(-50%);text-align:center;opacity:0;font:400 calc(20*var(--u))/1.2 var(--display);letter-spacing:.06em;white-space:nowrap;padding:calc(8*var(--u)) calc(40*var(--u));background:linear-gradient(90deg,transparent,rgba(8,12,15,.6) 25%,rgba(8,12,15,.6) 75%,transparent);border-top:calc(1*var(--u)) solid rgba(232,224,202,.3);border-bottom:calc(1*var(--u)) solid rgba(232,224,202,.3);animation:bn 5s ease-out}
 #banner small{display:block;font:600 calc(10*var(--u)) var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+
+/* v5_237 Pet Nest: hatch eggs / combine pets */
+#nest .nestwin{width:min(560px,100%);gap:8px;padding:12px;background:linear-gradient(#0d1c36,#08111f);border:1px solid #2a4a7a}
+.nesttabs{display:flex;gap:6px}.nesttabs .btn{flex:1;padding:6px 10px}.nesttabs .btn.on{background:var(--gold);color:#241a05}
+#nestBody{display:flex;flex-direction:column;gap:8px;min-height:0}
+.nstage{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px;border-radius:10px;text-align:center;background:radial-gradient(circle at 50% 40%,#16315a,#0a1424);border:1px solid #2a4a7a}
+.nstage small{color:var(--mist);font-size:12px}.ncount{font:700 15px var(--body);color:var(--paper)}
+.negg{width:92px;height:92px}.negg svg{width:100%;height:100%;display:block;filter:drop-shadow(0 4px 8px rgba(0,0,0,.6))}
+.negg.shake{animation:nShake .95s ease-in-out forwards}
+@keyframes nShake{0%{transform:rotate(0) scale(1)}15%{transform:rotate(-12deg)}30%{transform:rotate(12deg)}45%{transform:rotate(-14deg) scale(1.05)}60%{transform:rotate(14deg) scale(1.08)}80%{transform:rotate(-8deg) scale(1.14);filter:brightness(1.5)}100%{transform:scale(1.25);filter:brightness(2.4);opacity:.15}}
+.nres{display:flex;flex-direction:column;align-items:center;gap:6px;min-height:20px}
+.nline{font-size:13px;color:var(--paper);text-align:center}.nline.bad{color:#ff8a7a}.nline.good{font-weight:700}
+.nlist{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.nit{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:8px;background:rgba(255,255,255,.06);font:600 13px var(--body);animation:nPop .4s cubic-bezier(.2,1.4,.4,1)}
+.nit.sp{box-shadow:0 0 14px rgba(255,225,74,.55);border:1px solid #ffe14a}
+.nit .bslot{position:relative;width:44px;height:44px;flex:none;cursor:default}
+.nbtns{display:flex;gap:8px;justify-content:center}.nbtns .btn{flex:1;max-width:200px}.nbtns .btn:disabled{opacity:.45;cursor:default}
+.nrow{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;border-radius:10px;background:radial-gradient(circle at 50% 40%,#16315a,#0a1424);border:1px solid #2a4a7a}
+.nop{font:700 22px var(--body);color:var(--gold)}
+.nslot{width:68px;height:68px;flex:none;font:700 26px var(--body);color:#9fb4c8;display:flex;align-items:center;justify-content:center}
+.nslot.empty{opacity:.5}.nout.ghost{opacity:.4;filter:grayscale(.5)}
+.nout.won{animation:nPop .5s cubic-bezier(.2,1.4,.4,1);box-shadow:0 0 18px currentColor}
+.nout.lost{border-color:#d9503f;background:radial-gradient(circle at 50% 40%,#5a1c18,#2a0c0a);color:#ff6a55;animation:nShakeX .5s}
+.merge .nslot.a{animation:nML .95s ease-in forwards}.merge .nslot.b{animation:nMR .95s ease-in forwards}.merge .nout{animation:nGlow .95s ease-in}
+@keyframes nML{to{transform:translateX(46px) scale(.6);opacity:.2}}@keyframes nMR{to{transform:translateX(-46px) scale(.6);opacity:.2}}
+@keyframes nGlow{0%{box-shadow:0 0 0 #fff}80%{box-shadow:0 0 22px #fff;filter:brightness(1.4)}100%{box-shadow:0 0 0 #fff}}
+@keyframes nPop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes nShakeX{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+.ninfo{font-size:12px;color:var(--mist);text-align:center;min-height:2.6em;display:flex;flex-direction:column;gap:3px}
+.ngrid{display:grid;grid-template-columns:repeat(auto-fill,50px);gap:5px;align-content:start;justify-content:center;overflow-y:auto;min-height:0;flex:1;overscroll-behavior:contain;touch-action:pan-y}
+.ngrid .bslot{width:50px;height:50px}.ngrid .bslot.dim{opacity:.35}
+/* multi-combine: pets on the left, 10 slots on the right */
+#nest.wide .nestwin{width:min(820px,100%)}
+.ncomb{display:flex;gap:8px;min-height:0;height:min(430px,calc(100dvh - 190px))}
+.nleft{flex:0 0 40%;display:flex;flex-direction:column;gap:5px;min-height:0;padding:6px;border-radius:10px;background:radial-gradient(circle at 50% 30%,#16315a,#0a1424);border:1px solid #2a4a7a}
+.nright{flex:1;display:flex;flex-direction:column;gap:5px;min-height:0;min-width:0;padding:6px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid #2a4a7a}
+.nhd{font:700 13px var(--body);letter-spacing:.04em;color:var(--gold)}.nhint{font-size:11px;color:var(--mist)}
+.nrows{display:flex;flex-direction:column;gap:4px;overflow-y:auto;min-height:0;flex:1;overscroll-behavior:contain;touch-action:pan-y}
+.nrw{display:flex;align-items:center;gap:4px;padding:3px 5px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid transparent;flex:none}
+.nrw.rdy{border-color:rgba(227,181,89,.55);background:rgba(227,181,89,.08)}
+.nno{width:16px;font:700 11px var(--body);color:var(--mist);text-align:center}
+.nrw .nop{font-size:15px}.nrw .nslot{width:38px;height:38px;font-size:18px}
+.nch{margin-left:auto;font:700 12px var(--body);color:var(--mist);min-width:30px;text-align:right}
+.nrw.merge .nslot.a{animation:nML .95s ease-in forwards}.nrw.merge .nslot.b{animation:nMR .95s ease-in forwards}.nrw.merge .nout{animation:nGlow .95s ease-in}
+@media (orientation:portrait){.ncomb{flex-direction:column;height:min(520px,calc(100dvh - 200px))}.nleft{flex:0 0 38%}}
+@media (orientation:landscape) and (max-height:520px){#nest.modal{padding:4px}#nest .nestwin{padding:6px;gap:4px}#nestBody{gap:4px}.negg{width:52px;height:52px}.nstage{padding:5px;gap:2px}.nslot{width:52px;height:52px}.nrow{padding:4px;gap:5px}.ncomb{height:calc(100dvh - 118px)}.ngrid{grid-template-columns:repeat(auto-fill,42px)}.ngrid .bslot{width:42px;height:42px}.nrw .nslot{width:32px;height:32px;font-size:15px}.nrw{padding:2px 4px}.nhint{display:none}.ninfo{font-size:11px;min-height:2.2em}.nit .bslot{width:34px;height:34px}.nstage small{font-size:11px}}
+@media (prefers-reduced-motion:reduce){.negg.shake,.merge .nslot,.merge .nout,.nit,.nout.won,.nout.lost{animation-duration:.01s}}
 /* v5_98 level-up popup: same look as the forge SUCCESS / FAILED popup */
-#lvUp{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:30;pointer-events:none;text-align:center;padding:14px 34px;border-radius:12px;background:rgba(10,14,18,.95);border:2px solid var(--gold);box-shadow:0 0 34px rgba(227,181,89,.5);animation:lvPop .35s cubic-bezier(.2,1.4,.4,1);max-width:calc(100vw - 24px)}
+#lvUp{position:fixed;left:50%;top:calc(76px + env(safe-area-inset-top,0px));transform:translateX(-50%);opacity:.88;z-index:30;pointer-events:none;text-align:center;padding:14px 34px;border-radius:12px;background:rgba(10,14,18,.6);border:2px solid var(--gold);box-shadow:0 0 34px rgba(227,181,89,.5);animation:lvPop .35s cubic-bezier(.2,1.4,.4,1);max-width:calc(100vw - 24px)}
 #lvUp[hidden]{display:none}
 #lvUp b{display:block;font:400 30px var(--display);letter-spacing:.14em;color:var(--gold)}
 #lvUp small{display:block;color:var(--mist);margin-top:3px;font-size:13px}
 #lvUp.fade{opacity:0;transition:opacity .5s}
-@keyframes lvPop{from{transform:translate(-50%,-50%) scale(.5);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@keyframes lvPop{from{transform:translateX(-50%) scale(.5);opacity:0}to{transform:translateX(-50%) scale(1);opacity:.88}}
 html.phone #lvUp{padding:10px 24px}html.phone #lvUp b{font-size:24px}html.phone #lvUp small{font-size:12px}
 /* v5_109 screen saver */
 #saver{position:fixed;inset:0;z-index:9999;background:#000;display:none;touch-action:none;-webkit-user-select:none;user-select:none;overflow:hidden}
@@ -310,6 +354,7 @@ html.phone #lvUp{padding:10px 24px}html.phone #lvUp b{font-size:24px}html.phone 
 
 /* top-right: menu icons, zone strip, quest tracker, minimap */
 #tr{position:absolute;right:calc(10*var(--u));top:calc(8*var(--u));display:flex;gap:calc(10*var(--u))}
+#trx{display:flex;gap:calc(10*var(--u))}html.phone #trx{gap:calc(18*var(--u))}#tr.col #trx{display:none}#bTrT{opacity:.85}
 #tr .ic{width:calc(34*var(--u));height:calc(34*var(--u));border-radius:calc(6*var(--u));font-size:calc(17*var(--u))}
 #menu .mrow{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:calc(8*var(--u));margin-top:calc(2*var(--u))}#menu .mrow.ck{justify-content:flex-start;font-size:inherit}#menu .mrow select{flex:1 1 auto;min-width:0;max-width:62%;font-size:inherit;background:#10161a;color:var(--paper);border:1px solid #2c3a40;border-radius:calc(4*var(--u));padding:calc(1*var(--u)) calc(3*var(--u))}#menu button.mrow{justify-content:center}
 #menu{position:absolute;right:calc(10*var(--u));top:calc(50*var(--u));width:calc(230*var(--u));padding:calc(10*var(--u)) calc(12*var(--u));display:grid;grid-template-columns:auto 1fr;gap:calc(3*var(--u)) calc(10*var(--u));font-size:calc(11*var(--u));color:var(--mist);z-index:4}
@@ -403,6 +448,9 @@ html.phone #finv button{min-height:36px;padding:6px 12px;font-size:13px}
 #log div{font:600 calc(13*var(--u))/1.3 var(--body);padding:0;background:none;text-shadow:0 0 calc(3*var(--u)) #000,0 calc(1*var(--u)) calc(2*var(--u)) #000,0 0 calc(6*var(--u)) #000;animation:fade 6s forwards}
 @keyframes fade{0%,80%{opacity:1}100%{opacity:0}}
 #sb{position:absolute;left:calc(8*var(--u));bottom:calc(5*var(--u));display:flex;gap:calc(14*var(--u));align-items:center;font:600 calc(13*var(--u)) var(--body);font-variant-numeric:tabular-nums}
+/* v5_313 the player's IGN sits right above the clock */
+#ign{position:absolute;left:calc(8*var(--u));bottom:calc(23*var(--u));max-width:calc(220*var(--u));overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;font:600 calc(13*var(--u)) var(--body);color:#e3b559}
+#ign:empty{display:none}
 #sb .clk{color:#d8dde0}#sb .xpt{color:#4fe3e8}
 #sb .net{display:flex;align-items:center;gap:calc(5*var(--u));color:#b7e04a}
 #sb .net.mid{color:#ffd54a}#sb .net.bad{color:#ff6a5a}#sb .net.off{color:#8d9aa2}
@@ -423,7 +471,7 @@ html.phone #finv button{min-height:36px;padding:6px 12px;font-size:13px}
 #ab #bAuto{right:calc(375*var(--u))}#ab #bMine{right:calc(425*var(--u))}
 #bMine,#bAuto{border-color:#9ab3c4}
 #bMine{font-size:calc(19*var(--u))}#bAuto{font-size:calc(19*var(--u))}
-#bPot{font-size:calc(20*var(--u))}#bPotQ{font-size:calc(20*var(--u))}
+#bPot,#bCk{font-size:calc(20*var(--u))}#bPotQ{font-size:calc(20*var(--u))}
 #bOre{display:none!important}
 #bBell[hidden]{display:none!important}
 
@@ -442,6 +490,11 @@ html.phone #finv button{min-height:36px;padding:6px 12px;font-size:13px}
 .rsv[hidden]{display:none}
 .rsv b{font:700 calc(21*var(--u))/1 var(--body);text-shadow:0 0 calc(6*var(--u)) currentColor}
 .rsv u{position:absolute;top:100%;left:50%;transform:translate(-50%,calc(-4*var(--u)));text-decoration:none;white-space:nowrap;font:700 calc(8*var(--u))/1 var(--body);padding:calc(2*var(--u)) calc(6*var(--u));border-radius:calc(7*var(--u));background:#3a2f12;border:calc(1*var(--u)) solid var(--gold);color:#ffd27a}
+.sk.spr{border-color:#5fd3a5;background:radial-gradient(circle at 35% 28%,#2f4a44,#0b1512 78%)}
+.sk.spr img{width:78%;height:78%;object-fit:contain;pointer-events:none;-webkit-user-drag:none}
+.sk.spr .kn{display:none}
+.sk.spr.on{box-shadow:0 0 calc(10*var(--u)) #5fd3a5;background:radial-gradient(circle at 35% 28%,#3f7a64,#10231d 78%)}
+.sk.spr.on img{opacity:.35}
 .sk.big{width:calc(56*var(--u));height:calc(56*var(--u));border-width:calc(3*var(--u))}
 .sk.big b{font-size:calc(24*var(--u))}
 .sk.sm{width:calc(38*var(--u));height:calc(38*var(--u))}
@@ -511,6 +564,11 @@ html.phone #log{left:14px;bottom:calc(64px + 128px + 56px + env(safe-area-inset-
 html.phone #log div{font-size:max(12px,calc(13*var(--u)))}
 html.phone #skills{transform:scale(1.1);transform-origin:100% 100%;right:env(safe-area-inset-right,0px);bottom:env(safe-area-inset-bottom,0px);z-index:4}
 html.phone #joy{left:calc(24px + env(safe-area-inset-left,0px))}
+/* v5_279 menu option "Smaller joystick": 10% smaller ring and knob */
+html.joysm #joy{width:104px;height:104px}
+html.joysm #joy i{width:41px;height:41px;margin:-20.5px 0 0 -20.5px}
+html.phone.joysm #joy{width:115px;height:115px}
+html.phone.joysm #joy i{width:47px;height:47px;margin:-23.5px 0 0 -23.5px}
 #menu #bLand{display:none}html.phone #menu #bLand{display:block}
 /* PERF: a blurred backdrop over a canvas that redraws every frame forces the GPU to re-blur each frame; on phones use a slightly more opaque panel instead */
 html.phone .panel{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(13,17,20,.86)}
@@ -528,7 +586,7 @@ html.phone #menu .vol input{height:22px}
 html.phone #menu .mrow{margin-top:1px;gap:6px}
 html.phone #menu .mrow select{font-size:11px;padding:1px 3px;min-height:22px}
 html.phone #menu .mrow.ck{line-height:1.2}
-html:not(.phone) #menu #tapMoveRow{display:none}
+html:not(.phone) #menu #tapMoveRow,html:not(.phone) #menu #joySmallRow{display:none}
 html.phone #menu .mrow.ck input{margin:0 4px 0 0;width:15px;height:15px;flex:0 0 auto}
 html.phone #menu .mbtns{gap:4px;margin-top:3px}
 html.phone #menu .mbtns .btn{flex:1 1 30%;min-height:26px;padding:3px 4px;font-size:11px;line-height:1.15;border-radius:6px;white-space:normal}
@@ -564,13 +622,13 @@ html.phone #worlds .card p{font-size:12px;line-height:1.35}
 #worldRows{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1 1 auto;min-height:0}
 #worldClose{flex:0 0 auto}
 /* forge result popup */
-#forgeRes{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;pointer-events:none;text-align:center;padding:14px 34px;border-radius:12px;background:rgba(10,14,18,.95);border:2px solid var(--gold);box-shadow:0 0 34px rgba(227,181,89,.5);animation:frPop .35s cubic-bezier(.2,1.4,.4,1)}
+#forgeRes{position:absolute;left:50%;top:calc(76px + env(safe-area-inset-top,0px));transform:translateX(-50%);opacity:.88;z-index:3;pointer-events:none;text-align:center;padding:14px 34px;border-radius:12px;background:rgba(10,14,18,.6);border:2px solid var(--gold);box-shadow:0 0 34px rgba(227,181,89,.5);animation:frPop .35s cubic-bezier(.2,1.4,.4,1)}
 #forgeRes[hidden]{display:none}
 #forgeRes b{display:block;font:400 30px var(--display);letter-spacing:.14em;color:var(--gold)}
 #forgeRes small{display:block;color:var(--mist);margin-top:3px;font-size:13px}
 #forgeRes.bad{border-color:var(--cinnabar);box-shadow:0 0 34px rgba(217,80,63,.5)}
 #forgeRes.bad b{color:#ff6a55}
-@keyframes frPop{from{transform:translate(-50%,-50%) scale(.5);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@keyframes frPop{from{transform:translateX(-50%) scale(.5);opacity:0}to{transform:translateX(-50%) scale(1);opacity:.88}}
 html.phone #forgeRes{padding:10px 24px}html.phone #forgeRes b{font-size:24px}html.phone #forgeRes small{font-size:12px}
 #title{background:radial-gradient(ellipse at 50% 30%,#1d2a2b,#0a0d10 70%)}
 #title h1{font-family:var(--display);font-weight:400;font-size:clamp(30px,7.5vw,54px);letter-spacing:.08em;margin:0;line-height:1}
@@ -793,6 +851,205 @@ html.phone .wdcard .wdnote{display:none}
  html.phone .wdcard .wdbody{gap:8px}
  html.phone #menu{width:min(340px,calc(100vw - 24px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)))}
 }
+
+/* v5_240 close X buttons + phone-portrait layouts for Forge / Warehouse / Bag / Look */
+.wx{flex:0 0 auto;align-self:flex-end;width:30px;height:26px;margin:-4px -2px -8px 0;padding:0;min-height:0;display:flex;align-items:center;justify-content:center;border:1px solid #2a4a7a;border-radius:8px;background:rgba(10,24,48,.9);color:#e8e0ca;font:700 15px/1 var(--body);cursor:pointer;z-index:6;-webkit-tap-highlight-color:transparent}
+.wx:hover,.wx:active{background:#7a2a22;border-color:#d9503f;color:#fff}
+.wx2{flex:0 0 auto;cursor:pointer;background:transparent;border:0;color:var(--mist);font-size:max(13px,calc(14*var(--u)));line-height:1;min-width:26px;min-height:24px;padding:0 4px;pointer-events:auto}
+.wx2:hover,.wx2:active{color:#ff8a7a}
+#statsWin h4,#online h4{display:flex;justify-content:space-between;align-items:center;gap:8px}
+#menu .wxm{grid-column:1/-1;justify-self:end;position:sticky;top:0;z-index:3;margin:0 0 -4px;background:rgba(13,17,20,.92);border:1px solid var(--line);border-radius:6px}
+.fgtop,.fgdesc,.fgbot{display:contents}
+@media (orientation:landscape) and (max-height:520px){
+ .modal .card{position:relative}
+ .modal .card>.wx{position:absolute;top:4px;right:4px;margin:0}
+ .modal .bagtop,.whhead{padding-right:34px}
+}
+@media (orientation:portrait){
+ html.phone #forge.modal,html.phone #bag.modal,html.phone #wh.modal,html.phone #wardrobe.modal{padding:6px}
+ html.phone #forge .bagwin,html.phone #bag .bagwin,html.phone #wh .whwin,html.phone #wardrobe .wdwin{width:100%;height:100%;max-height:100%;padding:8px;gap:6px;overflow:hidden}
+ html.phone #forge .bagbtns,html.phone #bag .bagbtns,html.phone #wh .bagbtns,html.phone #wardrobe .bagbtns{flex:0 0 auto}
+ html.phone #forge .bwbody,html.phone #bag .bwbody,html.phone #wardrobe .bwbody{flex:1 1 auto;min-height:0;flex-direction:column;overflow:hidden;gap:6px}
+ html.phone #forge .bwhero,html.phone #bag .bwhero{flex:0 0 auto}
+ html.phone #forge .bwstage,html.phone #bag .bwstage{aspect-ratio:auto;width:100%;height:clamp(230px,34vh,290px);height:clamp(230px,34dvh,290px);max-height:none;flex:0 0 auto}
+ html.phone #forge .bwcol,html.phone #bag .bwcol{width:34px}
+ html.phone #forge .bwcol .bslot,html.phone #bag .bwcol .bslot{width:32px;height:32px;aspect-ratio:auto;margin:0 auto}
+ html.phone #forge .bwside,html.phone #bag .bwside,html.phone #wardrobe .bwside{flex:1 1 auto;min-height:0;overflow:hidden;gap:6px}
+ html.phone .bagtop h2{font-size:18px}
+ /* 1. FORGE: only the description scrolls */
+ html.phone #fgInfo{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden;gap:6px;padding:6px 8px}
+ html.phone #fgInfo .fgtop,html.phone #fgInfo .fgbot{display:flex;flex-direction:column;gap:4px;flex:0 0 auto}
+ html.phone #fgInfo .fgdesc{display:flex;flex-direction:column;gap:4px;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+ html.phone #fgInfo .fgb{padding:8px 12px;font-size:14px;min-height:0}
+ /* 2. WAREHOUSE: the two grids always show their gear (the card has a real height now) */
+ html.phone #wh .whcols{flex:1 1 auto;min-height:0;flex-direction:column;overflow:hidden;gap:6px}
+ html.phone #wh .whcol{flex:1 1 0;min-height:0;min-width:0}
+ html.phone #wh .whgrid{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;grid-template-columns:repeat(auto-fill,40px);grid-auto-rows:40px;justify-content:center;gap:4px}
+ html.phone #wh .whgrid .bslot{width:40px;height:40px}
+ html.phone #wh #whInfo{flex:0 0 auto;min-height:40px;padding:6px 8px}
+ html.phone #wh .whhead{flex:0 0 auto}
+ /* 3. BAG: only the gear grid scrolls */
+ html.phone #bag #bagCur{flex:0 0 auto}
+ html.phone #bag #bagItems{flex:1 1 auto;min-height:72px;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;grid-template-columns:repeat(auto-fill,40px);grid-auto-rows:40px;justify-content:center;gap:4px}
+ html.phone #bag #bagItems .bslot{width:40px;height:40px}
+ html.phone #bag #bagInfo{flex:0 0 auto;min-height:40px;max-height:96px;overflow-y:auto;padding:6px 8px}
+ html.phone #bag .bwopts{flex:0 0 auto}
+ /* 4. LOOK: current look text sits LEFT of the avatar, only the items scroll */
+ html.phone #wardrobe .bwhero{flex:0 0 auto;display:flex;flex-direction:row;align-items:center;gap:8px}
+ html.phone #wardrobe .bwstage{order:2;flex:0 0 auto;width:auto;aspect-ratio:380/448;height:clamp(170px,28vh,250px);height:clamp(170px,28dvh,250px);max-height:none;margin:0}
+ html.phone #wardrobe #wdName{order:1;flex:1 1 0;min-width:0;min-height:0;text-align:left;font-size:12px;line-height:1.45;overflow-y:auto;overflow-wrap:anywhere}
+ html.phone #wardrobe .wdclass,html.phone #wardrobe .wdtabs{flex:0 0 auto}
+ html.phone #wardrobe #wdGrid{flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;grid-template-columns:repeat(auto-fill,minmax(78px,1fr))}
+ html.phone #wardrobe .wdnote{display:none}
+}
+
+/* v5_241 bag pet / egg info: description scrolls, buttons fixed on the right. Pet Nest: slim buttons, small icons, 10 slots in 2 columns */
+#bagInfo.pinf{flex-wrap:nowrap;align-items:stretch;gap:8px}
+#bagInfo.pinf>div:first-child{flex:1 1 0;min-width:0;max-height:110px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#bagInfo.pinf .bagact{flex:0 0 auto;flex-direction:column;justify-content:center;align-self:center;gap:4px;max-width:46%}
+#bagInfo.pinf .bagact .btn{padding:4px 10px;font-size:12px;min-height:0;white-space:normal;line-height:1.15}
+html.phone #bag #bagInfo.pinf{max-height:96px;overflow:hidden}
+html.phone #bag #bagInfo.pinf>div:first-child{max-height:84px}
+html.phone #bag #bagInfo.pinf .bagact .btn{min-height:0;padding:4px 8px;font-size:12px}
+#nest .nesttabs .btn,#nest .nbtns .btn,html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{padding:2px 10px;font-size:12px;min-height:0;line-height:1.5;border-radius:6px;max-width:none}
+#nest .nbtns{gap:6px}
+#nest .ngrid{grid-template-columns:repeat(auto-fill,34px);gap:3px}
+#nest .ngrid .bslot{width:34px;height:34px}
+#nest .ngrid .bslot .q{font-size:8px;padding:0 2px}
+#nest .nrows{display:grid;grid-template-columns:1fr 1fr;gap:4px;align-content:start}
+#nest .nrw{padding:2px 3px;gap:2px;min-width:0}
+#nest .nno{width:12px;font-size:9px}
+#nest .nrw .nslot{width:24px;height:24px;font-size:12px;border-radius:5px}
+#nest .nrw .nslot svg{width:100%;height:100%}
+#nest .nrw .nop{font-size:11px}
+#nest .nrw .nch{font-size:10px;min-width:0;margin-left:auto}
+#nest .nhd{font-size:12px}
+@media (orientation:portrait){#nest .ncomb .nleft{flex:1 1 0;min-height:0}#nest .ncomb .nright{flex:0 0 auto}#nest .ncomb{height:min(540px,calc(100dvh - 150px))}}
+
+/* v5_242 hatch result list scrolls + smaller; bag pet buttons big, as wide as Close */
+#nest .nlist{max-height:92px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;gap:5px;padding:2px;width:100%;box-sizing:border-box}
+#nest .nit{padding:2px 8px 2px 2px;gap:4px;font-size:11px}
+#nest .nit .bslot{width:28px;height:28px}
+#nest .nline{font-size:12px}
+#bagInfo.pinf .bagact{flex:0 0 auto;max-width:none;overflow-y:auto;max-height:118px}
+#bagInfo.pinf .bagact .btn,html.phone #bag #bagInfo.pinf .bagact .btn{width:100%;box-sizing:border-box;padding:8px 10px;font-size:14px;min-height:36px;line-height:1.15}
+html.phone #bag #bagInfo.pinf{max-height:130px}
+html.phone #bag #bagInfo.pinf>div:first-child{max-height:118px}
+
+/* v5_246 forge: on every screen only the description scrolls; name / level / bar and the cost + Forge button stay fixed */
+#forge .bwside{min-height:0;overflow:hidden}
+#forge #fgInfo{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden;gap:6px}
+#forge #fgInfo .fgtop,#forge #fgInfo .fgbot{display:flex;flex-direction:column;gap:4px;flex:0 0 auto}
+#forge #fgInfo .fgdesc{display:flex;flex-direction:column;gap:4px;flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#forge #fgInfo .fgdesc>*{flex:0 0 auto}
+
+/* v5_247 Here / Online list: over the minimap, right under the world-name label, nearest player first, scrolls, stays above the (bigger) JUMP button */
+#online,html.phone #online,html.phone #hud #online{top:calc(90*var(--u));z-index:6;pointer-events:auto;overflow:hidden;max-height:max(56px,calc(100% - 374*var(--u)))}
+html.phone #online,html.phone #hud #online{max-height:max(56px,calc(100% - 400*var(--u)))}
+#online .olist{display:flex;flex-direction:column;gap:calc(2*var(--u));min-height:0;flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
+#online .pn{flex:0 0 auto}
+#jump{right:calc(30*var(--u));width:calc(54*var(--u));height:calc(54*var(--u))}
+#jump b{font-size:calc(26*var(--u))}
+html.phone #jump{right:calc(47*var(--u) + env(safe-area-inset-right,0px));width:calc(52*var(--u));height:calc(52*var(--u))}
+
+/* v5_248 online window: draggable title, collapsible; portrait phone = under the minimap; landscape phone = minimap moved left of the Online window so JUMP never covers it */
+#online h4{cursor:move;touch-action:none;-webkit-user-select:none;user-select:none}
+#online .ohb{display:flex;gap:2px;flex:0 0 auto}
+#online.olc .olist{display:none}
+#online.drag{opacity:.9}
+@media (orientation:portrait){html.phone #online,html.phone #hud #online{top:calc(276*var(--u));max-height:max(56px,calc(100% - 590*var(--u)))}}
+@media (orientation:landscape){html.phone #mmw{right:calc(99*var(--u) + env(safe-area-inset-right,0px))}html.phone #online,html.phone #hud #online{right:calc(285*var(--u) + env(safe-area-inset-right,0px))}} /* v5_249: minimap's right edge touches the JUMP button's left edge (jump right 47u + 52u wide); the Online window sits left of it */
+
+/* v5_250 hatch: 6 permanent species slots (3 x 2), no scrolling needed */
+#nest .nlist.n6{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-height:none;overflow:visible;padding:2px}
+#nest .nit.n6i{flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;padding:4px 2px;text-align:center;opacity:.55;min-width:0}
+#nest .nit.n6i.on{opacity:1}
+#nest .nit.n6i .bslot{width:34px;height:34px}
+#nest .nit.n6i .nnm{font-size:11px;line-height:1.1}
+#nest .nit.n6i .ncn{font-size:13px}
+
+/* v5_252 Pet Nest on phones: no 1.3x zoom (it squeezed everything), compact landscape layout, nothing overlaps */
+html.phone #nest .nestwin{zoom:1}
+#nest .nrw{overflow:hidden}
+#nest .nrw .nch{white-space:nowrap;flex:0 0 auto;margin-left:auto}
+#nest .nrw .nslot{flex:0 0 auto}
+#nest .nres{flex:0 0 auto}
+#nestBody{min-height:0}
+html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padding:5px 6px;white-space:nowrap}
+@media (orientation:portrait){
+ html.phone #nest .nestwin{width:100%;max-height:100%}
+ html.phone #nest .ncomb .nleft{min-height:110px}
+}
+@media (orientation:landscape) and (max-height:520px){
+ html.phone #nest .nestwin{width:min(100%,820px);max-height:100%;padding:6px;gap:4px}
+ html.phone #nest .nestwin h2{font-size:16px;line-height:1.1}
+ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padding:3px 10px}
+ /* hatch tab: egg + text side by side, the 6 species in one row */
+ #nest .nstage{flex-direction:row;justify-content:center;gap:10px;padding:4px 8px;text-align:left}
+ #nest .nstage>*{margin:0}
+ #nest .negg{width:40px;height:40px}
+ #nest .nlist.n6{grid-template-columns:repeat(6,1fr);gap:4px}
+ #nest .nit.n6i{padding:3px 1px}
+ #nest .nit.n6i .bslot{width:28px;height:28px}
+ #nest .nit.n6i .nnm{font-size:10px}
+ #nest .nit.n6i .ncn{font-size:12px}
+ #nest .nline{font-size:11px;min-height:0}
+ #nest .nres{gap:3px}
+ html.phone #nest .ncomb{height:calc(100dvh - 150px)}
+ #nest .nrw .nslot{width:22px;height:22px}
+ #nest .nrows{gap:3px}
+}
+
+/* v5_271 special pet hatched: reveal inside the egg area + highlighted species slot */
+.negg.spec{animation:nShake .95s ease-in-out forwards,nSpecGlow .95s ease-in forwards}
+@keyframes nSpecGlow{0%{filter:drop-shadow(0 0 0 #ffe14a)}100%{filter:drop-shadow(0 0 22px #ffe14a) brightness(2.4)}}
+.nstage.spk{background:radial-gradient(circle at 50% 40%,#5a4a16,#1a1406);border-color:#ffe14a;box-shadow:0 0 18px rgba(255,225,74,.6) inset,0 0 14px rgba(255,225,74,.45);animation:nStageFlash .9s ease-out}
+@keyframes nStageFlash{0%{filter:brightness(2.6)}100%{filter:brightness(1)}}
+.negg.nrev{width:auto;min-width:92px;height:92px;display:flex;align-items:center;justify-content:center;gap:6px;position:relative}
+.nrvp{position:relative;z-index:1;width:92px;height:92px;animation:nBurst .8s cubic-bezier(.2,1.5,.4,1) both,nBob 1.6s ease-in-out .8s infinite;filter:drop-shadow(0 0 12px #ffe14a)}
+.nrvp svg{width:100%;height:100%;display:block}
+.nrays{position:absolute;left:50%;top:50%;width:190px;height:190px;margin:-95px 0 0 -95px;border-radius:50%;pointer-events:none;background:repeating-conic-gradient(rgba(255,225,74,.55) 0 10deg,rgba(255,225,74,0) 10deg 30deg);-webkit-mask-image:radial-gradient(circle,#000 18%,transparent 70%);mask-image:radial-gradient(circle,#000 18%,transparent 70%);animation:nSpin 6s linear infinite,nRayIn .6s ease-out both}
+.nspk{position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3px;border-radius:50%;background:#fff6b8;box-shadow:0 0 8px #ffe14a;pointer-events:none;animation:nFly 1.1s ease-out both}
+.nspt{color:#ffe14a!important;text-shadow:0 0 10px rgba(255,225,74,.9);animation:nPulseTxt 1.2s ease-in-out infinite}
+@keyframes nBurst{0%{transform:scale(.2) rotate(-20deg);opacity:0}60%{transform:scale(1.25) rotate(6deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+@keyframes nBob{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-5px) scale(1.06)}}
+@keyframes nSpin{to{transform:rotate(360deg)}}
+@keyframes nRayIn{from{opacity:0;transform:scale(.3)}}
+@keyframes nFly{0%{transform:rotate(var(--a)) translateX(10px) scale(1);opacity:1}100%{transform:rotate(var(--a)) translateX(84px) scale(.2);opacity:0}}
+@keyframes nPulseTxt{50%{opacity:.65}}
+#nest .nit.n6i.hot{animation:nPop .4s cubic-bezier(.2,1.4,.4,1),nHot 1.1s ease-in-out .4s infinite;border:1px solid #ffe14a;background:rgba(255,225,74,.18)}
+@keyframes nHot{0%,100%{box-shadow:0 0 8px rgba(255,225,74,.5)}50%{box-shadow:0 0 22px rgba(255,225,74,1)}}
+@media (orientation:landscape) and (max-height:520px){#nest .negg.nrev{width:auto;min-width:40px;height:40px}#nest .nrvp{width:40px;height:40px}#nest .nrays{width:90px;height:90px;margin:-45px 0 0 -45px}}
+@media (prefers-reduced-motion:reduce){.nrvp,.nrays,.nspk,.nspt,.nit.hot,.negg.spec,.nstage.spk{animation-duration:.01s;animation-iteration-count:1}}
+
+/* v5_272 Pet Nest HATCH tab on a landscape phone: compact two-column window.
+   top row = title + tabs + Close; below: left = egg + text + Hatch buttons, right = the 6 species slots (3 x 2) */
+@media (orientation:landscape) and (max-height:520px){
+ #nest.hatchtab.modal{padding:3px}
+ #nest.hatchtab .nestwin,html.phone #nest.hatchtab .nestwin{width:min(100%,640px);flex-direction:row;flex-wrap:wrap;align-items:center;align-content:flex-start;gap:4px 8px;padding:5px 8px}
+ #nest.hatchtab .bagtop{order:1;flex:0 0 auto;gap:8px;margin:0}
+ #nest.hatchtab .bagtop h2{font-size:15px}
+ #nest.hatchtab .nesttabs{order:2;flex:1 1 0;min-width:0}
+ #nest.hatchtab .bagbtns{order:3;flex:0 0 auto;margin:0}
+ #nest.hatchtab .bagbtns .btn,html.phone #nest.hatchtab .bagbtns .btn{min-height:0;padding:2px 12px;font-size:12px;line-height:1.5}
+ #nest.hatchtab #nestBody{order:4;flex:1 1 100%;display:grid;grid-template-columns:minmax(150px,40%) 1fr;grid-template-rows:auto auto;gap:4px 8px;align-items:stretch}
+ #nest.hatchtab .nstage{grid-column:1;grid-row:1;flex-direction:column;gap:1px;padding:4px 6px;text-align:center}
+ #nest.hatchtab .nstage>*{margin:0}
+ #nest.hatchtab .negg{width:52px;height:52px}
+ #nest.hatchtab .negg.nrev{width:auto;min-width:52px;height:52px}
+ #nest.hatchtab .nrvp{width:52px;height:52px}
+ #nest.hatchtab .nrays{width:110px;height:110px;margin:-55px 0 0 -55px}
+ #nest.hatchtab .ncount{font-size:12px}
+ #nest.hatchtab .nstage small{font-size:10px;line-height:1.15}
+ #nest.hatchtab .nbtns{grid-column:1;grid-row:2;gap:4px}
+ #nest.hatchtab .nres{grid-column:2;grid-row:1 / span 2;justify-content:center;gap:3px}
+ #nest.hatchtab .nline{font-size:11px;min-height:0}
+ #nest.hatchtab .nlist.n6{grid-template-columns:repeat(3,1fr);gap:4px}
+ #nest.hatchtab .nit.n6i{padding:3px 1px}
+ #nest.hatchtab .nit.n6i .bslot{width:34px;height:34px}
+ #nest.hatchtab .nit.n6i .nnm{font-size:10px}
+ #nest.hatchtab .nit.n6i .ncn{font-size:12px}
+}
 </style>
 
 <div id="stage">
@@ -813,7 +1070,7 @@ html.phone .wdcard .wdnote{display:none}
     </div>
 
     <div id="statsWin" class="panel" hidden>
-      <h4>Character stats</h4>
+      <h4><span>Character stats</span><button class="wx2" id="swX" type="button" title="Close" aria-label="Close">&#10005;</button></h4>
       <div class="swWide"><span>Class</span><b id="swCls"></b><span>Realm</span><b id="swRealm"></b></div>
       <span>Level</span><b id="swLv"></b>
       <span>Power</span><b id="swPw"></b>
@@ -860,6 +1117,7 @@ html.phone .wdcard .wdnote{display:none}
     </div>
     <div id="qb">
       <button class="ic" id="bPot" type="button" title="Health Potion (Q): heals 5% HP (5 s cooldown)"><span>&#9879;</span><span class="cnt" id="potN">0</span><span class="cd" id="potCd" hidden></span><span class="lb">HP</span></button>
+      <button class="ic" id="bCk" type="button" title="Fried Chicken (Y): instantly restores 50% HP (60 s cooldown). Fry a Chicken pet in your bag to make it."><span>&#127831;</span><span class="cnt" id="ckN">0</span><span class="cd" id="ckCd" hidden></span><span class="lb">Chicken</span></button>
       <button class="ic" id="bPotQ" type="button" title="Mana Potion (Z): restores 10% mana"><span style="color:#6fb2ff">&#9879;</span><span class="cnt" id="potQN">0</span><span class="cd" id="potQCd" hidden></span><span class="lb">MP</span></button>
       <button class="ic" id="bTp" type="button" title="Home Scroll (X): teleport to your hub"><span style="color:#d2b4ff">&#10162;</span><span class="cnt" id="tpN">0</span><span class="cd" id="tpCd" hidden></span><span class="lb">Home</span></button>
       <button class="ic" id="bOre" type="button" title="Darksteel ore: open the forge"><span>&#9670;</span><span class="cnt" id="oreN">0</span><span class="lb">Ore</span></button>
@@ -889,28 +1147,34 @@ html.phone .wdcard .wdnote{display:none}
 
     <!-- top-right: menu icons, zone strip, quests, minimap -->
     <div id="tr">
+      <div id="trx">
       <button class="ic" id="bForge" type="button" title="Lotus Forge (O)">&#9874;<span class="lb">Forge</span></button>
       <button class="ic" id="bWorld" type="button" title="World Gate (G)">&#127760;<span class="lb">World</span></button>
       <button class="ic" id="bBook" type="button" title="Skill book (K)">&#128214;<span class="lb">Skills</span></button>
       <button class="ic" id="bWare" type="button" title="Warehouse (H, in a hub)">&#128230;<span class="lb">Store</span></button>
       <button class="ic" id="bBag" type="button" title="Bag (B)">&#127890;<span class="lb">Bag</span></button>
       <button class="ic" id="bMap" type="button" title="Minimap (M)">&#9906;<span class="lb">Map</span></button>
-      <button class="ic" id="bSkin" type="button" title="Wardrobe: skin, hair, outfit, headwear, aura (C)"><span>&#9786;</span><span class="lb">Look</span></button>
+      <button class="ic" id="bSkin" type="button" title="Wardrobe: skin, hair, outfit, headwear, aura (L)"><span>&#9786;</span><span class="lb">Look</span></button>
+      <button class="ic" id="bNest" type="button" title="Pet Nest (U): hatch eggs and combine pets"><span>&#129370;</span><span class="lb">Nest</span></button>
       <button class="ic" id="bBell" type="button" hidden>&#128276;</button>
+      </div>
+      <button class="ic" id="bTrT" type="button" title="Hide / show the buttons" aria-label="Hide / show the buttons" aria-expanded="true"><span>&#8250;</span></button>
       <button class="ic" id="bGear" type="button" title="Menu"><span>&#9881;</span><span class="lb">Menu</span></button>
     </div>
     <div id="menu" class="panel" hidden>
+      <button class="wx2 wxm" id="menuX" type="button" title="Close" aria-label="Close">&#10005;</button>
       <b>Move</b><span>WASD / arrows / click</span>
       <b>Attack</b><span>Click · F = nearest</span>
       <b>Jump</b><span>Space · JUMP button</span>
       <b>Skills</b><span>1-0 - = · R T</span>
-      <b>Potions</b><span>Q hp · Z qi</span>
+      <b>Potions</b><span>Q hp · Y chicken · Z qi</span>
       <b>Auto / Mine</b><span>A · E</span>
       <b>Forge / World</b><span>F · G</span>
       <b>Skill book</b><span>K</span>
       <b>Private chat</b><span>I · /w name</span>
       <b>Wardrobe / View</b><span>C · V</span>
       <b>Bag / Shop</b><span>B · N (at the merchant)</span>
+      <b>Pet Nest</b><span>U (hatch / combine pets)</span>
       <b>Minimap</b><span>M</span>
       <b>Chat</b><span>Enter</span>
       <div class="vsep"></div>
@@ -918,6 +1182,7 @@ html.phone .wdcard .wdnote{display:none}
       <div class="vol"><b>Sound FX</b><input type="range" id="volSfx" min="0" max="100" step="1" aria-label="Sound effects volume"><span id="volSfxV">70%</span></div>
       <div class="mrow"><span>Resolution</span><select id="perfSel"><option value="auto">Auto (by device)</option><option value="vlow">Very low (fastest, very blurry)</option><option value="low">Low</option><option value="med">Medium</option><option value="high">High (best looking)</option></select></div>
       <label class="mrow ck" id="tapMoveRow"><input type="checkbox" id="tapMove"> Tap to move: tap the ground to walk there (off = joystick only)</label>
+      <label class="mrow ck" id="joySmallRow"><input type="checkbox" id="joySmall"> Smaller joystick (10% smaller than normal)</label>
       <label class="mrow ck"><input type="checkbox" id="fightBack"> Fight back: attack the monster that hits you</label>
       <label class="mrow ck"><input type="checkbox" id="autoPot"> Auto-use potions when low</label>
       <div class="vol"><b>HP potion at</b><input type="range" id="apHp" min="5" max="95" step="5" aria-label="Use HP potion when HP is below this percent"><span id="apHpV">35%</span></div>
@@ -951,6 +1216,7 @@ html.phone .wdcard .wdnote{display:none}
       </div>
       <div id="cpPop" hidden></div>
     </div>
+    <div id="ign" class="tx"></div>
     <div id="sb" class="tx"><span class="clk" id="clk">00:00</span><span class="xpt" id="xpt">EXP 0%</span><span class="net off" id="net"><s><i style="height:calc(4*var(--u))"></i><i style="height:calc(7*var(--u))"></i><i style="height:calc(11*var(--u))"></i></s><span id="ping">solo</span></span></div>
 
     <!-- bottom-centre -->
@@ -1080,6 +1346,15 @@ html.phone .wdcard .wdnote{display:none}
     </div>
   </div>
 
+  <div class="modal" id="nest" hidden>
+    <div class="card panel nestwin">
+      <div class="bagtop"><h2>Pet Nest</h2><span id="nestCnt"></span></div>
+      <div class="nesttabs"><button class="btn" id="nTabH" type="button">Hatch</button><button class="btn" id="nTabC" type="button">Combine</button></div>
+      <div id="nestBody"></div>
+      <div class="bagbtns"><button class="btn" id="nestClose" type="button">Close</button></div>
+    </div>
+  </div>
+
   <div class="modal" id="shop" hidden>
     <div class="card panel bagcard">
       <div class="bagtop"><h2>Potion Merchant</h2><span id="shopCoins"></span></div>
@@ -1115,6 +1390,13 @@ html.phone .wdcard .wdnote{display:none}
     </div>
   </div>
 
+<!-- v5_309 AVATAR LOADING (after login): all 10 avatars are downloaded before the title / game screen; no skip button -->
+<style>#avl{position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147482000;background:#0d1114;color:#e8e0ca;display:flex;align-items:center;justify-content:center;font-family:'Marcellus SC',Georgia,serif}
+#avl[hidden]{display:none}#avl .lb{width:min(78vw,340px);text-align:center}#avl .lt{font-size:22px;letter-spacing:.06em;margin-bottom:22px;color:#e3b559}
+#avl .lr{height:8px;border-radius:5px;background:rgba(232,224,202,.14);overflow:hidden}#avl .lr i{display:block;height:100%;width:0;border-radius:5px;background:linear-gradient(90deg,#5fd3a5,#e3b559);transition:width .25s}
+#avl .ls{margin-top:12px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:#8d9aa2;min-height:18px}
+#avl button{margin:14px 6px 0;padding:8px 16px;border:1px solid rgba(232,224,202,.3);border-radius:8px;background:rgba(232,224,202,.08);color:#e8e0ca;font:13px -apple-system,BlinkMacSystemFont,sans-serif}</style>
+<div id="avl" hidden><div class="lb"><div class="lt">Loading avatars</div><div class="lr"><i id="avB"></i></div><div class="ls" id="avS">Starting...</div><div><button id="avR" style="display:none">Retry</button></div></div></div>
   <div class="modal" id="title">
     <div class="card panel" style="background:transparent;border:0;backdrop-filter:none;text-align:left;gap:16px;width:min(460px,100%)">
       <h1>World of <em>Ascension</em></h1>
@@ -1169,6 +1451,7 @@ html.phone .wdcard .wdnote{display:none}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="var q=document.createElement('script');q.src='three.min.js';document.head.appendChild(q)"></script>
 <script src="three-compat.js"></script>
 <script src="models3d.js"></script>
+<script src="vrm3d.js"></script>
 <script src="pets3d.js"></script>
 <script src="fx3d.js"></script>
 <script src="audio.js"></script>

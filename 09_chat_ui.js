@@ -11,7 +11,7 @@ const CMDHELP=[
  'Friends:  /friend name (send a request)  \u00b7 /friend accept [name]  \u00b7 /friend decline [name]  \u00b7 /unfriend name  \u00b7 /friends (open the window)',
  'Private:  /w name message  \u00b7 /r message (reply)  \u00b7 or tap a name in the Here list',
  'Fun:  /fireworks  \u00b7 /roll [sides]  \u00b7 /flip',
- 'Server:  /who  \u00b7 /announce message'];
+ 'Server:  /who  \u00b7 /announce message  \u00b7 /backup (copy all player data to your private GitHub repository)'];
 const CMDNUM=(v,d)=>{const n=parseFloat(v);return isFinite(n)?n:d};
 function refreshCurrencyUi(){if($('bag')&&!$('bag').hidden)renderBag();if($('forge')&&!$('forge').hidden)renderForge();if($('shop')&&!$('shop').hidden&&typeof renderShop==='function')renderShop()}
 const isReset=v=>v!==undefined&&/^(reset|zero|clear|none)$/i.test(String(v));
@@ -72,7 +72,7 @@ const CMDS={
     say('Added '+(n>1?n+' pets: ':'a pet: ')+given.map(k=>{const p=petParse(k);return petName(p.s,p.c)}).join(', ')+'.','#ffe14a',6000)},
   egg(a){const n=clamp(CMDNUM(a[0],1)|0,1,9999);P.eggs=clamp((P.eggs|0)+n,0,99999);save();if(!$('bag').hidden)renderBag();say('Pet Eggs: '+P.eggs.toLocaleString(),'#f4ecd8')},
   petreset(){P.pets={};P.eggs=0;P.pet=null;P.pf=null;petComb=null;if(typeof bagSel==='string'&&(bagSel==='egg'||bagSel.indexOf('pet_')===0))bagSel=null;save();if(!$('bag').hidden)renderBag();say('All pets and eggs removed.','#e3b559')},
-  pots(a){const n=CMDNUM(a[0],10)|0;for(const k of ['hp','qi','tp'])P.pots[k]=clamp(P.pots[k]+n,0,POT_MAX);save();say('Potions and scrolls '+(n>=0?'+':'')+n+' each.','#e3b559')},
+  pots(a){const n=CMDNUM(a[0],10)|0;for(const k of ['hp','ck','qi','tp'])P.pots[k]=clamp(P.pots[k]+n,0,POT_MAX);save();say('Potions and scrolls '+(n>=0?'+':'')+n+' each.','#e3b559')},
   minimap(a){const w=String(a[0]||'').toLowerCase();MINI_MAX=w==='max';if(!MINI_MAX)MINI_R=w==='min'?500:clamp(CMDNUM(a[0],2000),500,3080*MAP_K);say('Minimap range: '+(MINI_MAX?RIM+' units (maximum radius = whole map)':MINI_R+' units.'),'#e3b559')},
   boss(a){bossNear(clamp(CMDNUM(a[0],1)|0,1,BOSS_MAX),CMDNUM(a[1],0)|0)},
   bossclear(){let n=0;for(const m of mons)if(m.boss&&!m.dead){m.dead=true;m.dieT=0;m.respawn=1e9;n++}say('Removed '+n+' boss(es).','#e3b559')},
@@ -109,7 +109,8 @@ const CMDS={
     if(!keys||keys.length===0){say('Usage: /forgereset [slot|all]   slots: '+GEAR.map(q=>q.k).join(' '),'#d9503f');return}
     forgeApply(keys,0);say('Forge level reset to +0 on '+(keys.length===GEAR.length?'all slots':keys.join(', '))+'.','#e3b559')},
   who(){say('/who needs the multiplayer server.','#8d9aa2')},
-  announce(){say('/announce needs the multiplayer server.','#8d9aa2')}
+  announce(){say('/announce needs the multiplayer server.','#8d9aa2')},
+  backup(){say('/backup needs the multiplayer server.','#8d9aa2')}
 };
 function runCmd(line){
   if(!started)return;

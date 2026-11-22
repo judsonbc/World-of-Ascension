@@ -1,3 +1,5 @@
+/* v5_217: the browser's right-click menu is disabled everywhere on the page (capture phase, so it also covers overlays, chat, and the login screen). It only cancels the default menu: the game's own right-click handlers (PvP select/attack, camera drag) still run. To allow the menu again, delete this line. */
+document.addEventListener('contextmenu',e=>e.preventDefault(),true);
 const $=id=>document.getElementById(id);
 const LK=window.T3_LIGHT_K||1; /* v5_173 light-intensity factor: 1 on Three r128 (default), PI on r155+ (set by three-compat.js) so a newer Three.js looks the same */
 const stage=$('stage'),cv=$('game'),mm=$('mm'),mctx=mm.getContext('2d');let ctx=cv.getContext('2d');
@@ -27,10 +29,12 @@ try{if(window.ResizeObserver)new ResizeObserver(()=>{if(stage.clientWidth!==VW||
 
 /* ---------- constants ---------- */
 /* MAP_K = map size multiplier (linear). Must equal mapK in game.go. Monsters, ore and scenery scale with it too. */
+const SCENERY_BIG=30; /* percent of scenery props that are the BIG size (v5_258) */
+const SCENERY_N=1950*5; /* scatter props per world (1500*MAP_K before v5_257); MAP_K is 5 */
 const RING_MONS=[300,400,500,600,700,800,900,1000,300]; /* monsters per ring 1-9; must equal ringMons in game.go */
-const MAP_K=5,WORLD=6400*MAP_K,C=WORLD/2,TOWN=345,MAXLV=1000,FORGE_MAX=100;
+const MAP_K=5,WORLD=6400*MAP_K,C=WORLD/2,TOWN=400,MAXLV=1000,FORGE_MAX=100;
 let RIM=3080*MAP_K; /* current map radius: the Colosseum swaps in ARENA_R */
-const NW=16,ARENA=0,ARENA_R=2250; /* World 0 (Arena) is the PvP arena, worlds 1-15 are the hunting worlds; keep equal to arenaWi / arenaR in game.go */
+const NW=16,ARENA=0,ARENA_R=2250,ARENA_PROPS=600; /* World 0 (Arena) is the PvP arena, worlds 1-15 are the hunting worlds; keep equal to arenaWi / arenaR in game.go */
 const WORLDS=[
  {n:'Ashen Reach',hub:'Lotus Sanctum',lo:1,hi:50,acc:'#e3b559',blurb:'Mist, bandits and the first rim.',
   z:['Mistfall Meadow','Hollow Pass','Stoneback Ridge','Jadewater Marsh','The Ashen Rim','Cinderfall Dunes','Frostveil Peaks','Obsidian Abyss','Celestial Ruin'],
@@ -102,10 +106,12 @@ const QI_COST_MUL=.891; /* v5_188 another -10% (.99 x .9) */
 /* history: v5_140 final Qi cost reduced by 10% (x.9); v5_162 then +10% on every skill of every class (x.9 x1.1 = x.99) */
 const skCostAt=(s,l)=>Math.max(1,Math.round((s.cost+Math.round(l*QI_PLVL_ADD))*QI_COST_MUL));
 const skCost=s=>skCostAt(s,typeof P!=='undefined'&&P&&P.lvl?P.lvl:1);
-/* v5_188 Qi-REGEN skills (they give Qi back: soulburst, soulheal, mend + signature sg_c25 / sg_s25 / sg_s300) are paid with HP instead of Qi.
+/* v5_229 COST RULE: a skill that heals HP (with or without giving Qi back) is paid with Qi; a skill that gives Qi back and does NOT heal HP is paid with HP (QI_REGEN_T). Today that is only soulburst (Soul Burst line).
+   soulheal, mend, sg_c25, sg_s25 and sg_s300 also heal HP, so they went back to a Qi cost. Add a type to QI_REGEN_T only if it restores Qi and never heals HP.
+   v5_188 Qi-REGEN skills were paid with HP instead of Qi (history: soulburst, soulheal, mend + signature sg_c25 / sg_s25 / sg_s300).
    v5_188e HP price = a FIXED % of your MAX HP per skill (it does not change as you level). The % is the skill's Qi cost as a share of the class's max Qi, both taken at the skill's own unlock level (skHpPct, cached in s._hp).
    A cast needs remaining HP >= QI_REGEN_SAFE (2) x the HP price, otherwise it does not cast. */
-const QI_REGEN_T={soulburst:1,soulheal:1,mend:1,sg_c25:1,sg_s25:1,sg_s300:1};
+const QI_REGEN_T={soulburst:1};
 const QI_REGEN_SAFE=2;
 const skHp=s=>!!QI_REGEN_T[s.t];
 const skHpPct=s=>{if(s._hp==null){const l=Math.max(1,s.lv|0),c=s.c||0;s._hp=skCostAt(s,l)/Math.round((60+l*4)*(CLB[c].qi||1)*QI_MUL)}return s._hp};
@@ -133,6 +139,27 @@ const CLASSES=[
  {n:'Spirit Summoner',d:'Spirit caller: wolves (up to 3) and a guardian spirit that focus your target, soul blasts and soul healing. +62.5% max Qi, -5% max HP.'}];
 /* passive class bonuses: crit = extra crit chance, hp / def / qi / spd = multipliers */
 const CLB=[{crit:.05,qi:1.2,def:1.1},{crit:.10,hp:.9},{hp:1.25,def:1.4,spd:1.1},{crit:.15,spd:1.1},{qi:1.625,hp:.95}];
+
+/* ---------- PET STATS FOR THE OWNER (v5_219, per species since v5_220) ----------
+   The summoned pet gives its owner TWO stats, fixed by the pet's SPECIES (PET_PAIR, indexed by species: 0 Chicken, 1 Dragon, 2 Fairy, 3 Phoenix, 4 Tiger, 5 Wolf), whatever class the owner is:
+   Dragon ATK + DEF (powerful, armoured) | Fairy DEF + accuracy (protective, precise magic) | Phoenix HP + evasion (rebirth, hard to catch) | Tiger ATK + evasion (fierce, agile) | Wolf HP + accuracy (tireless hunter) |
+   Chicken HP + evasion (it runs away; it is weak anyway). Each of ATK / HP / DEF / accuracy / evasion is given by exactly two of the five special pets.
+   The size comes from the pet's class F..S (PET_GF = fraction of the S value). A Chicken counts as a Class F pet at half strength.
+   PET_STAT_S = value at class S: ATK / HP / DEF in % of the owner's own value, ACC in points, EVA in %-points. Tune here. */
+const PET_GF=[.2,.3,.42,.56,.72,.88,1],PET_CHICKEN_K=.5;
+const PET_STAT_S={atk:10,hp:12,def:12,acc:8,eva:4};
+const PET_PAIR=[['hp','eva'],['atk','def'],['def','acc'],['hp','eva'],['atk','eva'],['hp','acc']];
+const PET_FLAT={acc:1,eva:1}; /* these two are added as points; ATK / HP / DEF are multipliers (1 + pct/100) */
+let _pcK='',_pcV={};
+/* the owner's bonus from the summoned pet for one stat: a fraction for atk / hp / def (0.1 = +10%), points for acc / eva; 0 when no pet or the stat is not in the pet's pair */
+function petPct(k){
+  const pk=P.pet;if(!pk)return 0;
+  if(pk!==_pcK){
+    _pcK=pk;_pcV={};const a=pk.split(':'),s=a[0]|0,c=a[1]|0,g=PET_GF[Math.max(0,Math.min(6,c))]*(s===0?PET_CHICKEN_K:1);
+    for(const st of (PET_PAIR[s]||[]))_pcV[st]=PET_STAT_S[st]*g*(PET_FLAT[st]?1:.01);
+  }
+  return _pcV[k]||0;
+}
 const CLS_ORDER=[[['pierce'],['nova'],['mend','heal'],['meteor'],['chain'],['might'],['drain'],['fan'],['strike'],['cleave'],['leap'],['flurry']],
  [['kunai'],['shadowstep'],['venom'],['bladestorm'],['smoke'],['execute'],['siphon'],['rush']],
  [['bash'],['bulwark'],['quake'],['charge'],['roar'],['counter'],['hammer'],['ironskin'],['shockwave']],
@@ -229,8 +256,11 @@ const NSLOT=14,AUTO_SLOTS=12, /* slots 1-12 can auto-cast; R and T (13, 14) neve
 const AUTOSK=new Array(NSLOT).fill(true);
 /* slot hotkeys: 12 round slots, then the two large ones */
 const SLOTKEYS=['1','2','3','4','5','6','7','8','9','0','-','=','r','t'];
+/* v5_277 UNIQUE (signature) skills live ONLY in the large R and T slots (12, 13). Anything of that kind found in a round slot is moved to a free R / T slot, or unequipped. */
+const isSigSlot=i=>i>=AUTO_SLOTS;
+function fixSig(){for(let i=0;i<AUTO_SLOTS;i++){const q=SKILLS[EQ[i]];if(!q||!q.sig)continue;const e=EQ.findIndex((v,j)=>isSigSlot(j)&&v<0);if(e>=0){EQ[e]=EQ[i];AUTOSK[e]=true}EQ[i]=-1}}
 /* potion cooldowns (5s) */
-const pot={hp:0,qi:0,tp:0};
+const pot={hp:0,qi:0,tp:0,ck:0};
 
 
 function rngSeed(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -306,7 +336,7 @@ const P={x:C,y:C+110,r:14,lvl:1,exp:0,hp:100,qi:60,coins:0,gold:0,ore:0,wlv:0,al
   face:0,anim:0,mvAmt:0,dir:1,atkCd:0,bf:0,bfT:0,sh:0,shT:0,inv:0,hurt:0,dead:0,swing:0,target:null,mv:null,task:null,mine:0,qiT:0,pvpT:0,pvpKills:0};
 let PVPLVL=0,PVPMODE=false; /* v5_158 PvP mode 0 Peaceful / 1 Lawful / 2 Hostile / 3 Carnal (saved, sent to the server), and the 'ATK Players Only' toggle */
 P.gear={};for(const g of GEAR){P.gear[g.k]={g:0,lv:0,r:0,st:{}};if(g.core)Object.defineProperty(P.gear[g.k],'lv',{enumerable:true,get:()=>P[g.core],set:v=>{P[g.core]=v}})}
-P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.recent=[];
+P.cls=0;P.rsv=-1;P.rsvT=0;P.rsvA=-1;P.vlT=0;P.drT=0;P.dr=0;P.ceT=0;P.spirits=[];P.dcd=0;P.dashT=0;P.dvx=0;P.dvy=0;P.pots={hp:0,qi:0,tp:0,ck:0};P.tp=0;P.tpx=0;P.tpy=0;P.autoPot=true;P.apHp=35;P.apQi=20;P.fightBack=true;P.tapMove=true;P.joySmall=false;P.recent=[];
 /* the core slots (weapon / robe) already add their ATK / DEF / HP forge bonus in atkVal / defVal / maxHp; every other stat gets it here */
 const CORE_FORGED={atk:1,def:1,hp:1};
 /* v5_148 PERCENT FORGE (replaces the v5_143 exponential flat forge). The forge no longer adds a flat amount of ATK / HP / DEF: that was huge at level 1 (+100 gave x200 power)
@@ -332,14 +362,17 @@ function gearStat(key){let v=0;for(const q of GEAR){const o=P.gear[q.k],a=q.st[k
 const gearName=(q,o)=>RAR[o.r|0].n+' '+TIER[o.g-1]+' '+q.n;
 const critChance=()=>Math.min(.75,.15+P.lvl*.0001+gearStat('crit')/100+(CLB[P.cls].crit||0)+(P.ceT>0?.25:0));
 const atkCd=()=>.55/(1+Math.min(60,gearStat('aspd'))/100);
-const moveSpd=()=>200*(1+Math.min(25,gearStat('spd'))/100)*(P.spdMul||1)*(P.vlT>0?1.35:1)*(CLB[P.cls].spd||1);
+const moveSpd=()=>200*(1+Math.min(25,gearStat('spd'))/100)*(P.spdMul||1)*(P.vlT>0?1.35:1)*(CLB[P.cls].spd||1)*(P.slowT>0?SLOW_HIT_MUL:1)*(P.sprT>0?SPRINT_MUL:1);
+/* v5_277 getting hit (monster or player) slows you 10% for SLOW_HIT_T s (refreshed, never stacks); the Sprint button gives +30% while you keep tapping it (each tap = SPRINT_T s) */
+const SLOW_HIT_MUL=.9,SLOW_HIT_T=2,SPRINT_MUL=1.3,SPRINT_T=3,SPRINT_SHOW_T=3; /* v5_279 the Sprint button appears after SPRINT_SHOW_T s of running (was 5); getting hit hides it and slows you 10% */
+const SPRINT_ICO='data:image/png;base64,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';
 const realmIdx=()=>Math.floor((P.lvl-1)/10);
 const realmName=i=>i<REALMS.length?REALMS[i]:'Sovereign Tier '+(i-REALMS.length+1);
-const maxHp=()=>Math.round((100+P.lvl*32+gearStat('hp'))*(1+forgeP('hp'))*(1+realmIdx()*.1)*(CLB[P.cls].hp||1));
+const maxHp=()=>Math.round((100+P.lvl*32+gearStat('hp'))*(1+forgeP('hp'))*(1+realmIdx()*.1)*(CLB[P.cls].hp||1)*(1+petPct('hp')));
 const qrgVal=()=>Math.min(QRG_CAP,gearStat('qrg')); /* v5_143 gear Qi regen, % of max Qi per second */
 const QI_MUL=1.5; /* v5_143: max Qi reduced by 25% (was 2 since v5_123 = 2x max Qi). 1 = base pool, 2 = the old doubled pool */
 const maxQi=()=>Math.round((60+P.lvl*4)*(CLB[P.cls].qi||1)*QI_MUL);
-const atkVal=()=>Math.round((10+P.lvl*3.5+gearStat('atk'))*(1+forgeP('atk'))*(1+realmIdx()*.12)*(1+(P.bfT>0?P.bf:0)));
+const atkVal=()=>Math.round((10+P.lvl*3.5+gearStat('atk'))*(1+forgeP('atk'))*(1+realmIdx()*.12)*(1+(P.bfT>0?P.bf:0))*(1+petPct('atk')));
 /* DEF now grows with level (3 per level, +4% per realm) and armor level. Shared defense curve (keep equal to pDef* in game.go):
    reduction = def / (def + PDEF_K + attackerLevel*PDEF_K_LV), capped at PDEF_CAP. The ATTACKER's level is in the formula, so
    the same DEF protects less against a higher-level monster or player. */
@@ -351,7 +384,7 @@ const MON_ATK_MUL=3;
 const monGap=(mLv,pLv)=>{const g=mLv-pLv;return g>=0?1+Math.min(3,g*.03):Math.max(.4,1+g*.01)};
 /* level gap, you hitting a monster: monsters above your level shrug off more damage (x1/(1+0.03*gap), down to x0.2) */
 const atkGap=(mLv,pLv)=>{const g=mLv-pLv;return g>0?Math.max(.2,1/(1+g*.03)):1};
-const defVal=()=>Math.round((P.lvl*3+gearStat('def'))*(1+forgeP('def'))*(1+realmIdx()*.04)*(CLB[P.cls].def||1));
+const defVal=()=>Math.round((P.lvl*3+gearStat('def'))*(1+forgeP('def'))*(1+realmIdx()*.04)*(CLB[P.cls].def||1)*(1+petPct('def')));
 /* ---------- EVASION + ACCURACY ----------
    Evasion: % chance to dodge a monster / player hit completely (base 5% + gear, capped at EVA_CAP). An attacker above your level pierces it:
    -EVA_LV_PEN %-points of dodge per level above you.
@@ -360,8 +393,8 @@ const defVal=()=>Math.round((P.lvl*3+gearStat('def'))*(1+forgeP('def'))*(1+realm
    Equipment: Gloves roll accuracy, Boots roll evasion, and any Rare+ piece can roll either as an extra stat. Tune the constants below. */
 const EVA_BASE=5,EVA_CAP=50,EVA_LV_PEN=.4,ACC_BASE=100,ACC_MIN_HIT=.2;
 const EVA_PER_LV=.02,ACC_PER_LV=.04; /* level scaling: +0.02% evasion, +0.04 accuracy per level */
-const evaVal=()=>Math.min(EVA_CAP,EVA_BASE+P.lvl*EVA_PER_LV+gearStat('eva'));
-const accVal=()=>ACC_BASE+P.lvl*ACC_PER_LV+gearStat('acc');
+const evaVal=()=>Math.min(EVA_CAP,EVA_BASE+P.lvl*EVA_PER_LV+gearStat('eva')+petPct('eva'));
+const accVal=()=>ACC_BASE+P.lvl*ACC_PER_LV+gearStat('acc')+petPct('acc');
 /* ---------- CRIT STATS (all in %, each = level part + gear + forge) ----------
    Crit chance      15% base +0.01% per level + gear (cap 75%).
    Crit ATK DMG boost  added to the 180% crit multiplier: +0.05% per level + gear.   crit multiplier = 180% + boost.
@@ -406,7 +439,7 @@ P.hp=maxHp();
 
 let auto=false,started=false,time=0;
 /* ---------- multiplayer state (see the multiplayer client section further down) ---------- */
-const NET={ws:null,on:false,joined:false,id:0,name:'Wanderer',peers:new Map(),online:0,counts:[],pendingEnter:-1,sendT:0,infoT:0,infoKey:'',fails:0,giveUp:false,olKey:''};
+const NET={ws:null,on:false,joined:false,id:0,name:'Wanderer',peers:new Map(),online:0,counts:[],pendingEnter:-1,sendT:0,infoT:0,infoKey:'',fails:0,giveUp:false,rt:0,lastMsg:0,olKey:''};
 let MP=false; /* true while the shared server world is loaded; false = classic solo simulation */
 /* character LOOK: one integer (see AL3D.look in models3d.js) = palette + hair + outfit + headwear + aura.
    It is saved with the character (browser + account) and in its own backup key, so it survives logout, and it is
@@ -418,7 +451,7 @@ function skinOf(i){
   i=i|0;if(!window.AL3D)return DEFSKIN;
   let r=_skc.get(i);
   if(!r){const A=AL3D,l=A.look(i),pal=A.SKINS[l.p%A.SKINS.length];
-    r=Object.assign({},pal,{pi:l.p%A.SKINS.length,hs:l.h%A.HAIRS.length,ot:l.o%A.OUTFITS.length,hw:l.w%A.HEADS.length,au:l.a%A.AURAS.length,ge:l.g&1,ar:l.r%A.ARMORS.length,ax:l.x%A.ACCENTS.length});_skc.set(i,r)}
+    r=Object.assign({},pal,{pi:l.p%A.SKINS.length,hs:l.h%A.HAIRS.length,ot:l.o%A.OUTFITS.length,hw:0,au:l.a%A.AURAS.length,ge:l.g&1,ar:l.r%A.ARMORS.length,ax:0});_skc.set(i,r)}
   return r;
 }
 const SK=()=>skinOf(SKIN);
@@ -427,7 +460,8 @@ const SKW=()=>(SKIN|((P.cls&7)<<21))>>>0;
 function mixc(a,b,f){const A=parseInt(a.slice(1),16),B=parseInt(b.slice(1),16),m=(x,y)=>Math.round(x+(y-x)*f);return '#'+((1<<24)|(m(A>>16,B>>16)<<16)|(m((A>>8)&255,(B>>8)&255)<<8)|m(A&255,B&255)).toString(16).slice(1)}
 function normLook(v){
   v=v|0;if(!window.AL3D)return v>>>0;
-  const A=AL3D,l=A.look(v);l.p%=A.SKINS.length;l.h%=A.HAIRS.length;l.o%=A.OUTFITS.length;l.w%=A.HEADS.length;l.a%=A.AURAS.length;l.g&=1;l.r%=A.ARMORS.length;l.x%=A.ACCENTS.length;return A.packLook(l);
+  const A=AL3D,l=A.look(v);l.p%=A.SKINS.length;l.h%=A.HAIRS.length;l.o%=A.OUTFITS.length;l.w=0;l.a%=A.AURAS.length;l.g&=1;l.r%=A.ARMORS.length;l.x=0;   /* v5_298 no Accent option any more: saved / other players' accents are ignored */
+  return A.packLook(l);
 }
 const lookKey=()=>'al_look_'+(AUTH.email||'');
 function applyLook(sk){
@@ -462,29 +496,33 @@ let DG=new Map();
 let BG=new Map();
 function buildBldGrid(){BG=new Map();for(const b of bld){const x0=((b.x-b.hw-14)/256)|0,x1=((b.x+b.hw+14)/256)|0,y0=((b.y-b.hh-14)/256)|0,y1=((b.y+b.hh+14)/256)|0;
   for(let gx=x0;gx<=x1;gx++)for(let gy=y0;gy<=y1;gy++){const k=gx*512+gy;let a=BG.get(k);if(!a)BG.set(k,a=[]);a.push(b)}}}
-function bldWet(i,x,y){try{return WMAP[tIx(i)%12][0]==='isles'&&mkH(i)(x-C,y-C)<2}catch(e){return false}} /* no houses in the water of the island worlds (WMAP does not exist yet while World 1 is built at start-up: that world is dry) */
+function bldWet(i,x,y,r){ /* v5_272 NOTHING IN THE WATER: the footprint (centre + 2 rings of 8 points out to radius r) must stay on dry ground, a little above the real water level of the world (worldWL, the same level the water surface is drawn at). Before, only the centre of a building was checked, only on island worlds, against height 2. */
+  try{const f=mkH(i),wl=worldWL(i);if(wl<-1e4)return false;const lim=wl+10,cx=x-C,cy=y-C;r=r||0;
+    if(f(cx,cy)<lim)return true;
+    if(r>0)for(let q=0;q<8;q++){const a=q*.7854,ca=Math.cos(a),sa=Math.sin(a);for(const k of[.5,1])if(f(cx+ca*r*k,cy+sa*r*k)<lim)return true}
+    return false}catch(e){return false}} /* WMAP / GKIT do not exist yet while World 1 is built at start-up (it is rebuilt right after): no check then */
 /* v5_172 CULTURES: every world has its own architecture. Kinds: 0 cottage, 1 hall, 2 watchtower (flat top, standable), 3 pagoda, 4 skyscraper, 5 domed temple, 6 round tower, 7 yurt,
    8 obelisk, 9 ziggurat (3 standable tiers), 10 windmill, 11 crystal spire, 12 longhouse, 13 lighthouse, 14 well.
    home = [kind, weight] used for ordinary village buildings, land = tall / grand landmarks (lone, or the centre of a village, or a 'downtown' cluster).
    pal = [wallH,wallS,wallL, roofH,roofS,roofL, accentH,accentS,accentL]. */
 const CUL=[
- {home:[[2,3],[0,2],[14,1]],land:[[9,3],[8,3],[6,2]],pal:[35,12,48,20,20,30,45,70,60]},                                   /* 0 Arena: ruined sandstone */
- {home:[[0,6],[1,2],[7,1],[2,1],[14,1]],land:[[3,5],[6,1],[2,2],[10,1]],pal:[40,25,70,5,55,32,45,80,58]},                  /* 1 Ashen Reach: lacquered pagodas */
- {home:[[0,4],[12,3],[1,2],[2,2],[14,1]],land:[[6,4],[9,2],[2,3],[4,1]],pal:[10,18,42,0,60,28,40,70,55]},                  /* 2 Crimson Dominion: war forts */
- {home:[[0,3],[5,3],[7,2],[14,1]],land:[[8,4],[11,4],[4,3],[5,2]],pal:[225,25,66,250,35,40,190,80,75]},                    /* 3 Starfall: observatories and crystals */
- {home:[[0,3],[12,3],[1,2],[2,2]],land:[[9,5],[6,3],[4,2],[8,1]],pal:[15,15,28,10,70,34,28,100,55]},                        /* 4 Ember Throne: forge ziggurats */
- {home:[[0,3],[5,3],[1,2],[7,1],[14,1]],land:[[3,4],[4,4],[5,3],[8,2],[11,1]],pal:[50,20,82,195,45,48,48,90,62]},          /* 5 Heavenfall: celestial spires */
- {home:[[0,5],[12,2],[7,2],[1,1],[14,2]],land:[[13,5],[6,2],[5,2],[10,1],[3,1]],pal:[190,30,72,205,50,35,15,70,58]},       /* 6 Tideglass: harbour */
- {home:[[7,4],[0,4],[12,2],[10,1],[14,1]],land:[[10,3],[3,2],[6,2],[11,1],[2,2]],pal:[30,32,45,110,40,30,85,60,55]},        /* 7 Verdant: wood and windmills */
- {home:[[2,3],[0,3],[1,2],[12,1]],land:[[4,4],[6,3],[8,3],[2,2],[13,1]],pal:[215,12,54,225,25,28,55,95,60]},                /* 8 Stormcrown: sky fortresses */
- {home:[[0,4],[1,2],[6,2],[14,1]],land:[[8,4],[6,4],[4,2],[9,1],[5,1]],pal:[340,10,30,350,50,22,355,80,50]},                /* 9 Bloodmoon: gothic spires */
- {home:[[0,5],[5,2],[7,2],[14,2],[1,1]],land:[[9,4],[8,4],[5,3],[10,1],[4,1]],pal:[38,50,66,30,60,45,45,95,58]},            /* 10 Sunforged: sandstone domes */
- {home:[[0,3],[5,2],[1,2],[7,2]],land:[[4,5],[11,5],[8,2],[5,2]],pal:[290,20,76,270,30,44,180,70,70]},                      /* 11 Mirrorveil: glass towers */
- {home:[[2,3],[0,3],[6,2],[14,1]],land:[[8,4],[11,3],[4,3],[6,2],[9,1]],pal:[265,15,24,275,35,20,285,80,58]},               /* 12 Voidmaw: obsidian */
- {home:[[12,3],[0,3],[1,3],[2,2]],land:[[6,4],[9,3],[8,2],[2,2],[4,1]],pal:[45,22,74,20,40,36,10,80,52]},                   /* 13 Dragonbone: bone halls */
- {home:[[0,3],[1,2],[7,1],[10,2],[14,1]],land:[[4,4],[6,4],[10,3],[8,2],[5,1]],pal:[30,28,50,35,60,36,45,90,60]},           /* 14 Chronos: clockwork */
- {home:[[1,3],[0,2],[5,2],[2,2]],land:[[4,5],[3,3],[8,3],[9,2],[5,1]],pal:[55,10,84,45,40,40,48,100,64]}];                   /* 15 Heaven-Sundering: monuments */
-const KROUND=[6,7,10,13,14]; /* kinds with a circular footprint (hw = radius) */
+ {home:[[2,3],[22,3],[0,1],[14,1],[15,2]],land:[[35,3],[40,1],[9,3],[8,2],[18,3],[22,3],[6,2],[15,2]],pal:[35,12,48,20,20,30,45,70,60]}, /* Arena: ruined sandstone, henge, pyramids */
+ {home:[[0,4],[29,3],[17,1],[7,1],[1,2]],land:[[36,4],[35,3],[37,3],[39,2],[38,2],[40,2],[41,3],[3,5],[29,4],[2,1],[10,1]],pal:[40,25,70,5,55,32,45,80,58]}, /* Ashen Reach: lacquered pagodas, torii shrines */
+ {home:[[12,3],[0,2],[2,3],[25,3],[1,1]],land:[[6,3],[9,2],[32,3],[25,2],[4,1]],pal:[10,18,42,0,60,28,40,70,55]}, /* Crimson Dominion: war forts, smelters, beacons */
+ {home:[[5,3],[16,3],[7,1],[0,2],[14,1]],land:[[11,4],[8,2],[28,3],[20,3],[4,2]],pal:[225,25,66,250,35,40,190,80,75]}, /* Starfall: observatories, mushrooms, storm rods, monoliths */
+ {home:[[25,4],[12,2],[0,2],[2,2]],land:[[9,4],[32,3],[25,3],[4,1],[24,3]],pal:[15,15,28,10,70,34,28,100,55]}, /* Ember Throne: smelters, forge ziggurats, shard spires */
+ {home:[[0,2],[5,3],[26,3],[7,1]],land:[[36,1],[41,1],[3,3],[26,4],[20,3],[4,3],[11,1]],pal:[50,20,82,195,45,48,48,90,62]}, /* Heavenfall: sky temples, celestial spires */
+ {home:[[17,4],[0,3],[27,3],[14,2],[12,1]],land:[[38,1],[40,2],[13,5],[27,2],[5,2],[10,1],[3,1]],pal:[190,30,72,205,50,35,15,70,58]}, /* Tideglass: stilt harbour, shell domes, lighthouses */
+ {home:[[16,4],[7,3],[17,2],[0,2],[10,1]],land:[[35,2],[36,2],[41,2],[37,1],[10,3],[15,3],[16,2],[3,1],[2,1]],pal:[30,32,45,110,40,30,85,60,55]}, /* Verdant: mushroom homes, stilt houses, windmills, henges */
+ {home:[[2,3],[0,2],[26,2],[12,1]],land:[[28,4],[4,3],[26,3],[8,2],[24,2]],pal:[215,12,54,225,25,28,55,95,60]}, /* Stormcrown: storm rods, sky fortresses */
+ {home:[[0,3],[30,2],[22,2],[1,1],[14,1]],land:[[23,5],[8,3],[6,2],[30,2],[5,1]],pal:[340,10,30,350,50,22,355,80,50]}, /* Bloodmoon: cathedrals, ruins, skull gates */
+ {home:[[0,4],[7,3],[31,2],[14,2],[5,1]],land:[[36,1],[18,5],[9,3],[31,3],[8,2],[10,1]],pal:[38,50,66,30,60,45,45,95,58]}, /* Sunforged: pyramids, sundials, domes */
+ {home:[[0,2],[24,3],[5,2],[20,2],[7,1]],land:[[11,4],[20,4],[24,3],[4,3],[8,1]],pal:[290,20,76,270,30,44,180,70,70]}, /* Mirrorveil: glass towers, monoliths, shards */
+ {home:[[24,3],[2,3],[0,2],[6,1]],land:[[23,3],[20,2],[8,3],[24,3],[9,1]],pal:[265,15,24,275,35,20,285,80,58]}, /* Voidmaw: obsidian cathedrals, shard spires */
+ {home:[[12,3],[30,2],[0,2],[15,1],[1,2]],land:[[19,5],[30,3],[6,2],[9,2]],pal:[45,22,74,20,40,36,10,80,52]}, /* Dragonbone: rib arches, skull gates, bone halls */
+ {home:[[0,2],[31,3],[10,2],[7,1],[29,2],[14,1]],land:[[40,1],[21,5],[31,2],[4,3],[6,2],[10,2]],pal:[30,28,50,35,60,36,45,90,60]}, /* Chronos: clock towers, sundials, clockwork */
+ {home:[[1,3],[26,2],[29,3],[5,2],[2,1]],land:[[4,3],[26,4],[20,3],[32,3],[8,2],[9,1]],pal:[55,10,84,45,40,40,48,100,64]}]; /* Heaven-Sundering: monuments, sky temples, beacons */
+const KROUND=[6,7,10,13,14,15,16,20,24,27,28,31,32,38,40,41]; /* kinds with a circular footprint (hw = radius). v5_253 new kinds 15-32 (v5_262 PHILIPPINES: 33 bahay kubo, 34 bahay na bato, 35 The Ruins, 36 cathedral, 37 sugar mill, 38 Masskara monument, 39 capitol, 40 Spanish watchtower, 41 Mt. Kanlaon): 15 henge, 16 mushroom house, 17 stilt house, 18 pyramid, 19 rib arch, 20 crystal monolith, 21 clock tower, 22 ruins, 23 cathedral, 24 shard spire, 25 smelter, 26 sky temple, 27 shell dome, 28 storm rod, 29 torii shrine, 30 skull gate, 31 sundial, 32 beacon */
 function genVillages(i,R2){
   bld.length=0;
   const arena=i===ARENA,cu=CUL[arena?0:Math.min(i,15)],P9=cu.pal,rr=(a,b)=>a+R2()*(b-a),pick=l=>{let t=0;for(const e of l)t+=e[1];let r=R2()*t;for(const e of l){r-=e[1];if(r<=0)return e[0]}return l[0][0]};
@@ -496,7 +534,7 @@ function genVillages(i,R2){
   const relief=(x,y,r)=>{if(!hf)return 0;let lo2=1e9,hi2=-1e9;const s=(dx,dy)=>{const h=hf(x-C+dx,y-C+dy);if(h<lo2)lo2=h;if(h>hi2)hi2=h};s(0,0);for(let q=0;q<8;q++){const a=q*.7854;for(const f of[.5,1])s(Math.cos(a)*r*f,Math.sin(a)*r*f)}return hi2-lo2};
   const findSite=(r,fa,fd)=>{let best=null,bestR=1e9;const rr2=Math.min(r,230),lim=22+rr2*.12; /* allowed relief: ~35-50 units over the footprint */
     for(let t=0;t<110;t++){const a=fa!=null?fa+(R2()-.5)*.3:R2()*Math.PI*2,d=fa!=null?Math.max(lo,Math.min(hi,fd+(R2()-.5)*160)):lo+Math.sqrt(R2())*(hi-lo),x=C+Math.cos(a)*d,y=C+Math.sin(a)*d;
-      if(sites.some(q=>Math.hypot(q.x-x,q.y-y)<q.r+r+130)||bldWet(i,x,y))continue;
+      if(sites.some(q=>Math.hypot(q.x-x,q.y-y)<q.r+r+130)||bldWet(i,x,y,Math.min(r,230)))continue;
       const rl=relief(x,y,rr2);if(rl<bestR){bestR=rl;best={x,y}}if(rl>lim)continue;const q={x,y,r};sites.push(q);return q}
     if(best&&bestR<=lim*1.6){const q={x:best.x,y:best.y,r};sites.push(q);return q}return null};
   let placed=[];
@@ -510,6 +548,20 @@ function genVillages(i,R2){
       case 8:{const w=rr(22,30);return [w,w,rr(280,440)]}case 9:{const w=rr(110,150);return [w,w,78]}
       case 10:{const r=rr(34,44);return [r,r,rr(150,210)]}case 11:{const w=rr(30,44);return [w,w,rr(140,320)]}
       case 12:return [rr(100,140),rr(44,58),rr(52,70)];case 13:{const r=rr(34,46);return [r,r,rr(220,330)]}
+      case 15:{const r=rr(70,100);return [r,r,rr(60,90)]}case 16:{const r=rr(36,56);return [r,r,rr(110,190)]}
+      case 17:return [rr(50,70),rr(44,60),rr(90,120)];case 18:{const w=rr(90,140);return [w,w,rr(160,260)]}
+      case 19:return [rr(70,100),rr(30,40),rr(180,260)];case 20:{const r=rr(30,44);return [r,r,rr(220,420)]}
+      case 21:{const w=rr(34,46);return [w,w,rr(340,520)]}case 22:return [rr(80,120),rr(40,60),rr(90,170)];
+      case 23:return [rr(60,80),rr(100,140),rr(200,320)];case 24:{const r=rr(46,70);return [r,r,rr(180,340)]}
+      case 25:return [rr(60,84),rr(50,70),rr(150,230)];case 26:return [rr(70,100),rr(70,100),rr(140,220)];
+      case 27:{const r=rr(44,66);return [r,r,rr(100,170)]}case 28:{const r=rr(22,30);return [r,r,rr(360,560)]}
+      case 29:return [rr(40,56),rr(40,56),rr(100,140)];case 30:return [rr(70,96),rr(34,46),rr(160,230)];
+      case 31:{const r=rr(60,90);return [r,r,rr(70,120)]}case 32:{const r=rr(26,36);return [r,r,rr(180,300)]}
+      case 33:return [rr(40,54),rr(36,48),rr(72,92)];case 34:return [rr(76,100),rr(54,70),rr(104,132)];
+      case 35:return [rr(92,122),rr(62,82),rr(130,190)];case 36:return [rr(60,80),rr(100,130),rr(210,300)];
+      case 37:return [rr(72,92),rr(50,64),rr(300,440)];case 38:{const r=rr(38,50);return [r,r,rr(200,300)]}
+      case 39:return [rr(104,132),rr(60,76),rr(150,220)];case 40:{const r=rr(34,46);return [r,r,rr(220,320)]}
+      case 41:{const r=rr(120,165);return [r,r,rr(300,440)]}
       default:return [17,17,22]}};
   const colors=()=>{const rh=P9[3]+(R2()<.4?(R2()<.5?36:-36):0);return {wc:H(P9[0]+rr(-9,9),P9[1],P9[2]+rr(-8,8)),rc:H(rh,P9[4],P9[5]+rr(-6,6)),ac:H(P9[6],P9[7],P9[8]),tc:H(P9[0]+rr(-6,6),P9[1]*.7,P9[2]*.55),gc:H(P9[6]+rr(-10,10),55,76)}};
   /* put one building (a ziggurat adds 3 nested records). (tx,ty) = the point its door faces. Returns the record or null. */
@@ -517,7 +569,7 @@ function genVillages(i,R2){
     const d=dims(k),hw=d[0],hh=d[1],wh=d[2],rd=KROUND.includes(k),m=Math.max(hw,hh);
     if(Math.hypot(x-C,y-C)>RIM-70-m||Math.hypot(x-C,y-C)<TOWN+140+m)return null;
     for(const q of keepList)if(Math.abs(q.x-x)<q.hw+hw+(k===14?24:46)&&Math.abs(q.y-y)<q.hh+hh+(k===14?24:46))return null;
-    if(bldWet(i,x,y))return null;
+    if(bldWet(i,x,y,m+30))return null;
     const dx=tx-x,dy=ty-y,sd=Math.abs(dx)>Math.abs(dy)?[dx>0?1:-1,0]:[0,dy>0?1:-1],col=colors();
     const mk=(extra)=>{const b=Object.assign({x,y,hw,hh,sy:y+hh,k,rd,wh,H:Infinity,fx:sd[0],fy:sd[1],sd:Math.floor(R2()*1e6),v:0,n:d[3]||0},col,extra);bld.push(b);return b};
     let b;
@@ -634,17 +686,37 @@ function spawnBossWave(){
   }
   announceBosses(out);
 }
+/* v5_231 worldGen counts every buildWorld(): the 3D scene is rebuilt whenever it changes (not only when the world number changes), so what is drawn always matches the solids you collide with */
+/* v5_281 PACKS: every normal monster belongs to a pack of PACK_SIZE (3). Hit one and the whole pack attacks you. Spawn spots are not changed, only grouped.
+   A monster takes the 2 nearest monsters that have no pack yet; a ring whose count is not a multiple of 3 ends with one pack of 1 or 2. Same rule as groupMons() in game.go (the server does it in shared worlds). */
+const PACK_SIZE=3;
+function groupMonsters(list){
+  const free=list.slice();
+  while(free.length){
+    const a=free.shift(),pack=[a];
+    for(let k=0;k<PACK_SIZE-1&&free.length;k++){
+      let bi=0,bd=Infinity;
+      for(let i=0;i<free.length;i++){const o=free[i],d=(o.hx-a.hx)*(o.hx-a.hx)+(o.hy-a.hy)*(o.hy-a.hy);if(d<bd){bd=d;bi=i}}
+      pack.push(free[bi]);free[bi]=free[free.length-1];free.pop();
+    }
+    for(const m of pack)m.grp=pack;
+  }
+}
+function pullPack(m){for(const o of (m.grp||[]))if(o!==m&&!o.dead&&o.state==='idle')o.state='chase'}
+let worldGen=0;
 function buildWorld(i,spawn){
-  P.sel=null;
+  worldGen++;P.sel=null;
   setWorld(i);
   mons.length=0;ores.length=0;items.length=0;projs.length=0;fx.length=0;texts.length=0;deco.length=0;parts.length=0;beams.length=0;delayed.length=0;
   const R2=rngSeed(20261101+i*7919);
   for(let k=0;k<9;k++){ /* fixed monster count per ring, even per AREA inside each ring (keep equal to ringMons in game.go) */
     const lo=k?ZD[k-1]:500,hi=k<8?ZD[k]:RIM-40;
+    const ringFirst=mons.length;
     for(let n=0;n<RING_MONS[k];n++){
       const a=R2()*Math.PI*2,d=Math.sqrt(lo*lo+R2()*Math.max(0,hi*hi-lo*lo));
       if(!spawn&&i!==ARENA)mons.push(monsterAt(C+Math.cos(a)*d,C+Math.sin(a)*d,null)); /* still draws the same random numbers so ore and scenery stay identical */
     }
+    if(!spawn&&i!==ARENA)groupMonsters(mons.slice(ringFirst)); /* v5_281 packs of 3 (spawn spots are not touched) */
   }
   if(spawn){
     /* shared world: the server owns every monster. [id, x, y, bossIdx, maxHp, def, radius, hp, dead] */
@@ -659,10 +731,13 @@ function buildWorld(i,spawn){
     const a=R2()*Math.PI*2,d=400+R2()*(RIM-500);
     if(i!==ARENA)ores.push({x:C+Math.cos(a)*d,y:C+Math.sin(a)*d,cd:0});
   }
-  for(let n=0;n<1500*MAP_K;n++){
+  let arenaKept=0; /* v5_260 the Arena is capped at ARENA_PROPS scatter props */
+  for(let n=0;n<SCENERY_N;n++){ /* v5_257 scenery density +30%: 1500 -> 1950 per map-k. Nothing else draws from R2() after this loop, so every old prop keeps its place and the extra 30% are appended */
     const a=R2()*Math.PI*2,d=Math.sqrt(R2())*RIM;
-    if(d<TOWN+40||(i===ARENA&&n%4))continue;
-    deco.push({k:Math.floor(R2()*3),x:C+Math.cos(a)*d,y:C+Math.sin(a)*d,s:.7+R2()*.8});
+    if(d<TOWN+40||(i===ARENA&&(n%12||arenaKept>=ARENA_PROPS)))continue; /* v5_260 the Arena keeps exactly ARENA_PROPS (600) props: every 12th candidate until the cap (v5_259 kept 1 in 8, about 1,200) */
+    if(i===ARENA)arenaKept++;
+    const k=Math.floor(R2()*54),x=C+Math.cos(a)*d,y=C+Math.sin(a)*d,r=R2(); /* same 4 draws as before */
+    deco.push({k,x,y,s:(Math.imul(n,2654435761)>>>0)%100<SCENERY_BIG?1.6+r*.6:.7+r*.4}); /* v5_258 two sizes: SMALL .7-1.1, BIG 1.6-2.2 (about double), picked by a hash of n so no extra random draw */
   }
   genVillages(i,rngSeed(55555+i*104729));
   buildDecoGrid();buildBldGrid();
@@ -770,7 +845,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow()})
 window.addEventListener('pagehide',saveNow);window.addEventListener('beforeunload',saveNow);
 function save(){
   if(!AUTH.ok)return;
-  const str=JSON.stringify({v:2,pm:PVPLVL,ts:Date.now(),gv:GEAR_VER,sv:AUTH.ver===null?undefined:AUTH.ver,lvl:P.lvl,exp:P.exp,coins:P.coins,ore:P.ore,wlv:P.wlv,alv:P.alv,wv:2,wi:curWorld===ARENA?1:curWorld,eq:EQ,as:AUTOSK.map(x=>x?1:0),sk:SKIN,lkv:2,lk:LOOKS.map((v,i)=>i===P.cls?SKIN:v),gear:P.gear,bag:bagArr(),pots:P.pots,wh:whArr(),eg:P.eggs|0,pt:P.pets,sp:P.pet||'',fb:P.fightBack?1:0,tm:P.tapMove?1:0,mk:1,sg:1,cl:P.cls,cs:CLS_STORE.map(x=>x?{e:x.e,a:x.a.map(y=>y?1:0)}:null),ap:P.autoPot?1:0,ah:P.apHp,aq:P.apQi});
+  const str=JSON.stringify({v:2,pm:PVPLVL,ts:Date.now(),gv:GEAR_VER,sv:AUTH.ver===null?undefined:AUTH.ver,lvl:P.lvl,exp:P.exp,coins:P.coins,ore:P.ore,wlv:P.wlv,alv:P.alv,wv:2,wi:curWorld===ARENA?1:curWorld,eq:EQ,as:AUTOSK.map(x=>x?1:0),sk:SKIN,lkv:2,lk:LOOKS.map((v,i)=>i===P.cls?SKIN:v),gear:P.gear,bag:bagArr(),pots:P.pots,wh:whArr(),eg:P.eggs|0,pt:P.pets,sp:P.pet||'',fb:P.fightBack?1:0,tm:P.tapMove?1:0,js:P.joySmall?1:0,mk:1,sg:1,cl:P.cls,cs:CLS_STORE.map(x=>x?{e:x.e,a:x.a.map(y=>y?1:0)}:null),ap:P.autoPot?1:0,ah:P.apHp,aq:P.apQi});
   try{localStorage.setItem(saveKey(),str)}catch(e){}
   cloudPush(str);
   netInfo();
@@ -785,7 +860,7 @@ function load(){
     const parseGear=(arr,cap)=>{const out=[];if(Array.isArray(arr))for(const o of arr.slice(0,cap)){const q=o&&GEAR.find(z=>z.k===o.slot);if(!q)continue;const it={slot:q.k,g:clamp(o.g|0,1,NW),r:clamp(o.r|0,0,RAR.length-1),st:{}};if(o.st&&typeof o.st==='object')for(const k in o.st)if(k in STATBASE||k in SPECIAL){const v=+o.st[k];if(v>=0&&v<1e6)it.st[k]=r2(v*gm(k))}addQrg(it,q);it.col=RAR[it.r].c;it.u=bagUid++;out.push(it)}return out};
     P.bag=parseGear(s.bag,200);P.wh=parseGear(s.wh,WH_CAP);P.eggs=clamp(s.eg|0,0,99999);P.pets=parsePets(s.pt);P.pet=petLoad(s.sp);P.pf=null;
     PVPLVL=clamp(s.pm|0,0,3);
-    if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;
+    if(s.pots)P.pots={hp:clamp(s.pots.hp|0,0,9999),qi:clamp(s.pots.qi|0,0,9999),tp:clamp(s.pots.tp|0,0,9999),ck:clamp(s.pots.ck|0,0,9999)};P.autoPot=s.ap!==0;P.apHp=clamp((s.ah|0)||35,5,95);P.apQi=clamp((s.aq|0)||20,5,95);P.fightBack=s.fb!==0;P.tapMove=s.tm!==0;P.joySmall=s.js===1;applyJoySize();
     let wi=s.wi|0;if(s.wv!==2&&wi<=10)wi++; /* older saves: world numbers started at 0 for Ashen Reach */
     wi=clamp(wi,0,NW-1);if(wi===ARENA)wi=1;if(wi!==curWorld)buildWorld(wi);
     P.cls=clamp(s.cl|0,0,CLASSES.length-1);loadLooks(s);CLS_STORE.fill(null);
@@ -793,7 +868,7 @@ function load(){
     if(s.v===2&&Array.isArray(s.eq)&&s.eq.length<=NSLOT){for(let i=0;i<NSLOT;i++){const q=SKILLS[s.eq[i]];EQ[i]=q&&P.lvl>=q.lv&&(q.c||0)===P.cls?s.eq[i]:-1}}else autoArrange();
     for(let i=0;i<NSLOT;i++)AUTOSK[i]=!Array.isArray(s.as)||s.as[i]!==0;
     if(s.mk!==1&&P.cls===0)giveMelee();
-    if(s.sg!==1)giveSig();
+    fixSig();if(s.sg!==1)giveSig();
     buildBar();
     P.hp=maxHp();P.qi=maxQi();return true;
   }catch(e){return false}

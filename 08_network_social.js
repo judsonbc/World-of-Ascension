@@ -17,11 +17,11 @@ function eqClean(raw){const o={};if(!raw||typeof raw!=='object')return o;
   return o}
 function mkPeer(i){
   return {isPl:true,eq:eqClean(i.eq),id:i.id,name:String(i.n||'?').slice(0,16),sk:i.sk|0,lvl:clamp(i.lv|0,1,MAXLV),wlv:i.wl|0,alv:i.al|0,mh:Math.max(1,i.mh|0),hp:Math.max(1,i.mh|0),
-    x:+i.x||C,y:+i.y||C,tx:+i.x||C,ty:+i.y||C,face:0,dir:1,mvAmt:0,anim:0,swing:0,hurt:0,bfT:0,sh:0,dead:0,r:14,mine:0,pvp:false,pm:0};
+    x:+i.x||C,y:+i.y||C,tx:+i.x||C,ty:+i.y||C,face:0,dir:1,mvAmt:0,anim:0,swing:0,hurt:0,bfT:0,sh:0,dead:0,r:14,mine:0,pvp:false,pm:0,pet:petKeyClean(i.pt),pf:null,seen:performance.now()};
 }
 function netInfo(force){
   if(!NET.joined)return;
-  const o={t:'i',cl:P.cls,sk:SKW(),lv:P.lvl,wl:P.wlv,al:P.alv,mh:maxHp(),df:defVal(),eq:eqPack()},k=JSON.stringify(o);
+  const o={t:'i',cl:P.cls,sk:SKW(),lv:P.lvl,wl:P.wlv,al:P.alv,mh:maxHp(),df:defVal(),eq:eqPack(),pt:P.pet||''},k=JSON.stringify(o);
   if(!force&&k===NET.infoKey)return;
   NET.infoKey=k;netSend(o);
 }
@@ -33,31 +33,57 @@ function netJoin(){
 function setNetStatus(){
   const s=$('netStat');if(!s)return;
   if(NET.on){const on=Math.max(NET.online|0,NET.joined?1:0);s.textContent='Online \u00b7 '+on+' adventurer'+(on===1?'':'s')+' in the world';s.style.color='#5fd3a5'}
-  else{s.textContent=NET.giveUp?'No server found \u00b7 playing solo':'Connecting to server\u2026';s.style.color='#8d9aa2'}
+  else{s.textContent=NET.giveUp?'No server found \u00b7 playing solo':(NET.fails>=3?'Server unreachable \u00b7 playing solo, retrying\u2026':'Connecting to server\u2026');s.style.color='#8d9aa2'}
 }
 function netConnect(){
+  if(NET.rt){clearTimeout(NET.rt);NET.rt=0}
+  if(NET.giveUp)return;
+  if(NET.ws&&NET.ws.readyState<=1)return; /* already connecting / connected */
   if(!/^https?:$/.test(location.protocol)){NET.giveUp=true;setNetStatus();return} /* opened as a file: solo only */
   let ws;
-  try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}catch(e){NET.giveUp=true;setNetStatus();return}
-  NET.ws=ws;
-  ws.onopen=()=>{NET.on=true;NET.fails=0;setNetStatus()};
-  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}try{netMsg(m)}catch(err){console.error(err)}};
+  try{ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')}catch(e){netRetry();return}
+  NET.ws=ws;NET.lastMsg=Date.now();
+  ws.onopen=()=>{NET.on=true;NET.fails=0;NET.lastMsg=Date.now();setNetStatus()};
+  ws.onmessage=e=>{NET.lastMsg=Date.now();let m;try{m=JSON.parse(e.data)}catch(_){return}try{netMsg(m)}catch(err){console.error(err)}};
   ws.onclose=()=>{
+    if(NET.ws!==ws)return; /* an old socket: already handled */
     const was=NET.on;NET.on=false;NET.joined=false;NET.ws=null;
     setParty([]);pinvHide();
     if(MP){MP=false;NET.peers.clear();buildWorld(curWorld);P.target=null;P.pvpT=0;say('Connection lost \u2014 playing solo while reconnecting\u2026','#d9503f')}
-    if(!was&&++NET.fails>=3)NET.giveUp=true;
+    if(!was)NET.fails++;
     setNetStatus();
-    if(!NET.giveUp)setTimeout(netConnect,2500);
+    netRetry();
   };
   ws.onerror=()=>{};
 }
-/* network ticks run on a timer, not requestAnimationFrame, so a backgrounded tab keeps reporting its position */
+/* v5_233 never give up: keep retrying with a growing pause (2.5 s, 5 s ... max 15 s) so the game goes back online by itself when the internet / server is back.
+   Also retries at once when the browser reports it is online again or the tab becomes visible. Only a deliberate stop (opened as a file, kicked / logged in elsewhere) sets NET.giveUp. */
+function netRetry(){
+  if(NET.giveUp||NET.rt)return;
+  NET.rt=setTimeout(()=>{NET.rt=0;netConnect()},Math.min(15000,2500*(1+Math.min(NET.fails,5))));
+}
+function netNudge(){if(!NET.giveUp&&!NET.on&&!(NET.ws&&NET.ws.readyState<=1)){NET.fails=0;netConnect()}}
+window.addEventListener('online',netNudge);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)netNudge()});
+/* watchdog: a dead connection (internet lost but the socket never closed) sends nothing back; the server answers our 2 s ping, so 20 s of silence means it is dead */
 setInterval(()=>{
-  if(!NET.joined)return;
-  netSend({t:'p',x:+P.x.toFixed(1),y:+P.y.toFixed(1),f:+P.face.toFixed(2),hp:Math.round(P.hp),
-    fl:(P.dead>0?1:0)|(P.bfT>0?2:0)|(P.sh>0?4:0)|(document.hidden?16:0)});
-},66);
+  const w=NET.ws;if(!w||!NET.joined||Date.now()-(NET.lastMsg||0)<20000)return;
+  try{w.close()}catch(e){}
+  setTimeout(()=>{if(NET.ws===w&&w.onclose)w.onclose()},3000);
+},5000);
+/* network ticks run on a timer, not requestAnimationFrame, so a backgrounded tab keeps reporting its position */
+/* v5_251 the position sender now ticks from a Worker: main-thread timers of a hidden tab are slowed to ~1 per second (or 1 per minute after a while), which made other players look frozen / stuck on everybody else's screen */
+(function(){
+  const sendPos=()=>{
+    if(!NET.joined)return;
+    netSend({t:'p',x:+P.x.toFixed(1),y:+P.y.toFixed(1),f:+P.face.toFixed(2),hp:Math.round(P.hp),
+      fl:(P.dead>0?1:0)|(P.bfT>0?2:0)|(P.sh>0?4:0)|(document.hidden?16:0)});
+  };
+  let w=null;
+  try{w=new Worker(URL.createObjectURL(new Blob(['setInterval(function(){postMessage(0)},66)'],{type:'text/javascript'})));w.onmessage=sendPos}catch(e){w=null}
+  if(!w)setInterval(sendPos,66);
+  else setInterval(()=>{if(document.hidden)return;sendPos()},1000); /* spare: keeps reporting if the worker is ever suspended */
+})();
 setInterval(()=>netInfo(),2000);
 setInterval(()=>{if(NET.joined)netSend({t:'pg',i:Date.now()%1000000000})},2000);
 
@@ -128,7 +154,7 @@ function renderParty(){
   const h=document.createElement('h4'),t=document.createElement('span'),lv=document.createElement('button'),hd=document.createElement('button'),bt=document.createElement('span');
   t.className='phd';t.title='Drag the window to move it \u00b7 double-click to reset';t.textContent='Party \u00b7 '+PARTY.m.length+'/4';
   lv.type='button';lv.textContent='Leave';lv.title='Leave the party';lv.addEventListener('click',()=>partyCmd('leave'));
-  hd.type='button';hd.textContent='\u2013';hd.title='Hide (use the Party button on the left to show it again)';hd.addEventListener('click',()=>partyHide(true));
+  hd.type='button';hd.textContent='\u2715';hd.title='Hide (use the Party button on the left to show it again)';hd.addEventListener('click',()=>partyHide(true));
   const ch=document.createElement('button');ch.type='button';ch.textContent='\u{1F4AC}';ch.title='Party chat';ch.addEventListener('click',()=>{if(cpOpen()&&CP.cur==='party')cpHide();else cpShow('party',!PHONE)});
   bt.className='pbt';bt.appendChild(ch);bt.appendChild(lv);bt.appendChild(hd);h.appendChild(t);h.appendChild(bt);box.appendChild(h);
   for(const x of PARTY.m){
@@ -354,6 +380,7 @@ function netMsg(m){
       if(!entering)say('Joined the shared world of '+W[m.w].n+' \u00b7 '+(NET.peers.size+1)+' here.',W[m.w].acc);
       break}
     case 's':onSnap(m);break;
+    case 'wl':{if(!MP)break;for(const i of (m.ps||[]))if(i&&i.id!==NET.id&&!NET.peers.has(i.id))NET.peers.set(i.id,mkPeer(i));break}
     case 'h':{
       const o=monAt(m.i);if(!o||o.dead)break;
       o.flash=.1;spark(o.x,o.y,m.c?'#ffd36b':'#ffd9a0',m.c?8:4,150,.3,2.4);
@@ -374,7 +401,7 @@ function netMsg(m){
     case 'o':if(ores[m.i])ores[m.i].cd=+m.cd||30;break;
     case 'pj':{const i=m.p;if(i&&i.id!==NET.id&&MP){NET.peers.set(i.id,mkPeer(i));say(String(i.n)+' entered the world.','#5fd3a5')}break}
     case 'pl':{const q=NET.peers.get(m.id);if(q){NET.peers.delete(m.id);say(q.name+' left.','#8d9aa2');if(PG.id===m.id)pgClose()}break}
-    case 'pi':{const i=m.p,q=i&&NET.peers.get(i.id);if(q){q.sk=i.sk|0;q.lvl=clamp(i.lv|0,1,MAXLV);q.wlv=i.wl|0;q.alv=i.al|0;q.mh=Math.max(1,i.mh|0);if(i.eq!==undefined){q.eq=eqClean(i.eq);if(PG.id===q.id)pgRender()}}break}
+    case 'pi':{const i=m.p,q=i&&NET.peers.get(i.id);if(q){q.sk=i.sk|0;q.lvl=clamp(i.lv|0,1,MAXLV);q.wlv=i.wl|0;q.alv=i.al|0;q.mh=Math.max(1,i.mh|0);{const pk=petKeyClean(i.pt);if(pk!==q.pet){q.pet=pk;q.pf=null}}if(i.eq!==undefined){q.eq=eqClean(i.eq);if(PG.id===q.id)pgRender()}}break}
     case 'fx':if(MP)playFx(m);break;
     case 'pvp':break; /* v5_158 the 30 s flag is gone (PvP modes) */
     case 'pvpno':say(String(m.r||'PvP not allowed here.'),'#8d9aa2');break;
@@ -439,16 +466,22 @@ function onSnap(m){
     if(o.dead){o.dead=false;o.pend=false;o.dieT=0;o.x=e[1];o.y=e[2];o.lx=undefined} /* respawned */
     o.tx=e[1];o.ty=e[2];
     if(!(o.predT>0&&e[3]>o.hp))o.hp=e[3];
+    o.hpAuth=e[3]; /* v5_315 the server's own health value (o.hp also holds the predicted one) */
     if(e[3]>0)o.pend=false;
     const st=e[4]&3;o.state=st===1?'chase':st===2?'return':'idle';
     if((e[4]&8)&&!(o.atkT>0))o.atkT=.25;
     o.wx=(Math.abs(o.tx-o.x)>.4||Math.abs(o.ty-o.y)>.4)?1:0;
   }
+  let unk=false;const snow=performance.now();
   for(const e of (m.p||NONE)){
-    const q=NET.peers.get(e[0]);if(!q)continue;
+    const q=NET.peers.get(e[0]);if(!q){unk=true;continue}
+    q.seen=snow;
     q.tx=e[1];q.ty=e[2];q.face=e[3];q.hp=e[4];peerSample(q,e[1],e[2]);
     const f=e[5];q.dead=(f&1)?1.5:0;q.bfT=(f&2)?1:0;q.sh=(f&4)?1:0;q.pm=(f>>5)&3;q.pvp=q.pm>=2; /* v5_158 bits 5-6 = PvP mode; red name + swords for Hostile / Carnal */
   }
+  /* v5_251 a player the server reports but I do not have (a missed 'joined' message) -> ask for the list; a player I have but the server no longer reports for 4 s is a ghost -> remove */
+  if(unk&&snow-(NET.whoT||0)>2500){NET.whoT=snow;netSend({t:'who'})}
+  for(const [id,q] of NET.peers){if(snow-(q.seen||snow)>4000){NET.peers.delete(id);if(PG.id===id)pgClose()}}
   if(m.dd)for(const id of m.dd){const o=monAt(id);if(o&&!o.dead)killMonster(o,true)}
   if(m.tm!==undefined)time+=(m.tm-time)*.2;
 }
@@ -473,7 +506,7 @@ function peerSample(q,x,y){
       tt=Math.min(Math.max(t,l.t+.045),l.t+.09);if(Math.abs(tt-t)>.15)tt=t; /* v5_166 even out arrival jitter: stamps stay 45-90 ms apart (updates are really 66 ms apart) */
       if(d>PEER_BLINK){peerBlinkFx(l.x,l.y,x,y);if(d>400){b.length=0;q.x=x;q.y=y}} /* dash / teleport skill */
     }else if(d>PEER_SNAP){peerBlinkFx(l.x,l.y,x,y);b.length=0;q.x=x;q.y=y}  /* respawn / Home Scroll / world change */
-    else if(d>=PEER_STILL){b.push({t:t-Math.min(.6,Math.max(.066,d/PEER_RUN)),x:l.x,y:l.y})} /* lag catch-up: slide at running speed instead of a freeze + zip */
+    else if(d>=PEER_STILL){b.push({t:Math.max(l.t+.02,t-Math.min(.6,Math.max(.066,d/PEER_RUN))),x:l.x,y:l.y})} /* lag catch-up: slide at running speed instead of a freeze + zip */
     else b.push({t:t-.066,x:l.x,y:l.y});                            /* was standing still: do not slide during the pause */
   }
   b.push({t:tt,x,y});if(b.length>16)b.shift();
@@ -481,6 +514,7 @@ function peerSample(q,x,y){
 function updatePeers(dt){
   const k=Math.min(1,dt*12),rt=performance.now()/1000-PEER_DELAY;
   for(const q of NET.peers.values()){
+    if(!(isFinite(q.x)&&isFinite(q.y))){q.x=q.tx;q.y=q.ty;q.buf=[]}
     const ox=q.x,oy=q.y,b=q.buf;
     if(b&&b.length){
       while(b.length>2&&b[1].t<=rt)b.shift();
@@ -494,6 +528,7 @@ function updatePeers(dt){
       if(dx*dx+dy*dy>160000){q.x=q.tx;q.y=q.ty}else{q.x+=dx*k;q.y+=dy*k}}
     const mvd=Math.hypot(q.x-ox,q.y-oy);
     q.mvAmt+=((mvd>.05?1:0)-q.mvAmt)*Math.min(1,dt*10);q.anim+=mvd*.07;
+    if(q.dg){const u=(performance.now()/1000-q.dgS)/DASH_T;if(u>=1||q.dead)q.dg=0;else q.dgU=u}   /* v5_304 another player's dodge animation */
     q.swing-=dt;q.hurt-=dt;
     {if(q.jzAt&&performance.now()/1000-q.jzAt>5)q.jzT=0;q.jz=(q.jz||0)+((q.jzT||0)-(q.jz||0))*Math.min(1,dt*18)} /* v5_170 their height, from 'jz' messages */
     if(Math.cos(q.face)>.1)q.dir=1;else if(Math.cos(q.face)<-.1)q.dir=-1;
@@ -528,6 +563,7 @@ function playFx(m){
       }
       break}
     case 'sw':if(q){q.swing=.18;q.face=+m.f||0}break;
+    case 'dg':if(q){q.dg=clamp(m.d|0,1,3);q.dgS=performance.now()/1000;q.dgU=0;q.face=+m.f||0}break; /* v5_304 dodge: 1 forward roll, 2 side roll, 3 back dive */
     case 'jz':if(q){q.jzT=clamp(+m.z||0,0,400);q.jzAt=performance.now()/1000}break; /* v5_170 another player's height above the ground (jumping / standing on a structure) */
     case 'sp':{ /* v5_165 another player's spirits (visual only) */
       if(!q)break;const a=Array.isArray(m.a)?m.a:[],list=[];
@@ -535,20 +571,57 @@ function playFx(m){
       q.spx=list.length?{e:performance.now()/1000+clamp(+m.t||0,0,20),list}:null;break}
   }
 }
+/* v5_248 the Here / Online window can be dragged by its title bar (position remembered) and collapsed to just the title bar */
+const OLUI=(()=>{let o={};try{o=JSON.parse(localStorage.getItem('al_onlineui')||'{}')||{}}catch(e){}return{c:!!o.c,x:typeof o.x==='number'?o.x:null,y:typeof o.y==='number'?o.y:null}})();
+function onlUiSave(){try{localStorage.setItem('al_onlineui',JSON.stringify(OLUI))}catch(e){}}
+function onlPlace(){
+  const b=$('online');
+  b.classList.toggle('olc',OLUI.c);
+  if(OLUI.x===null){b.style.left=b.style.top=b.style.right=b.style.maxHeight='';return}
+  const r=$('hud').getBoundingClientRect(),w=b.offsetWidth||170,h=b.offsetHeight||60;
+  const x=clamp(OLUI.x*r.width,0,Math.max(0,r.width-w)),y=clamp(OLUI.y*r.height,0,Math.max(0,r.height-h));
+  b.style.right='auto';b.style.left=x+'px';b.style.top=y+'px';b.style.maxHeight=Math.max(56,r.height-y-8)+'px';
+}
+(function(){
+  const b=$('online');let d=null;
+  b.addEventListener('pointerdown',e=>{
+    const h=e.target.closest&&e.target.closest('h4');
+    if(!h||e.target.closest('button')||e.button>0)return;
+    const r=b.getBoundingClientRect();d={dx:e.clientX-r.left,dy:e.clientY-r.top,id:e.pointerId};b.classList.add('drag');e.preventDefault()});
+  window.addEventListener('pointermove',e=>{
+    if(!d||e.pointerId!==d.id)return;
+    const hr=$('hud').getBoundingClientRect(),w=b.offsetWidth,h=b.offsetHeight;
+    OLUI.x=clamp(e.clientX-d.dx-hr.left,0,Math.max(0,hr.width-w))/hr.width;OLUI.y=clamp(e.clientY-d.dy-hr.top,0,Math.max(0,hr.height-h))/hr.height;onlPlace()});
+  const end=e=>{if(!d||(e&&e.pointerId!==d.id))return;d=null;b.classList.remove('drag');onlUiSave()};
+  window.addEventListener('pointerup',end);window.addEventListener('pointercancel',end);
+  b.addEventListener('dblclick',e=>{if(e.target.closest&&e.target.closest('h4')&&!e.target.closest('button')){OLUI.x=OLUI.y=null;onlUiSave();onlPlace()}});
+  window.addEventListener('resize',onlPlace);
+})();
 function renderOnline(){
   const box=$('online');
   if(!MP){if(!box.hidden){box.hidden=true;NET.olKey=''}return}
-  const list=[...NET.peers.values()].sort((a,b)=>b.lvl-a.lvl),key=list.length+':'+NET.online+':'+PARTY.m.length+':'+FR.f.length+':'+FR.out.length+':'+list.slice(0,6).map(q=>q.name+q.lvl+(q.pvp?'!':'')+(PARTY.ids.has(q.id)?'p':'')).join('|');
+  /* v5_247: nearest player first (order refreshed at most every 1.5 s so rows do not jump under a tap); every player is listed, the list scrolls */
+  const list=[...NET.peers.values()],now=performance.now();
+  if(!NET.olOrd||now-NET.olOrdT>1500){list.sort((a,b)=>Math.hypot(a.x-P.x,a.y-P.y)-Math.hypot(b.x-P.x,b.y-P.y));NET.olOrd=list.map(q=>q.id);NET.olOrdT=now}
+  else{const ix=new Map(NET.olOrd.map((id,i)=>[id,i]));list.sort((a,b)=>(ix.has(a.id)?ix.get(a.id):1e9)-(ix.has(b.id)?ix.get(b.id):1e9))}
+  const key=list.length+':'+NET.online+':'+PARTY.m.length+':'+FR.f.length+':'+FR.out.length+':'+list.map(q=>q.id+q.name+q.lvl+(q.pvp?'!':'')+(PARTY.ids.has(q.id)?'p':'')).join('|');
   if(key===NET.olKey)return;
+  const oldL=box.querySelector('.olist'),st=oldL?oldL.scrollTop:0;
   NET.olKey=key;box.hidden=false;box.innerHTML='';
-  const h=document.createElement('h4');h.textContent='Here \u00b7 '+(list.length+1)+'  \u00b7  Online \u00b7 '+NET.online;box.appendChild(h);
-  for(const q of list.slice(0,6)){
+  const h=document.createElement('h4'),ht=document.createElement('span'),hx=document.createElement('button');ht.textContent='Here \u00b7 '+(list.length+1)+'  \u00b7  Online \u00b7 '+NET.online;h.appendChild(ht);
+  const hc=document.createElement('button');hc.type='button';hc.className='wx2';hc.textContent=OLUI.c?'+':'\u2013';hc.title=OLUI.c?'Expand the list':'Collapse the list';hc.setAttribute('aria-label',hc.title);
+  hc.addEventListener('click',e=>{e.stopPropagation();OLUI.c=!OLUI.c;onlUiSave();NET.olKey='';renderOnline()});
+  const hb=document.createElement('span');hb.className='ohb';hb.appendChild(hc);
+  hx.type='button';hx.className='wx2';hx.textContent='\u2715';hx.title='Close';hx.setAttribute('aria-label','Close');hx.addEventListener('click',e=>{e.stopPropagation();if(ONL_OPEN)$('bParty').click()});hb.appendChild(hx);h.appendChild(hb);box.appendChild(h);
+  onlPlace();
+  const ol=document.createElement('div');ol.className='olist';box.appendChild(ol);
+  for(const q of list){
     const r=document.createElement('div');const inP=PARTY.ids.has(q.id);r.className='pn'+(q.pvp?' pvp':'')+(inP?' pty':'');r.title='Tap to whisper';r.addEventListener('click',()=>whisperTo(q.name));
     const a=document.createElement('span'),b=document.createElement('span');a.textContent=(q.pvp?'\u2694 ':'')+q.name;b.textContent='Lv '+q.lvl;r.appendChild(a);r.appendChild(b);
     if(frIs(q.name))r.classList.add('fr');
     else{const hv=document.createElement('span');hv.className='fadd2';hv.textContent='\u2665';hv.title=FR.out.some(n=>n.toLowerCase()===q.name.toLowerCase())?'Friend request already sent to '+q.name:'Send '+q.name+' a friend request';hv.addEventListener('click',e=>{e.stopPropagation();frCmd('friend',q.name)});r.appendChild(hv)}
     if(!inP&&PARTY.m.length<4){const v=document.createElement('span');v.className='inv';v.textContent='+';v.title='Invite '+q.name+' to your party';v.addEventListener('click',e=>{e.stopPropagation();partyCmd('invite',q.name)});r.appendChild(v)}
-    box.appendChild(r);
+    ol.appendChild(r);
   }
-  if(list.length>6){const r=document.createElement('div');r.className='pn';r.textContent='+ '+(list.length-6)+' more';box.appendChild(r)}
+  ol.scrollTop=st;
 }
