@@ -27,6 +27,9 @@ const PEND=[];                              /* casts that arrived before the 3D 
 const LOOK={};   /* spell sprites removed in v5_329 (none installed): sprite entries in TABLE / SIGT / FAM are skipped, only the slash meshes play */
 const SP=(p,o)=>Object.assign({p,at:'self'},o),SL=(s,o)=>Object.assign({s,at:'front'},o);
 const TABLE={
+  /* v5_343 NORMAL ATTACK of the melee classes (not a skill): a small sword slash, alternating sides (basic_a / basic_b); tx:1 = sword_slash_3 */
+  basic_a:[SL('sword',{R:38,tilt:.5,f:.3,tx:1})],
+  basic_b:[SL('sword',{R:38,tilt:-.5,f:.3,tx:1})],
   /* slashes (melee) */
   strike:[SL('sword',{R:88,tilt:.55})],
   cleave:[SL('sword',{R:104,tilt:-.5,f:.35})],
@@ -53,7 +56,7 @@ const TABLE={
   shockwave:[SP('tidal',{at:'front',k:.62,cue:.22,o:110})],
   leap:[SL('sword',{R:96,tilt:1.2,f:.35}),SP('starfire',{at:'tgt',z:230,cue:.24})],
   /* dashes */
-  shadowstep:[SP('mothgate',{at:'self',z:200,cue:.2})],
+  shadowstep:[SP('mothgate',{at:'self',z:200,cue:.2}),SL('sword',{R:100,tilt:.6,at:'tgt',f:0,d:.08,tx:2})],   /* v5_343 a sword slash through the target right after you land (tx:2 = sword_slash_4) */
   rush:[SL('sword',{R:100,tilt:.25,f:.45})],
   gale:[SP('aurora',{at:'self',z:230,cue:.2})],
   charge:[SP('tidal',{at:'front',z:230,cue:.2,o:80}),SL('sword',{R:96,tilt:.2,f:.45})],
@@ -158,6 +161,7 @@ function run(o){
   if(!list){const ov=CLS_OVR[o.t];list=(ov&&ov[o.cls|0])||TABLE[o.t];}
   if(!list){const f=FAMOF[o.t];list=f?FAM[f]:null}
   if(!list||!list.length)return;
+  if(o.t.charAt(0)==='b'&&o.t.indexOf('basic')===0&&FX.length>=(S.max||14)-4)return;   /* v5_343 normal-attack slashes never push skill effects out of the pool */
   const R=clamp(+o.r||150,60,520),f=+o.face||0,now=performance.now()/1000;
   for(const e of list){
     let px=o.x,py=o.y;

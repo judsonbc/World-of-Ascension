@@ -380,6 +380,11 @@ html.phone #lvUp{padding:10px 24px}html.phone #lvUp b{font-size:24px}html.phone 
 /* party frame + invite prompt */
 #party{position:absolute;left:calc(52*var(--u));top:calc(154*var(--u));width:calc(176*var(--u));padding:calc(6*var(--u)) calc(8*var(--u));font-size:calc(11*var(--u));display:flex;flex-direction:column;gap:calc(4*var(--u));pointer-events:auto;cursor:move;touch-action:none;background:rgba(13,17,20,.34);border-color:rgba(232,224,202,.1);backdrop-filter:none;-webkit-backdrop-filter:none;text-shadow:0 0 calc(3*var(--u)) #000,0 calc(1*var(--u)) calc(2*var(--u)) #000}
 #party.drag{outline:1px dashed rgba(95,211,165,.6)}
+#party .pmr.pk{cursor:pointer}
+#party .pmr.pk:hover{background:rgba(232,224,202,.08)}
+#pmenu{position:absolute;z-index:40;display:none;flex-direction:column;gap:4px;padding:6px;min-width:120px;border-radius:9px;border:1px solid rgba(232,224,202,.4);background:rgba(10,14,18,.94);pointer-events:auto;touch-action:manipulation}
+#pmenu .pmh{font:600 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--jade,#5fd3a5);padding:2px 4px 4px;border-bottom:1px solid rgba(232,224,202,.18);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+#pmenu button{font:600 13px var(--body);min-height:32px;padding:4px 11px;border-radius:7px;border:1px solid rgba(232,224,202,.35);background:rgba(24,30,36,.9);color:var(--paper);text-align:left;white-space:nowrap}
 #party .phd{flex:1;min-width:0;padding:calc(2*var(--u)) 0}
 #party .pbt{display:flex;gap:calc(4*var(--u));flex:0 0 auto}
 #party h4{margin:0;display:flex;justify-content:space-between;align-items:center;font:600 calc(9.5*var(--u)) var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--jade)}
@@ -1390,6 +1395,23 @@ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padd
     </div>
   </div>
 
+<!-- v5_341 WORLD TRANSFER: loading screen with a spinning gate while the next world loads (the player cannot move meanwhile) -->
+<style>#xfer{position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147481000;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(20,26,34,.82),rgba(6,8,11,.96));color:#e8e0ca;font-family:'Marcellus SC',Georgia,serif;opacity:0;transition:opacity .3s;pointer-events:none}
+#xfer[hidden]{display:none}#xfer.on{opacity:1;pointer-events:auto}
+#xfer .xb{text-align:center;width:min(80vw,340px)}
+#xfer .xg{position:relative;width:132px;height:132px;margin:0 auto 22px}
+#xfer .xg i{position:absolute;inset:0;border-radius:50%;border:3px solid transparent}
+#xfer .xg i:nth-child(1){border-top-color:var(--xc,#5fd3a5);border-bottom-color:var(--xc,#5fd3a5);animation:xspin 1.6s linear infinite}
+#xfer .xg i:nth-child(2){inset:16px;border-left-color:#e3b559;border-right-color:#e3b559;animation:xspin 1.1s linear infinite reverse}
+#xfer .xg i:nth-child(3){inset:34px;border-top-color:#d2b4ff;border-bottom-color:#d2b4ff;animation:xspin .8s linear infinite}
+#xfer .xg b{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:radial-gradient(circle,#fff,var(--xc,#5fd3a5) 60%,transparent 72%);animation:xpulse 1.2s ease-in-out infinite}
+#xfer .xt{font-size:22px;letter-spacing:.06em;color:var(--xc,#e3b559);margin-bottom:6px}
+#xfer .xs{font:13px -apple-system,BlinkMacSystemFont,sans-serif;color:#8d9aa2;min-height:18px}
+#xfer .xr{height:5px;border-radius:4px;background:rgba(232,224,202,.14);overflow:hidden;margin-top:14px}
+#xfer .xr i{display:block;height:100%;width:38%;border-radius:4px;background:linear-gradient(90deg,#5fd3a5,#e3b559);animation:xbar 1.4s ease-in-out infinite}
+@keyframes xspin{to{transform:rotate(360deg)}}@keyframes xpulse{0%,100%{transform:scale(.7);opacity:.7}50%{transform:scale(1.25);opacity:1}}@keyframes xbar{0%{margin-left:-38%}100%{margin-left:100%}}
+@media (prefers-reduced-motion:reduce){#xfer .xg i,#xfer .xg b,#xfer .xr i{animation-duration:3s}}</style>
+<div id="xfer" hidden><div class="xb"><div class="xg"><i></i><i></i><i></i><b></b></div><div class="xt" id="xfT">Entering...</div><div class="xs" id="xfS">Opening the World Gate...</div><div class="xr"><i></i></div></div></div>
 <!-- v5_309 AVATAR LOADING (after login): all 10 avatars are downloaded before the title / game screen; no skip button -->
 <style>#avl{position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147482000;background:#0d1114;color:#e8e0ca;display:flex;align-items:center;justify-content:center;font-family:'Marcellus SC',Georgia,serif}
 #avl[hidden]{display:none}#avl .lb{width:min(78vw,340px);text-align:center}#avl .lt{font-size:22px;letter-spacing:.06em;margin-bottom:22px;color:#e3b559}

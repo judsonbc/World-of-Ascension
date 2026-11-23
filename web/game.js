@@ -987,7 +987,7 @@ function takeGear(it){
 const RANGE_FALL=.5,RANGED_CAP=.5;
 /* v5_80 NORMAL ATTACK RANGE per class [Cultivator, Night Blade, Iron Guardian, Storm Archer, Spirit Summoner]: 0 = melee (body size + 30), otherwise the attack
    reaches that many units. Ranged normal attacks lose up to BASIC_FALL of their damage at full range and you stand at BASIC_STAND of the range from the target. */
-const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','','','#9fe8c8','#9fe0ff'];
+const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','','','#9fe8c8','#9fe0ff'],BASIC_PSPD=1500,MELEE_BASIC_COL=['#cfe8ff','#c7a8ff','#ffcf8a'];let basicSwN=0; /* v5_343 MELEE_BASIC_COL = tint of the small slash of the melee normal attack (Cultivator, Night Blade, Iron Guardian); basicSwN alternates its side */ /* v5_343 BASIC_PSPD = speed of the visible bolt of the ranged normal attack (Storm Archer / Spirit Summoner); cosmetic only, the damage is still instant */
 function rangedDmg(m,d,fr){d=Math.round(d*(1-RANGE_FALL*clamp(fr,0,1)));if(!m.boss)d=Math.min(d,Math.max(1,Math.round(m.maxhp*RANGED_CAP)));return d}
 const CRIT_MUL=1.8;
 const SKILL_GCD=1; /* seconds between two skill casts (manual or auto); v5_190: 0.45 -> 1; v5_192: 2; v5_193: back to 1 */
@@ -1516,14 +1516,14 @@ function switchClass(c){
    v5_311: moving by hand (keys / joystick / tap to move) while auto-hunt is on is free; the zone where you stop becomes the new anchor (no prompt). */
 const AUTO_REALM_SPAN=1;let autoAnc=null; /* {w:world, z:zone index} while auto-hunt is on */
 function zoneIdxAt(x,y){const d=dist(x,y,C,C);for(let k=0;k<ZONES.length-1;k++)if(d<ZONES[k].d)return k;return ZONES.length-1}
-function autoAnchorNow(){autoAnc={w:curWorld,z:zoneIdxAt(P.x,P.y)}}
+function autoAnchorNow(){autoAnc={w:curWorld,z:zoneIdxAt(P.x,P.y),x:P.x,y:P.y}} /* v5_335 x,y = the spot where the anchor was set: after a death the player RUNS back to it (P.arRun, see respawn) */
 function autoRealmLimits(){ /* [lowest, highest] allowed zone index, or null = no limit (auto-hunt off, or the Arena which has no zones) */
   if(!auto||curWorld===ARENA||!ZONES.length)return null;
   if(!autoAnc||autoAnc.w!==curWorld)autoAnchorNow();
   return [Math.max(0,autoAnc.z-AUTO_REALM_SPAN),Math.min(ZONES.length-1,autoAnc.z+AUTO_REALM_SPAN)];
 }
 function autoRealmClamp(){
-  if(P.arMoving)return; /* v5_311 walking by hand: free until you stop, then autoAnchorNow() sets the new starting realm (05_render2d.js) */
+  if(P.arMoving||P.arRun)return; /* v5_335 P.arRun = running back to the anchor after a death: no teleport. */ /* v5_311 walking by hand: free until you stop, then autoAnchorNow() sets the new starting realm (05_render2d.js) */
   const L=autoRealmLimits();if(!L)return;
   const z=zoneIdxAt(P.x,P.y);if(z>=L[0]&&z<=L[1])return;
   const d=dist(P.x,P.y,C,C),a=d>1?Math.atan2(P.y-C,P.x-C):0;
@@ -1715,6 +1715,9 @@ function peerAt(wx,wy,ex){
 function respawn(){
   P.dashT=0;P.dg=0;
   P.x=C;P.y=C+110;P.hp=maxHp();P.qi=maxQi();P.dead=0;P.bfT=0;P.sh=0;
+  P.fol=null; /* v5_338 a death ends 'follow the leader' */
+  /* v5_335 auto-hunt still on after a death: run from the hub back to where auto-hunt was started instead of being teleported by autoRealmClamp (05_render2d.js) */
+  P.arRun=(auto&&autoAnc&&autoAnc.w===curWorld&&curWorld!==ARENA&&autoAnc.x!==undefined)?{x:autoAnc.x,y:autoAnc.y,t:0}:null;
 }
 
 /* ---------- forge ---------- */
@@ -1837,14 +1840,37 @@ function renderForge(){
   }
   if(!FGV.raf)FGV.raf=requestAnimationFrame(fgPreview);
 }
+/* v5_341 WORLD TRANSFER SCREEN: while the next world loads a spinning gate covers the screen and the player cannot move (updatePlayer returns early while P.xfer is set).
+   It ends when the world is built (arriveWorld / the server's 'world' answer), after at least XFER_MIN seconds so it never just flickers; after XFER_MAX seconds without an answer it gives up. */
+const XFER_MIN=.7,XFER_MAX=15;let xferT0=0,xferTm=0,xferFin=0;
+function xferShow(i){
+  const w=W[i],el=$('xfer');if(!el)return;
+  el.style.setProperty('--xc',w.acc||'#5fd3a5');
+  $('xfT').textContent='Entering '+w.n;$('xfS').textContent=MP?'Connecting to the shared world...':'Building the world...';
+  el.hidden=false;void el.offsetWidth;el.classList.add('on');
+  P.xfer=true;P.mv=null;P.target=null;P.task=null;P.mine=0;stopMine();
+  xferT0=performance.now();clearTimeout(xferTm);clearTimeout(xferFin);
+  xferTm=setTimeout(()=>{if(!P.xfer)return;NET.pendingEnter=-1;xferHide(true);say('The world did not answer in time. Stay here and try the World Gate again.','#d9503f')},XFER_MAX*1000);
+}
+function xferHide(now){
+  const el=$('xfer');if(!el)return;
+  if(!P.xfer&&el.hidden)return;
+  clearTimeout(xferTm);clearTimeout(xferFin);
+  const wait=now?0:Math.max(0,XFER_MIN*1000-(performance.now()-xferT0));
+  xferFin=setTimeout(()=>{el.classList.remove('on');P.xfer=false;setTimeout(()=>{if(!P.xfer)el.hidden=true},320)},wait);
+}
 function enterWorld(i){
+  if(P.xfer)return;
+  xferShow(i);
   if(MP){NET.pendingEnter=i;netSend({t:'world',w:i});$('worlds').hidden=true;return} /* the server answers with the shared world */
-  arriveWorld(i);
+  $('worlds').hidden=true;
+  setTimeout(()=>arriveWorld(i),120); /* lets the screen paint before the (blocking) world build */
 }
 function arriveWorld(i,spawn){
   buildWorld(i,spawn);
   P.x=C;P.y=C+110;P.hp=maxHp();P.qi=maxQi();P.target=null;P.mv=null;P.task=null;P.mine=0;P.pvpT=0;stopMine();
   $('worlds').hidden=true;
+  xferHide();ring(P.x,P.y,110,'#ffffff');ring(P.x,P.y,70,W[i].acc||'#5fd3a5');spark(P.x,P.y,'#ffffff',26,240,.8,3.2,100); /* v5_341 arrival flash */
   say(i===ARENA?'You enter the Arena. Pick a PvP mode (PvP button) to fight \u2014 Peaceful players cannot attack.':'Entered '+W[i].n+' (monsters Lv '+W[i].lo+'-'+W[i].hi+').',W[i].acc);save();
 }
 function renderWorlds(){
@@ -3003,7 +3029,7 @@ window.addEventListener('pointermove',e=>{
   if(camDist>20&&i.d>20&&MODE3D)T3.zoom=clamp(T3.zoom*camDist/i.d,ZOOM_MIN,2.2);
   camMid={x:i.x,y:i.y};camDist=i.d;P.mv=null;
 });
-/* v5_110 CONTROLS. PC: left click = move (marker shows where) / select / attack, right-drag or middle-drag = rotate + tilt, wheel = zoom, plain right click on a player = PvP.
+/* v5_110 CONTROLS. PC: left click = move (marker shows where) / select / attack, right-drag or middle-drag = rotate + tilt, wheel = zoom, left click on a player = select, right click on a player = attack (PvP).
    Phone: one tap = move (or select a monster / player / ore), touch and drag = rotate + tilt, pinch = zoom, double tap on a monster or player = attack. */
 const TAP_SLOP=16; /* v5_312 touch: a tap may wobble up to 16 px (was 10: a normal finger tap on a phone was often read as a camera drag and ignored) */
 const lc={id:null,x:0,y:0,sx:0,sy:0,moved:0,ev:null};
@@ -3035,8 +3061,7 @@ cv.addEventListener('contextmenu',e=>{
   const q=MP?(scrPick(e,[...NET.peers.values()].filter(o=>!o.dead))||peerAt(wx,wy,w3?20:0)):null;
   /* v5_110 right button: drag = rotate the camera; a plain right click on a player = PvP select / attack. (Moving is the LEFT click again.) */
   if(!q)return;
-  if(P.sel===q)startPvp(q);   /* 2nd right click on the selected player: attack */
-  else P.sel=q;               /* 1st right click: select only */
+  P.sel=q;startPvp(q);        /* v5_336 right click on a player = select AND attack (left click only selects, see cvClick0) */
 });
 let tapO=null,tapT=0;
 /* v5_312 snapCam / cvClick: the tap is resolved with the camera of the moment you PRESSED (the player keeps running until you release, which moved the camera and put the destination beside the spot you pointed at) */
@@ -3052,11 +3077,13 @@ function cvClick0(e){
   const w3=(MODE3D&&T3.r)?pick3(e):null,sky3=MODE3D&&T3.r&&!w3,wx=w3?w3.x:sky3?NaN:e.clientX-r.left+cam.x,wy=w3?w3.y:sky3?NaN:e.clientY-r.top+cam.y,ex=w3?20:0; /* v5_312 a click on the sky has no ground point: NaN so it can no longer 'hit' the shop / an ore / a monster through made-up 2D coordinates */
   if(inTown()&&dist(NPC.x,NPC.y,wx,wy)<46+ex){openShop();return}
   /* touch: tapping another player SELECTS them (no right-click on a phone); the action bar under the target frame offers Inspect / Attack / Party / Friend / Whisper */
-  if(MP&&(PHONE||e.pointerType==='touch'||e.pointerType==='pen')){
-    const q=scrPick(e,[...NET.peers.values()].filter(o=>!o.dead))||peerAt(wx,wy,ex+14);
+  /* v5_336 mouse: a LEFT click on another player now SELECTS them too (right click attacks, see the contextmenu handler). Touch: tap selects, double tap attacks. */
+  if(MP){
+    const touch=PHONE||e.pointerType==='touch'||e.pointerType==='pen';
+    const q=scrPick(e,[...NET.peers.values()].filter(o=>!o.dead))||peerAt(wx,wy,touch?ex+14:ex+6);
     if(q){
       const now=performance.now();
-      if(P.sel===q&&tapO===q&&now-tapT<450){tapT=0;startPvp(q);return} /* v5_110 double tap on a player = attack (PvP) */
+      if(touch&&P.sel===q&&tapO===q&&now-tapT<450){tapT=0;startPvp(q);return} /* v5_110 double tap on a player = attack (PvP) */
       P.sel=q;if(P.target&&P.target!==q)P.target=null;tapO=q;tapT=now;return}
   }
   /* monsters: 1st left click SELECTS (nothing attacks yet), 2nd left click on the same monster ATTACKS it */
@@ -3066,19 +3093,19 @@ function cvClick0(e){
     if(m){
       const now=performance.now(),touch=e.pointerType==='touch'||e.pointerType==='pen';
       /* mouse: 2nd click on the selected monster attacks; touch: DOUBLE TAP (within 0.45 s) attacks, a single tap only selects */
-      if(P.sel===m&&(!touch||(tapO===m&&now-tapT<450))){P.target=m;P.task=null;P.mv=null;tapT=0}
+      if(P.sel===m&&(!touch||(tapO===m&&now-tapT<450))){P.target=m;P.task=null;P.mv=null;P.fol=null;tapT=0}
       else{P.sel=m;tapO=m;tapT=now}
       return}
   }
-  /* players are NOT targeted with the left button: PvP is right click only (contextmenu handler above) */
+  /* players: left click selects (above), right click attacks (contextmenu handler) */
   for(const o of ores){
-    if(o.cd<=0&&dist(o.x,o.y,wx,wy)<50+ex){P.sel=null;P.task=o;P.target=null;P.mv=null;P.mine=0;return}
+    if(o.cd<=0&&dist(o.x,o.y,wx,wy)<50+ex){P.sel=null;P.task=o;P.target=null;P.mv=null;P.fol=null;P.mine=0;return}
   }
   /* v5_110 left click / single tap on the ground = move there. A ripple + a marker on the ground show the destination. */
   let gx=wx,gy=wy;if(MODE3D&&T3.r&&!w3){const h=skyHeading(e);if(!h)return;gx=P.x+h.x*600;gy=P.y+h.y*600}
   {const dc=dist(gx,gy,C,C);if(dc>RIM-60){gx=C+(gx-C)/dc*(RIM-60);gy=C+(gy-C)/dc*(RIM-60)}} /* v5_312 the world-edge clamp now also applies to a normal ground click */ /* v5_276 clicked the sky / above the horizon: walk 600 units toward that direction */
   if(PHONE&&P.tapMove===false)return; /* v5_134 phone option 'Tap to move' is off: the joystick is the only way to walk (monsters, ore and the shop can still be tapped) */
-  P.sel=null;P.mv={x:gx,y:gy};P.target=null;P.task=null;stopMine('Auto-mine off.');
+  P.sel=null;P.mv={x:gx,y:gy};P.target=null;P.task=null;P.fol=null;stopMine('Auto-mine off.');
   ring(gx,gy,46,'#8ff0c4');ring(gx,gy,26,'#ffffff');
 }
 
@@ -3586,7 +3613,7 @@ function pat2d(cv,k,ox,oy){
    Other players see your height: one small 'jz' effect message (rate limited, only while you are off the ground). */
 const JUMP_T=.7,JUMP_H=88,JUMP_CD=.25,STEP=12,JUMP_V0=4*JUMP_H/JUMP_T,JUMP_G=8*JUMP_H/(JUMP_T*JUMP_T);
 function doJump(){
-  if(!started||P.dead>0||P.air||P.jcd>0)return;
+  if(!started||P.dead>0||P.xfer||P.air||P.jcd>0)return;
   P.air=true;P.vz=JUMP_V0;
   ring(P.x,P.y,34,'#d9f2ff');spark(P.x,P.y,'#e8f6ff',8,90,.35,2.8);SFX('dodge');
 }
@@ -3782,6 +3809,7 @@ function solidPush(o){
 }
 function updatePlayer(dt){
   if(P.dead>0){P.air=false;P.vz=0;P.jz=0;P.dead-=dt;if(P.dead<=0)respawn();return}
+  if(P.xfer){P.mv=null;P.target=null;P.task=null;P.mine=0;P.arRun=null;P.fol=null;return} /* v5_341 world transfer: standing still while the next world loads */
   P.atkCd-=dt;P.hurt-=dt;P.swing-=dt;
   P.pvpT=(MP&&PVPLVL>0&&P.dead<=0&&!inTown())?1:0; /* v5_158 legacy flag, now simply 'my mode lets me attack players' (the old 30 s flag and the always-on Arena are gone) */
   const ox0=P.x,oy0=P.y;
@@ -3813,7 +3841,16 @@ function updatePlayer(dt){
     {const r=camRot(ix,iy);ix=r[0];iy=r[1]}
     const l=Math.max(.001,Math.hypot(ix,iy));   /* v5_307 unit direction: the speed no longer follows the push, only the walk zone slows it (sf) */
     P.x+=ix/l*speed*sf*dt;P.y+=iy/l*speed*sf*dt;if(!(P.dashT>0&&P.dg===3))P.face=Math.atan2(iy,ix);   /* v5_304 a back dive keeps facing the front */
-    P.mv=null;P.task=null;P.mine=0;P.fatk=false;stopMine('Auto-mine off.');P.arMvNow=true; /* v5_311 you are steering by hand */
+    P.mv=null;P.task=null;P.mine=0;P.fatk=false;P.arRun=null;P.fol=null;stopMine('Auto-mine off.');P.arMvNow=true; /* v5_311 you are steering by hand */
+  }else if(P.fol&&folStep(dt,speed)){
+    /* v5_338 following the party leader (see folStep): out of range -> run to the leader; in range the normal fight / auto-hunt rules below apply */
+  }else if(P.arRun){
+    /* v5_335 running back to the auto-hunt anchor after a death (set in respawn). Steering by hand cancels it (the branch above), auto-hunt off / another world / 40 s
+       without arriving ends it (the realm clamp then puts the player back as before). Monsters are ignored on the way; the anchor itself is not changed. */
+    const r=P.arRun;r.t+=dt;
+    /* stuck watchdog: the distance to the anchor must shrink by 40 within every 2.5 s, else the run is given up (a building / structure in the way) and the realm clamp teleports as before */
+    const dl=Math.hypot(r.x-P.x,r.y-P.y);if(r.bd===undefined||dl<r.bd-40){r.bd=dl;r.st=0}else r.st=(r.st||0)+dt;
+    if(!auto||curWorld===ARENA||!autoAnc||r.t>40||r.st>2.5||moveToward(r.x,r.y,40,dt,speed))P.arRun=null;
   }else if(P.task){
     const o=P.task;
     if(o.cd>0){P.task=null;P.mine=0}
@@ -3843,9 +3880,9 @@ function updatePlayer(dt){
     if(P.target&&dist(m.x,m.y,P.x,P.y)<=reach&&P.atkCd<=0){
       P.face=Math.atan2(m.y-P.y,m.x-P.x);
       const c=rnd()<critChance(),dd=dist(m.x,m.y,P.x,P.y);let d=Math.round(atkVal()*(.9+rnd()*.2)*(c?critMul():1)*(1+babVal()/100));
-      if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));for(let q=1;q<=6;q++)spark(P.x+(m.x-P.x)*q/6,P.y+(m.y-P.y)*q/6,BASIC_COL[P.cls],1,30,.25,2.2)} /* ranged normal attack: damage falloff + a short bolt trail */
+      if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));{const l=Math.max(.06,dd/BASIC_PSPD);projs.push({x:P.x,y:P.y,vx:Math.cos(P.face)*BASIC_PSPD,vy:Math.sin(P.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:P.face,col:BASIC_COL[P.cls],cos:true})}} /* ranged normal attack: damage falloff + a visible bolt (v5_343: cosmetic projectile flying to the target, replaces the old 6-spark trail; cos:true = it never hits anything) */
       if(m.isPl)hitPeer(m,d,c);else hitMonster(m,d,c);
-      P.qi=Math.min(maxQi(),P.qi+3);P.atkCd=atkCd();P.skT='';P.swing=.18;SFX('swing');fxs({k:'sw',f:+P.face.toFixed(2)});
+      P.qi=Math.min(maxQi(),P.qi+3);P.atkCd=atkCd();P.skT='';P.swing=.18;SFX('swing');fxs({k:'sw',f:+P.face.toFixed(2)});if(!rng)skfxCast({t:(basicSwN^=1)?'basic_a':'basic_b',cls:P.cls,x:P.x,y:P.y,face:P.face,tx:m.x,ty:m.y,r:70,col:MELEE_BASIC_COL[P.cls]}); /* v5_343 small sword slash on a melee normal attack */
     }
   }else if(P.mv){
     P.arMvNow=true; /* v5_311 click / tap to move is a move command too */
@@ -4150,7 +4187,7 @@ function drawMonster(m){
   else if(m.state==='chase'&&!m.dead)m.dir=P.x>=m.x?1:-1;
   m.lx=m.x;m.ly=m.y;
   const st=TYPES.indexOf(m.t),sc=m.boss?(m.lvl>60?2.3:1.9):m.r/14,col=m.flash>0?'#ffffff':m.col;
-  const k=m.dead?Math.max(0,(m.dieT||0)/.5):1;
+  const k=m.dead?Math.max(0,(m.dieT||0)/.5):m.pend?Math.max(0,1-(m.pendT||0)/.35):1; /* v5_339 predicted kill fades out */
   if(m.boss&&!m.dead){
     ctx.strokeStyle='rgba(227,181,89,'+(.35+.2*Math.sin(time*3))+')';ctx.lineWidth=3;
     ctx.beginPath();ctx.ellipse(x,y+8*sc,30*sc*.8,10*sc*.8,0,0,6.2832);ctx.stroke();
@@ -4255,7 +4292,7 @@ function drawMonster(m){
     }
   }
   ctx.restore();
-  if(m.dead)return;
+  if(m.dead||m.pend)return;
   const topY=y-(m.boss?32.6*sc:26*sc);
   if(m.state==='chase'||m.hp<m.maxhp)bar(x,topY,m.boss?56:34,m.hp/m.maxhp,m.boss?'#e3b559':'#d9503f');
   ctx.fillStyle=m.lvl>P.lvl+4?'#ff8a7a':'#e8e0ca';ctx.font='600 11px Figtree,system-ui,sans-serif';ctx.textAlign='center';
@@ -5036,7 +5073,7 @@ function mkMon(m){
   bg.position.set(-1.2,by,0);bg.scale.set(2.4,.28,1);fg.position.set(-1.2,by,0);fg.scale.set(2.4,.2,1);
   const dm=g.userData.mat;g.userData.fg=fg;g.userData.bar=[bg,fg];g.userData.mat={dispose(){dm.dispose();bg.material.dispose();fg.material.dispose()}};
   return g}
-function updMon(g,m){const u=g.userData,k=m.dead?Math.max(0,Math.min(1,m.dieT*2.5)):1,s=m.r*(m.boss?1.15:1)*k+.01;
+function updMon(g,m){const u=g.userData,k=m.dead?Math.max(0,Math.min(1,m.dieT*2.5)):m.pend?Math.max(0,1-(m.pendT||0)/.35):1,s=m.r*(m.boss?1.15:1)*k+.01;
   g.scale.set(s,s*(m.dead?.4:1),s);g.position.set(m.x-C,gh3(m.x,m.y),m.y-C);
   const dx=P.x-m.x,dy=P.y-m.y;
   /* facing: a monster looks where it is walking (chasing, wandering or heading home), so it never walks backwards.
@@ -5060,7 +5097,7 @@ function updMon(g,m){const u=g.userData,k=m.dead?Math.max(0,Math.min(1,m.dieT*2.
   {const md=Math.hypot(dx,dy),al=T3.al|0;let ms=1;
     if(ALOD&&!u.boss){const am=PQ.lock?PQ.am:(LOW?2:1);ms=(md>420?Math.max(am,al?2:1):1)+(al>1?1:0)}   /* v5_331 far monsters pose every 2nd (3rd) frame on a weak device / slow frame; near ones and bosses every frame (the pose is a function of time, so nothing is missed) */
     if(ms<2||((T3.fr+((u.seed*977)|0))%ms)===0)AL3D.animMonster(g,m,time,md)}
-  const f=m.hp/m.maxhp,v=!m.dead&&f<.999;u.bar.forEach(b=>b.visible=v);u.fg.scale.x=2.4*Math.max(.001,f)}
+  const f=m.hp/m.maxhp,v=!m.dead&&!m.pend&&f<.999;u.bar.forEach(b=>b.visible=v);u.fg.scale.x=2.4*Math.max(.001,f)}
 /* v5_170 hide the ground rings (level aura + forge ring/band) of a 3D character while it is off the ground; restores them on landing */
 function jumpRings(R,jz){
   if(jz>2){if(!R.jh){R.jh=1;R.jv=[R.ogl.visible,R.ogb.visible]}R.aura.visible=false;R.ogl.visible=false;R.ogb.visible=false}
@@ -5499,6 +5536,7 @@ function netConnect(){
     if(NET.ws!==ws)return; /* an old socket: already handled */
     const was=NET.on;NET.on=false;NET.joined=false;NET.ws=null;
     setParty([]);pinvHide();
+    if(P.xfer){NET.pendingEnter=-1;xferHide(true)} /* v5_341 */
     if(MP){MP=false;NET.peers.clear();buildWorld(curWorld);P.target=null;P.pvpT=0;say('Connection lost \u2014 playing solo while reconnecting\u2026','#d9503f')}
     if(!was)NET.fails++;
     setNetStatus();
@@ -5619,8 +5657,63 @@ function renderParty(){
       a.insertBefore(k,l);
     }b.className='pb';f.style.width=clamp(x.hp/x.mh,0,1)*100+'%';b.appendChild(f);
     r.appendChild(a);r.appendChild(b);box.appendChild(r);
+    if(!me)pmBind(r,x);
   }
-  partyPlace();
+  pmCheck();partyPlace();
+}
+/* v5_337 click a party mate in the party window: a small menu with Whisper / Move / Inspect. Move = walk to where that player is now (same world only); Inspect = the gear window (needs them in your world). */
+const PM={id:-1,el:null};
+function pmClose(){PM.id=-1;if(PM.el)PM.el.style.display='none'}
+function pmCheck(){if(PM.id>=0&&!PARTY.m.some(x=>x.id===PM.id))pmClose()}
+function pmPeer(x,why){const q=(MP&&x.w===curWorld)?NET.peers.get(x.id):null;if(!q)say(x.n+' is not in your world, so you cannot '+why+' them.','#8d9aa2');return q}
+function pmOpen(r,x){
+  const hud=$('hud');
+  if(!PM.el){
+    const m=document.createElement('div');m.id='pmenu';hud.appendChild(m);PM.el=m;
+    document.addEventListener('pointerdown',e=>{if(PM.id>=0&&!(e.target.closest&&(e.target.closest('#pmenu')||e.target.closest('#party .pmr'))))pmClose()},true);
+    addEventListener('keydown',e=>{if(e.key==='Escape'&&PM.id>=0)pmClose()});
+  }
+  const m=PM.el;m.innerHTML='';PM.id=x.id;
+  const mk=(txt,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=txt;b.addEventListener('click',e=>{e.stopPropagation();pmClose();fn()});b.addEventListener('pointerdown',e=>e.stopPropagation());m.appendChild(b)};
+  const hd=document.createElement('div');hd.className='pmh';hd.textContent=x.n;m.appendChild(hd);
+  mk('\u{1F4AC} Whisper',()=>whisperTo(x.n));
+  mk('\u{1F3C3} Move',()=>{if(P.dead>0)return;const q=pmPeer(x,'move to');if(!q)return;P.sel=null;P.target=null;P.task=null;stopMine('Auto-mine off.');P.mv={x:q.x,y:q.y};ring(q.x,q.y,46,'#8ff0c4')});
+  mk('\u{1F50D} Inspect',()=>{const q=pmPeer(x,'inspect');if(q)pgOpen(q)});
+  /* v5_338 only the party LEADER's row offers Follow, and only to the other members */
+  if(x.id===PARTY.lead&&!isLeader()){
+    if(P.fol&&P.fol.id===x.id)mk('\u23F9 Stop following',()=>{P.fol=null;say('You stopped following '+x.n+'.','#8d9aa2')});
+    else mk('\u{1F463} Follow',()=>{if(P.dead>0)return;const q=pmPeer(x,'follow');if(!q)return;P.sel=null;P.target=null;P.task=null;P.mv=null;stopMine('Auto-mine off.');P.fol={id:x.id,go:true};say('Following '+x.n+'. Walk, click the ground or pick a target to stop.','#5fd3a5')});
+  }
+  m.style.display='flex';
+  const hr=hud.getBoundingClientRect(),rr=r.getBoundingClientRect(),w=m.offsetWidth||130,h=m.offsetHeight||120;
+  let lx=rr.right-hr.left+6;if(lx+w>hr.width)lx=Math.max(0,rr.left-hr.left-w-6);
+  m.style.left=lx+'px';m.style.top=clamp(rr.top-hr.top,0,Math.max(0,hr.height-h))+'px';
+}
+/* v5_338 FOLLOW THE LEADER: run after the party leader (same world). It starts when you are more than FOL_FAR away and runs until you are within FOL_NEAR; in between your normal
+   fighting / auto-hunt rules apply, so you can fight next to the leader. It ends when you steer, click the ground / a monster / an ore, die, the leader changes or is not in your world. */
+const FOL_FAR=260,FOL_NEAR=110;
+function folStep(dt,speed){
+  const f=P.fol;if(!f)return false;
+  if(!MP||PARTY.m.length<2||PARTY.lead!==f.id||PARTY.lead===NET.id){P.fol=null;return false}
+  const q=NET.peers.get(f.id);
+  if(!q){const m=PARTY.m.find(x=>x.id===f.id);P.fol=null;say('Stopped following'+(m?' '+m.n:'')+': not in your world.','#8d9aa2');return false}
+  if(q.dead)return false;
+  const d=dist(q.x,q.y,P.x,P.y);
+  if(!f.go&&d>FOL_FAR){f.go=true;P.target=null;P.fatk=false}
+  if(!f.go)return false;
+  if(moveToward(q.x,q.y,FOL_NEAR,dt,speed)){f.go=false;return false}
+  P.arMvNow=true; /* counts as walking: the auto-hunt realm limit waits and the anchor is set where you stop */
+  return true;
+}
+function pmBind(r,x){
+  r.classList.add('pk');let dn=null;
+  r.addEventListener('pointerdown',e=>{dn={x:e.clientX,y:e.clientY}}); /* the window is also dragged by its rows: only a click that did not move opens the menu */
+  r.addEventListener('click',e=>{
+    if(e.target.closest&&e.target.closest('button'))return;
+    if(dn&&Math.hypot(e.clientX-dn.x,e.clientY-dn.y)>6)return;
+    if(PM.id===x.id){pmClose();return}
+    pmOpen(r,x);
+  });
 }
 $('pinvY').addEventListener('click',()=>partyCmd('accept'));
 $('pinvN').addEventListener('click',()=>partyCmd('decline'));
@@ -5827,6 +5920,7 @@ function netMsg(m){
       MP=true;
       if(entering)arriveWorld(m.w,m.mons);else buildWorld(m.w,m.mons);
       for(const e of (m.ores||[]))if(ores[e[0]])ores[e[0]].cd=e[1];
+      if(!entering)xferHide(); /* v5_341 */
       if(!entering)say('Joined the shared world of '+W[m.w].n+' \u00b7 '+(NET.peers.size+1)+' here.',W[m.w].acc);
       break}
     case 's':onSnap(m);break;
@@ -5847,7 +5941,7 @@ function netMsg(m){
       }
       announceBosses(out);break}
     case 'bx':{const o=monAt(m.i);if(o&&!o.dead){o.dead=true;o.dieT=0;o.respawn=1e9;o.pend=false;if(P.target===o)P.target=null;say(o.name+' (Lv '+o.lvl+') has vanished.','#8d9aa2')}break}
-    case 'hurt':if(MP&&P.dead<=0){const o=monAt(m.i);if(o)o.atkT=.25;hurtPlayer(Math.max(1,m.d|0),false,o?o.lvl:P.lvl,o);retaliate(o)}break;
+    case 'hurt':if(MP&&P.dead<=0&&!inTown()){const o=monAt(m.i); /* v5_340 the hub is safe: a hit the server sent before it learned you were in the hub (slow link) is ignored */if(o)o.atkT=.25;hurtPlayer(Math.max(1,m.d|0),false,o?o.lvl:P.lvl,o);retaliate(o)}break;
     case 'o':if(ores[m.i])ores[m.i].cd=+m.cd||30;break;
     case 'pj':{const i=m.p;if(i&&i.id!==NET.id&&MP){NET.peers.set(i.id,mkPeer(i));say(String(i.n)+' entered the world.','#5fd3a5')}break}
     case 'pl':{const q=NET.peers.get(m.id);if(q){NET.peers.delete(m.id);say(q.name+' left.','#8d9aa2');if(PG.id===m.id)pgClose()}break}
@@ -5991,6 +6085,9 @@ function updateMonstersMP(dt){
   for(const m of mons){
     if(m.flash>0)m.flash-=dt;
     if(m.predT>0)m.predT-=dt;
+    /* v5_339 a predicted kill (hp 0, waiting for the server's 'd') fades out at once instead of standing there at 0 hp while a slow connection delivers the message. It comes back by itself if the
+       server says it is still alive (onSnap hp > 0 clears pend). If nothing confirms it for 4 s it is hidden as a ghost; a later snapshot entry brings it back (onSnap 'respawned'). */
+    if(m.pend){m.pendT=(m.pendT||0)+dt;if(m.pendT>4){m.dead=true;m.dieT=0;m.pend=false;m.pendT=0;if(P.target===m)P.target=null}}else m.pendT=0;
     if(m.dead){m.dieT=Math.max(0,(m.dieT||0)-dt);continue}
     m.atkT=Math.max(0,(m.atkT||0)-dt);
     if(m.tx!==undefined){const dx=m.tx-m.x,dy=m.ty-m.y;if(dx*dx+dy*dy>90000){m.x=m.tx;m.y=m.ty}else{m.x+=dx*k;m.y+=dy*k}}
@@ -6014,7 +6111,7 @@ function playFx(m){
         ring(p[i+2],p[i+3],40,col);
       }
       break}
-    case 'sw':if(q){q.swing=.18;q.skT='';q.face=+m.f||0}break;
+    case 'sw':if(q){q.swing=.18;q.skT='';q.face=+m.f||0;const bc=(q.sk>>>21)&7;if(BASIC_RANGE[bc]&&projs.length<200&&dist(q.x,q.y,P.x,P.y)<1600){const l=BASIC_RANGE[bc]*BASIC_STAND/BASIC_PSPD;projs.push({x:q.x,y:q.y,vx:Math.cos(q.face)*BASIC_PSPD,vy:Math.sin(q.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:q.face,col:BASIC_COL[bc],cos:true})}else if(bc<3&&dist(q.x,q.y,P.x,P.y)<900)skfxCast({t:(basicSwN^=1)?'basic_a':'basic_b',cls:bc,x:q.x,y:q.y,face:q.face,r:70,col:MELEE_BASIC_COL[bc]})}break; /* v5_343 other players' ranged normal attack: a cosmetic bolt over the usual standing distance */
     case 'an':if(q){q.skT=String(m.s||'').slice(0,14);q.skTi=(q.skTi|0)+1;q.swing=.2;if(dist(q.x,q.y,P.x,P.y)<1600)skfxCast({t:q.skT,cls:(q.sk>>>21)&7,x:q.x,y:q.y,face:q.face,r:150,col:col})}break;   /* v5_322 another player's skill: its move (anim3d.js) */
     case 'em':if(q){q.emo={n:String(m.e||'').slice(0,12)||null,id:(q.emo?q.emo.id:0)+1}}break;   /* v5_322 another player's emote (/dance ...) */
     case 'ac':if(q){q.act={n:String(m.e||'').slice(0,12),id:(q.act?q.act.id:0)+1}}break;   /* v5_322 another player's one-shot move (drinking ...) */

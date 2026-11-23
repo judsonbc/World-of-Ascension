@@ -42,6 +42,11 @@ const SLIDE=[['Slide_Start',0,.45,1.6],['Slide_Exit',0,.4,1.4]];                
 const CLAW=[['Zombie_Scratch',.25,1.1,1.4]];                                                          /* clawing swipe: venom, blood fang, vampiric edge */
 const SWORDS3=[['Sword_Regular_A',0,.43,1.6],['Sword_Regular_B',0,.53,1.6],['Sword_Regular_A',0,.43,1.7]];
 const BLOCK=[['Sword_Block',0,.7,1.4]];
+/* v5_342 more moves from the clips that only /emote used */
+const KNEEL=[['Fixing_Kneeling',0,1.1,1.5]];                                                         /* down on one knee, a hand to the ground: summoning from the earth */
+const TORCH=[['Idle_Torch_Loop',0,1.0,1.1],['Idle_Rail_Call',0,.9,1.3]];                              /* raise a hand / torch, then call */
+const PULL=[['Spell_Simple_Enter',0,.4,1.7],['PickUp_Table',.3,.87,1.3]];                             /* reach out, then pull back: chains, binding */
+const LSLIDE=[['Slide_Start',0,.4,1.7],['Slide_Loop',.2,.9,1.5]];                                     /* a longer slide: gale step, windrunner, afterimage */
 const AIMUP=[['Pistol_Aim_Up',0,.17,1],['Pistol_Shoot',0,.55,1.1]],AIMDN=[['Pistol_Aim_Down',0,.17,1],['Pistol_Shoot',0,.55,1.1]],AIMNE=[['Pistol_Aim_Neutral',0,.17,1],['Pistol_Shoot',0,.55,1.1]];   /* archer: the bow stays aimed (up = rain / sky, down = traps, level = shots) */
 const SKILL={
   /* Cultivator */
@@ -53,24 +58,24 @@ const SKILL={
   kunai:THROW,shadowstep:SLIDE,venom:CLAW,bladestorm:[['Sword_Regular_Combo',1.0,2.1,1.5]],smoke:[['Crouch_Idle_Loop',.2,.9,1.3]],
   execute:[['Sword_Attack',.05,.95,1.3]],siphon:CLAW,rush:[['Sword_Dash',0,.55,1.6]],
   /* Iron Guardian */
-  bash:[['Shield_OneShot',0,.6,1.3]],bulwark:[['Idle_Shield_Loop',0,.9,1.5]],quake:[['Sword_Heavy_Combo',2.3,3.2,1.2]],charge:[['Shield_Dash',0,.55,1.4]],roar:CALL,
+  bash:[['Shield_OneShot',0,.6,1.3]],bulwark:[['Idle_Shield_Loop',0,.9,1.5]],quake:[['Sword_Heavy_Combo',2.3,3.2,1.2]],charge:[['Shield_Dash',0,.55,1.4]],roar:[['Idle_Shield_Break',0,.6,1.5],['Idle_Rail_Call',0,.9,1.4]],
   counter:[['Sword_Block',0,.4,1.6],['Melee_Hook',0,.47,1.3]],hammer:[['Sword_Heavy_Combo',1.55,2.35,1.2]],ironskin:BLOCK,shockwave:[['Sword_Heavy_Combo',.2,1.0,1.2]],
   /* Storm Archer */
-  arrow:AIMNE,volley:AIMNE,rain:AIMUP,blast:AIMNE,eagle:[['Pistol_Aim_Up',0,.17,1],['Pistol_Idle_Loop',.3,.9,1]],gale:SLIDE,trap:AIMDN,stormarrow:AIMUP,
+  arrow:AIMNE,volley:[['Pistol_Aim_Neutral',0,.17,1],['Pistol_Shoot',0,.4,1.4],['Pistol_Shoot',0,.4,1.5]],rain:AIMUP,blast:AIMNE,eagle:[['Pistol_Aim_Up',0,.17,1],['Pistol_Idle_Loop',.3,.9,1]],gale:LSLIDE,trap:[['PickUp_Table',0,.87,1.3]],stormarrow:AIMUP,
   /* Spirit Summoner */
-  wolves:CALL,soulburst:SPELL,soulheal:BLESS,wail:SPELL,chains:[['Push_Loop',.9,1.8,1.4]],harvest:[['Farm_Harvest',.15,1.6,1.4]],guardian:CALL,
+  wolves:KNEEL,soulburst:[['Spell_Simple_Enter',0,.45,1.6],['Interact',.25,1.0,1.4]],soulheal:BLESS,wail:[['Idle_Shield_Break',0,.6,1.5],['Spell_Simple_Shoot',0,.4,1.2]],chains:PULL,harvest:[['Farm_Harvest',.15,1.6,1.4]],guardian:TORCH,
   spiritbomb:[['Spell_Simple_Enter',0,.5,1.4],['OverhandThrow',.1,.8,1.3]],
   /* signature skills (SIGD in game.js) */
-  sg_c25:BLESS,sg_c50:BLOCK,sg_c100:PLANT,sg_c200:[['Spell_Simple_Enter',0,.5,1.4],['Sword_Attack',.1,.9,1.3]],sg_c300:[['Sword_Regular_Combo',0,1.4,1.5]],sg_c500:CALL,
+  sg_c25:BLESS,sg_c50:BLOCK,sg_c100:PLANT,sg_c200:[['Spell_Simple_Enter',0,.5,1.4],['Sword_Attack',.1,.9,1.3]],sg_c300:[['Sword_Regular_Combo',0,1.4,1.5]],sg_c500:TORCH,
   sg_c750:[['Sword_Heavy_Combo',0,.9,1]],sg_c1000:[['Spell_Simple_Enter',0,.5,1.2],['Idle_Rail_Call',0,1.1,1.1]],
-  sg_n25:SLIDE,sg_n50:CLAW,sg_n100:[['Punch_Cross',0,.5,1.3]],sg_n200:[['OverhandThrow',.1,.8,1.6],['OverhandThrow',.1,.8,1.7]],sg_n300:PLANT,
+  sg_n25:LSLIDE,sg_n50:CLAW,sg_n100:[['Punch_Cross',0,.5,1.3]],sg_n200:[['OverhandThrow',.1,.8,1.6],['OverhandThrow',.1,.8,1.7]],sg_n300:[['Crouch_Idle_Loop',.1,.5,1.3],['Farm_PlantSeed',.9,1.9,1.5]],
   sg_n500:[['Slide_Start',0,.3,1.8],['Melee_Hook',0,.47,1.3],['Melee_Hook_Rec',.1,.5,1.3]],sg_n750:[['Melee_Hook',0,.47,1.3],['Sword_Regular_B',0,.53,1.5]],
   sg_n1000:[['Punch_Jab',0,.4,1.7],['Punch_Cross',0,.42,1.7],['Melee_Hook',0,.47,1.6],['Sword_Attack',.1,.8,1.4]],
-  sg_g25:[['Idle_Shield_Loop',0,.9,1.4]],sg_g50:BLOCK,sg_g100:[['Shield_Dash',0,.55,1.4]],sg_g200:[['Idle_Shield_Loop',0,.6,1.4],['Sword_Heavy_Combo',1.55,2.35,1.2]],sg_g300:PLANT,
-  sg_g500:[['Sword_Heavy_Combo',1.4,2.4,1]],sg_g750:CALL,sg_g1000:[['Idle_Shield_Break',0,.6,1.4],['Idle_Rail_Call',0,.9,1.3]],
-  sg_a25:SLIDE,sg_a50:AIMUP,sg_a100:AIMUP,sg_a200:AIMDN,sg_a300:AIMNE,sg_a500:[['Pistol_Aim_Neutral',0,.17,1],['Pistol_Idle_Loop',.3,1,1],['Pistol_Shoot',0,.55,1]],sg_a750:AIMUP,sg_a1000:AIMUP,
-  sg_s25:[['Idle_Lantern_Loop',.3,1.3,1.3]],sg_s50:CALL,sg_s100:SPELL,sg_s200:[['Spell_Simple_Enter',0,.5,1.4],['Push_Loop',.9,1.7,1.4]],
-  sg_s300:[['Spell_Simple_Enter',0,.5,1.2],['Idle_Rail_Call',0,1,1.2]],sg_s500:[['Sword_Attack',.05,.95,1.2]],sg_s750:[['Idle_Rail_Call',0,1.2,1.2]],
+  sg_g25:[['Idle_Shield_Loop',0,.9,1.4]],sg_g50:BLOCK,sg_g100:[['Shield_Dash',0,.55,1.4]],sg_g200:[['Idle_Shield_Loop',0,.6,1.4],['Sword_Heavy_Combo',1.55,2.35,1.2]],sg_g300:[['PickUp_Table',0,.87,1.2],['Farm_PlantSeed',.9,1.9,1.5]],
+  sg_g500:[['Sword_Heavy_Combo',1.4,2.4,1]],sg_g750:[['Fixing_Kneeling',0,1.0,1.5],['Idle_Rail_Call',0,.9,1.4]],sg_g1000:[['Idle_Shield_Break',0,.6,1.4],['Idle_Rail_Call',0,.9,1.3]],
+  sg_a25:LSLIDE,sg_a50:AIMUP,sg_a100:AIMUP,sg_a200:[['PickUp_Table',0,.87,1.3],['Pistol_Aim_Down',0,.17,1],['Pistol_Shoot',0,.55,1.1]],sg_a300:AIMNE,sg_a500:[['Pistol_Aim_Neutral',0,.17,1],['Pistol_Idle_Loop',.3,1,1],['Pistol_Shoot',0,.55,1]],sg_a750:AIMUP,sg_a1000:AIMUP,
+  sg_s25:[['Idle_Lantern_Loop',.3,1.3,1.3]],sg_s50:[['Fixing_Kneeling',0,.9,1.6],['Zombie_Scratch',.3,1.2,1.5]],sg_s100:[['Idle_Torch_Loop',0,1.0,1.2],['Spell_Simple_Shoot',0,.4,1]],sg_s200:[['Spell_Simple_Enter',0,.5,1.4],['Zombie_Scratch',.3,1.1,1.5],['Spell_Simple_Shoot',0,.38,1.2]],
+  sg_s300:[['Idle_Lantern_Loop',.3,1.3,1.2],['Idle_Rail_Call',0,1,1.2]],sg_s500:[['Spell_Simple_Enter',0,.5,1.3],['Sword_Attack',.05,.95,1.2]],sg_s750:[['Fixing_Kneeling',0,.9,1.4],['Idle_Rail_Call',0,1.1,1.2]],
   sg_s1000:[['Spell_Simple_Enter',0,.5,1.4],['Spell_Simple_Shoot',0,.4,1],['Spell_Simple_Exit',0,.43,1.2]]};
 /* named moves for /emote and for the game's one-shot events: key -> [clip, loop, upper-body-only one-shot] */
 const EMOTES={
