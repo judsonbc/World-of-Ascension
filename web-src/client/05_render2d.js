@@ -96,7 +96,7 @@ function pat2d(cv,k,ox,oy){
    Other players see your height: one small 'jz' effect message (rate limited, only while you are off the ground). */
 const JUMP_T=.7,JUMP_H=88,JUMP_CD=.25,STEP=12,JUMP_V0=4*JUMP_H/JUMP_T,JUMP_G=8*JUMP_H/(JUMP_T*JUMP_T);
 function doJump(){
-  if(!started||P.dead>0||P.air||P.jcd>0)return;
+  if(!started||P.dead>0||P.xfer||P.air||P.jcd>0)return;
   P.air=true;P.vz=JUMP_V0;
   ring(P.x,P.y,34,'#d9f2ff');spark(P.x,P.y,'#e8f6ff',8,90,.35,2.8);SFX('dodge');
 }
@@ -292,6 +292,7 @@ function solidPush(o){
 }
 function updatePlayer(dt){
   if(P.dead>0){P.air=false;P.vz=0;P.jz=0;P.dead-=dt;if(P.dead<=0)respawn();return}
+  if(P.xfer){P.mv=null;P.target=null;P.task=null;P.mine=0;P.arRun=null;P.fol=null;return} /* v5_341 world transfer: standing still while the next world loads */
   P.atkCd-=dt;P.hurt-=dt;P.swing-=dt;
   P.pvpT=(MP&&PVPLVL>0&&P.dead<=0&&!inTown())?1:0; /* v5_158 legacy flag, now simply 'my mode lets me attack players' (the old 30 s flag and the always-on Arena are gone) */
   const ox0=P.x,oy0=P.y;
@@ -323,7 +324,16 @@ function updatePlayer(dt){
     {const r=camRot(ix,iy);ix=r[0];iy=r[1]}
     const l=Math.max(.001,Math.hypot(ix,iy));   /* v5_307 unit direction: the speed no longer follows the push, only the walk zone slows it (sf) */
     P.x+=ix/l*speed*sf*dt;P.y+=iy/l*speed*sf*dt;if(!(P.dashT>0&&P.dg===3))P.face=Math.atan2(iy,ix);   /* v5_304 a back dive keeps facing the front */
-    P.mv=null;P.task=null;P.mine=0;P.fatk=false;stopMine('Auto-mine off.');P.arMvNow=true; /* v5_311 you are steering by hand */
+    P.mv=null;P.task=null;P.mine=0;P.fatk=false;P.arRun=null;P.fol=null;stopMine('Auto-mine off.');P.arMvNow=true; /* v5_311 you are steering by hand */
+  }else if(P.fol&&folStep(dt,speed)){
+    /* v5_338 following the party leader (see folStep): out of range -> run to the leader; in range the normal fight / auto-hunt rules below apply */
+  }else if(P.arRun){
+    /* v5_335 running back to the auto-hunt anchor after a death (set in respawn). Steering by hand cancels it (the branch above), auto-hunt off / another world / 40 s
+       without arriving ends it (the realm clamp then puts the player back as before). Monsters are ignored on the way; the anchor itself is not changed. */
+    const r=P.arRun;r.t+=dt;
+    /* stuck watchdog: the distance to the anchor must shrink by 40 within every 2.5 s, else the run is given up (a building / structure in the way) and the realm clamp teleports as before */
+    const dl=Math.hypot(r.x-P.x,r.y-P.y);if(r.bd===undefined||dl<r.bd-40){r.bd=dl;r.st=0}else r.st=(r.st||0)+dt;
+    if(!auto||curWorld===ARENA||!autoAnc||r.t>40||r.st>2.5||moveToward(r.x,r.y,40,dt,speed))P.arRun=null;
   }else if(P.task){
     const o=P.task;
     if(o.cd>0){P.task=null;P.mine=0}
@@ -353,9 +363,9 @@ function updatePlayer(dt){
     if(P.target&&dist(m.x,m.y,P.x,P.y)<=reach&&P.atkCd<=0){
       P.face=Math.atan2(m.y-P.y,m.x-P.x);
       const c=rnd()<critChance(),dd=dist(m.x,m.y,P.x,P.y);let d=Math.round(atkVal()*(.9+rnd()*.2)*(c?critMul():1)*(1+babVal()/100));
-      if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));for(let q=1;q<=6;q++)spark(P.x+(m.x-P.x)*q/6,P.y+(m.y-P.y)*q/6,BASIC_COL[P.cls],1,30,.25,2.2)} /* ranged normal attack: damage falloff + a short bolt trail */
+      if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));{const l=Math.max(.06,dd/BASIC_PSPD);projs.push({x:P.x,y:P.y,vx:Math.cos(P.face)*BASIC_PSPD,vy:Math.sin(P.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:P.face,col:BASIC_COL[P.cls],cos:true})}} /* ranged normal attack: damage falloff + a visible bolt (v5_343: cosmetic projectile flying to the target, replaces the old 6-spark trail; cos:true = it never hits anything) */
       if(m.isPl)hitPeer(m,d,c);else hitMonster(m,d,c);
-      P.qi=Math.min(maxQi(),P.qi+3);P.atkCd=atkCd();P.skT='';P.swing=.18;SFX('swing');fxs({k:'sw',f:+P.face.toFixed(2)});
+      P.qi=Math.min(maxQi(),P.qi+3);P.atkCd=atkCd();P.skT='';P.swing=.18;SFX('swing');fxs({k:'sw',f:+P.face.toFixed(2)});if(!rng)skfxCast({t:(basicSwN^=1)?'basic_a':'basic_b',cls:P.cls,x:P.x,y:P.y,face:P.face,tx:m.x,ty:m.y,r:70,col:MELEE_BASIC_COL[P.cls]}); /* v5_343 small sword slash on a melee normal attack */
     }
   }else if(P.mv){
     P.arMvNow=true; /* v5_311 click / tap to move is a move command too */
@@ -660,7 +670,7 @@ function drawMonster(m){
   else if(m.state==='chase'&&!m.dead)m.dir=P.x>=m.x?1:-1;
   m.lx=m.x;m.ly=m.y;
   const st=TYPES.indexOf(m.t),sc=m.boss?(m.lvl>60?2.3:1.9):m.r/14,col=m.flash>0?'#ffffff':m.col;
-  const k=m.dead?Math.max(0,(m.dieT||0)/.5):1;
+  const k=m.dead?Math.max(0,(m.dieT||0)/.5):m.pend?Math.max(0,1-(m.pendT||0)/.35):1; /* v5_339 predicted kill fades out */
   if(m.boss&&!m.dead){
     ctx.strokeStyle='rgba(227,181,89,'+(.35+.2*Math.sin(time*3))+')';ctx.lineWidth=3;
     ctx.beginPath();ctx.ellipse(x,y+8*sc,30*sc*.8,10*sc*.8,0,0,6.2832);ctx.stroke();
@@ -765,7 +775,7 @@ function drawMonster(m){
     }
   }
   ctx.restore();
-  if(m.dead)return;
+  if(m.dead||m.pend)return;
   const topY=y-(m.boss?32.6*sc:26*sc);
   if(m.state==='chase'||m.hp<m.maxhp)bar(x,topY,m.boss?56:34,m.hp/m.maxhp,m.boss?'#e3b559':'#d9503f');
   ctx.fillStyle=m.lvl>P.lvl+4?'#ff8a7a':'#e8e0ca';ctx.font='600 11px Figtree,system-ui,sans-serif';ctx.textAlign='center';

@@ -263,7 +263,7 @@ function mkMon(m){
   bg.position.set(-1.2,by,0);bg.scale.set(2.4,.28,1);fg.position.set(-1.2,by,0);fg.scale.set(2.4,.2,1);
   const dm=g.userData.mat;g.userData.fg=fg;g.userData.bar=[bg,fg];g.userData.mat={dispose(){dm.dispose();bg.material.dispose();fg.material.dispose()}};
   return g}
-function updMon(g,m){const u=g.userData,k=m.dead?Math.max(0,Math.min(1,m.dieT*2.5)):1,s=m.r*(m.boss?1.15:1)*k+.01;
+function updMon(g,m){const u=g.userData,k=m.dead?Math.max(0,Math.min(1,m.dieT*2.5)):m.pend?Math.max(0,1-(m.pendT||0)/.35):1,s=m.r*(m.boss?1.15:1)*k+.01;
   g.scale.set(s,s*(m.dead?.4:1),s);g.position.set(m.x-C,gh3(m.x,m.y),m.y-C);
   const dx=P.x-m.x,dy=P.y-m.y;
   /* facing: a monster looks where it is walking (chasing, wandering or heading home), so it never walks backwards.
@@ -287,7 +287,7 @@ function updMon(g,m){const u=g.userData,k=m.dead?Math.max(0,Math.min(1,m.dieT*2.
   {const md=Math.hypot(dx,dy),al=T3.al|0;let ms=1;
     if(ALOD&&!u.boss){const am=PQ.lock?PQ.am:(LOW?2:1);ms=(md>420?Math.max(am,al?2:1):1)+(al>1?1:0)}   /* v5_331 far monsters pose every 2nd (3rd) frame on a weak device / slow frame; near ones and bosses every frame (the pose is a function of time, so nothing is missed) */
     if(ms<2||((T3.fr+((u.seed*977)|0))%ms)===0)AL3D.animMonster(g,m,time,md)}
-  const f=m.hp/m.maxhp,v=!m.dead&&f<.999;u.bar.forEach(b=>b.visible=v);u.fg.scale.x=2.4*Math.max(.001,f)}
+  const f=m.hp/m.maxhp,v=!m.dead&&!m.pend&&f<.999;u.bar.forEach(b=>b.visible=v);u.fg.scale.x=2.4*Math.max(.001,f)}
 /* v5_170 hide the ground rings (level aura + forge ring/band) of a 3D character while it is off the ground; restores them on landing */
 function jumpRings(R,jz){
   if(jz>2){if(!R.jh){R.jh=1;R.jv=[R.ogl.visible,R.ogb.visible]}R.aura.visible=false;R.ogl.visible=false;R.ogb.visible=false}

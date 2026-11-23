@@ -118,14 +118,37 @@ function renderForge(){
   }
   if(!FGV.raf)FGV.raf=requestAnimationFrame(fgPreview);
 }
+/* v5_341 WORLD TRANSFER SCREEN: while the next world loads a spinning gate covers the screen and the player cannot move (updatePlayer returns early while P.xfer is set).
+   It ends when the world is built (arriveWorld / the server's 'world' answer), after at least XFER_MIN seconds so it never just flickers; after XFER_MAX seconds without an answer it gives up. */
+const XFER_MIN=.7,XFER_MAX=15;let xferT0=0,xferTm=0,xferFin=0;
+function xferShow(i){
+  const w=W[i],el=$('xfer');if(!el)return;
+  el.style.setProperty('--xc',w.acc||'#5fd3a5');
+  $('xfT').textContent='Entering '+w.n;$('xfS').textContent=MP?'Connecting to the shared world...':'Building the world...';
+  el.hidden=false;void el.offsetWidth;el.classList.add('on');
+  P.xfer=true;P.mv=null;P.target=null;P.task=null;P.mine=0;stopMine();
+  xferT0=performance.now();clearTimeout(xferTm);clearTimeout(xferFin);
+  xferTm=setTimeout(()=>{if(!P.xfer)return;NET.pendingEnter=-1;xferHide(true);say('The world did not answer in time. Stay here and try the World Gate again.','#d9503f')},XFER_MAX*1000);
+}
+function xferHide(now){
+  const el=$('xfer');if(!el)return;
+  if(!P.xfer&&el.hidden)return;
+  clearTimeout(xferTm);clearTimeout(xferFin);
+  const wait=now?0:Math.max(0,XFER_MIN*1000-(performance.now()-xferT0));
+  xferFin=setTimeout(()=>{el.classList.remove('on');P.xfer=false;setTimeout(()=>{if(!P.xfer)el.hidden=true},320)},wait);
+}
 function enterWorld(i){
+  if(P.xfer)return;
+  xferShow(i);
   if(MP){NET.pendingEnter=i;netSend({t:'world',w:i});$('worlds').hidden=true;return} /* the server answers with the shared world */
-  arriveWorld(i);
+  $('worlds').hidden=true;
+  setTimeout(()=>arriveWorld(i),120); /* lets the screen paint before the (blocking) world build */
 }
 function arriveWorld(i,spawn){
   buildWorld(i,spawn);
   P.x=C;P.y=C+110;P.hp=maxHp();P.qi=maxQi();P.target=null;P.mv=null;P.task=null;P.mine=0;P.pvpT=0;stopMine();
   $('worlds').hidden=true;
+  xferHide();ring(P.x,P.y,110,'#ffffff');ring(P.x,P.y,70,W[i].acc||'#5fd3a5');spark(P.x,P.y,'#ffffff',26,240,.8,3.2,100); /* v5_341 arrival flash */
   say(i===ARENA?'You enter the Arena. Pick a PvP mode (PvP button) to fight \u2014 Peaceful players cannot attack.':'Entered '+W[i].n+' (monsters Lv '+W[i].lo+'-'+W[i].hi+').',W[i].acc);save();
 }
 function renderWorlds(){

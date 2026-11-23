@@ -40,7 +40,7 @@ window.addEventListener('pointermove',e=>{
   if(camDist>20&&i.d>20&&MODE3D)T3.zoom=clamp(T3.zoom*camDist/i.d,ZOOM_MIN,2.2);
   camMid={x:i.x,y:i.y};camDist=i.d;P.mv=null;
 });
-/* v5_110 CONTROLS. PC: left click = move (marker shows where) / select / attack, right-drag or middle-drag = rotate + tilt, wheel = zoom, plain right click on a player = PvP.
+/* v5_110 CONTROLS. PC: left click = move (marker shows where) / select / attack, right-drag or middle-drag = rotate + tilt, wheel = zoom, left click on a player = select, right click on a player = attack (PvP).
    Phone: one tap = move (or select a monster / player / ore), touch and drag = rotate + tilt, pinch = zoom, double tap on a monster or player = attack. */
 const TAP_SLOP=16; /* v5_312 touch: a tap may wobble up to 16 px (was 10: a normal finger tap on a phone was often read as a camera drag and ignored) */
 const lc={id:null,x:0,y:0,sx:0,sy:0,moved:0,ev:null};
@@ -72,8 +72,7 @@ cv.addEventListener('contextmenu',e=>{
   const q=MP?(scrPick(e,[...NET.peers.values()].filter(o=>!o.dead))||peerAt(wx,wy,w3?20:0)):null;
   /* v5_110 right button: drag = rotate the camera; a plain right click on a player = PvP select / attack. (Moving is the LEFT click again.) */
   if(!q)return;
-  if(P.sel===q)startPvp(q);   /* 2nd right click on the selected player: attack */
-  else P.sel=q;               /* 1st right click: select only */
+  P.sel=q;startPvp(q);        /* v5_336 right click on a player = select AND attack (left click only selects, see cvClick0) */
 });
 let tapO=null,tapT=0;
 /* v5_312 snapCam / cvClick: the tap is resolved with the camera of the moment you PRESSED (the player keeps running until you release, which moved the camera and put the destination beside the spot you pointed at) */
@@ -89,11 +88,13 @@ function cvClick0(e){
   const w3=(MODE3D&&T3.r)?pick3(e):null,sky3=MODE3D&&T3.r&&!w3,wx=w3?w3.x:sky3?NaN:e.clientX-r.left+cam.x,wy=w3?w3.y:sky3?NaN:e.clientY-r.top+cam.y,ex=w3?20:0; /* v5_312 a click on the sky has no ground point: NaN so it can no longer 'hit' the shop / an ore / a monster through made-up 2D coordinates */
   if(inTown()&&dist(NPC.x,NPC.y,wx,wy)<46+ex){openShop();return}
   /* touch: tapping another player SELECTS them (no right-click on a phone); the action bar under the target frame offers Inspect / Attack / Party / Friend / Whisper */
-  if(MP&&(PHONE||e.pointerType==='touch'||e.pointerType==='pen')){
-    const q=scrPick(e,[...NET.peers.values()].filter(o=>!o.dead))||peerAt(wx,wy,ex+14);
+  /* v5_336 mouse: a LEFT click on another player now SELECTS them too (right click attacks, see the contextmenu handler). Touch: tap selects, double tap attacks. */
+  if(MP){
+    const touch=PHONE||e.pointerType==='touch'||e.pointerType==='pen';
+    const q=scrPick(e,[...NET.peers.values()].filter(o=>!o.dead))||peerAt(wx,wy,touch?ex+14:ex+6);
     if(q){
       const now=performance.now();
-      if(P.sel===q&&tapO===q&&now-tapT<450){tapT=0;startPvp(q);return} /* v5_110 double tap on a player = attack (PvP) */
+      if(touch&&P.sel===q&&tapO===q&&now-tapT<450){tapT=0;startPvp(q);return} /* v5_110 double tap on a player = attack (PvP) */
       P.sel=q;if(P.target&&P.target!==q)P.target=null;tapO=q;tapT=now;return}
   }
   /* monsters: 1st left click SELECTS (nothing attacks yet), 2nd left click on the same monster ATTACKS it */
@@ -103,19 +104,19 @@ function cvClick0(e){
     if(m){
       const now=performance.now(),touch=e.pointerType==='touch'||e.pointerType==='pen';
       /* mouse: 2nd click on the selected monster attacks; touch: DOUBLE TAP (within 0.45 s) attacks, a single tap only selects */
-      if(P.sel===m&&(!touch||(tapO===m&&now-tapT<450))){P.target=m;P.task=null;P.mv=null;tapT=0}
+      if(P.sel===m&&(!touch||(tapO===m&&now-tapT<450))){P.target=m;P.task=null;P.mv=null;P.fol=null;tapT=0}
       else{P.sel=m;tapO=m;tapT=now}
       return}
   }
-  /* players are NOT targeted with the left button: PvP is right click only (contextmenu handler above) */
+  /* players: left click selects (above), right click attacks (contextmenu handler) */
   for(const o of ores){
-    if(o.cd<=0&&dist(o.x,o.y,wx,wy)<50+ex){P.sel=null;P.task=o;P.target=null;P.mv=null;P.mine=0;return}
+    if(o.cd<=0&&dist(o.x,o.y,wx,wy)<50+ex){P.sel=null;P.task=o;P.target=null;P.mv=null;P.fol=null;P.mine=0;return}
   }
   /* v5_110 left click / single tap on the ground = move there. A ripple + a marker on the ground show the destination. */
   let gx=wx,gy=wy;if(MODE3D&&T3.r&&!w3){const h=skyHeading(e);if(!h)return;gx=P.x+h.x*600;gy=P.y+h.y*600}
   {const dc=dist(gx,gy,C,C);if(dc>RIM-60){gx=C+(gx-C)/dc*(RIM-60);gy=C+(gy-C)/dc*(RIM-60)}} /* v5_312 the world-edge clamp now also applies to a normal ground click */ /* v5_276 clicked the sky / above the horizon: walk 600 units toward that direction */
   if(PHONE&&P.tapMove===false)return; /* v5_134 phone option 'Tap to move' is off: the joystick is the only way to walk (monsters, ore and the shop can still be tapped) */
-  P.sel=null;P.mv={x:gx,y:gy};P.target=null;P.task=null;stopMine('Auto-mine off.');
+  P.sel=null;P.mv={x:gx,y:gy};P.target=null;P.task=null;P.fol=null;stopMine('Auto-mine off.');
   ring(gx,gy,46,'#8ff0c4');ring(gx,gy,26,'#ffffff');
 }
 

@@ -107,7 +107,7 @@ function takeGear(it){
 const RANGE_FALL=.5,RANGED_CAP=.5;
 /* v5_80 NORMAL ATTACK RANGE per class [Cultivator, Night Blade, Iron Guardian, Storm Archer, Spirit Summoner]: 0 = melee (body size + 30), otherwise the attack
    reaches that many units. Ranged normal attacks lose up to BASIC_FALL of their damage at full range and you stand at BASIC_STAND of the range from the target. */
-const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','','','#9fe8c8','#9fe0ff'];
+const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','','','#9fe8c8','#9fe0ff'],BASIC_PSPD=1500,MELEE_BASIC_COL=['#cfe8ff','#c7a8ff','#ffcf8a'];let basicSwN=0; /* v5_343 MELEE_BASIC_COL = tint of the small slash of the melee normal attack (Cultivator, Night Blade, Iron Guardian); basicSwN alternates its side */ /* v5_343 BASIC_PSPD = speed of the visible bolt of the ranged normal attack (Storm Archer / Spirit Summoner); cosmetic only, the damage is still instant */
 function rangedDmg(m,d,fr){d=Math.round(d*(1-RANGE_FALL*clamp(fr,0,1)));if(!m.boss)d=Math.min(d,Math.max(1,Math.round(m.maxhp*RANGED_CAP)));return d}
 const CRIT_MUL=1.8;
 const SKILL_GCD=1; /* seconds between two skill casts (manual or auto); v5_190: 0.45 -> 1; v5_192: 2; v5_193: back to 1 */
@@ -636,14 +636,14 @@ function switchClass(c){
    v5_311: moving by hand (keys / joystick / tap to move) while auto-hunt is on is free; the zone where you stop becomes the new anchor (no prompt). */
 const AUTO_REALM_SPAN=1;let autoAnc=null; /* {w:world, z:zone index} while auto-hunt is on */
 function zoneIdxAt(x,y){const d=dist(x,y,C,C);for(let k=0;k<ZONES.length-1;k++)if(d<ZONES[k].d)return k;return ZONES.length-1}
-function autoAnchorNow(){autoAnc={w:curWorld,z:zoneIdxAt(P.x,P.y)}}
+function autoAnchorNow(){autoAnc={w:curWorld,z:zoneIdxAt(P.x,P.y),x:P.x,y:P.y}} /* v5_335 x,y = the spot where the anchor was set: after a death the player RUNS back to it (P.arRun, see respawn) */
 function autoRealmLimits(){ /* [lowest, highest] allowed zone index, or null = no limit (auto-hunt off, or the Arena which has no zones) */
   if(!auto||curWorld===ARENA||!ZONES.length)return null;
   if(!autoAnc||autoAnc.w!==curWorld)autoAnchorNow();
   return [Math.max(0,autoAnc.z-AUTO_REALM_SPAN),Math.min(ZONES.length-1,autoAnc.z+AUTO_REALM_SPAN)];
 }
 function autoRealmClamp(){
-  if(P.arMoving)return; /* v5_311 walking by hand: free until you stop, then autoAnchorNow() sets the new starting realm (05_render2d.js) */
+  if(P.arMoving||P.arRun)return; /* v5_335 P.arRun = running back to the anchor after a death: no teleport. */ /* v5_311 walking by hand: free until you stop, then autoAnchorNow() sets the new starting realm (05_render2d.js) */
   const L=autoRealmLimits();if(!L)return;
   const z=zoneIdxAt(P.x,P.y);if(z>=L[0]&&z<=L[1])return;
   const d=dist(P.x,P.y,C,C),a=d>1?Math.atan2(P.y-C,P.x-C):0;
@@ -835,5 +835,8 @@ function peerAt(wx,wy,ex){
 function respawn(){
   P.dashT=0;P.dg=0;
   P.x=C;P.y=C+110;P.hp=maxHp();P.qi=maxQi();P.dead=0;P.bfT=0;P.sh=0;
+  P.fol=null; /* v5_338 a death ends 'follow the leader' */
+  /* v5_335 auto-hunt still on after a death: run from the hub back to where auto-hunt was started instead of being teleported by autoRealmClamp (05_render2d.js) */
+  P.arRun=(auto&&autoAnc&&autoAnc.w===curWorld&&curWorld!==ARENA&&autoAnc.x!==undefined)?{x:autoAnc.x,y:autoAnc.y,t:0}:null;
 }
 

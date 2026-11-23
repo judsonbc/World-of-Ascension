@@ -1,3 +1,54 @@
+v5_343 SHADOW STEP SLASH, RANGED BASIC ATTACK BOLT, MELEE BASIC ATTACK SLASH
+  Night Blade Shadow Step (every tier) now plays a sword slash through the target 0.08 s after you land, using the sl_sword_slash_4.png texture (TABLE.shadowstep, tx:2). One entry, no other file touched.
+  Other players see it too, but it is placed from their position when the message arrives. Not seen in the game yet.
+  Storm Archer and Spirit Summoner normal attacks now fire a visible bolt (the glowing orb with a trail, mint green / light blue) that flies to the target at BASIC_PSPD = 1500 (02_combat.js). It replaces
+  the old instant 6-spark trail and is cosmetic only (cos:true projectile, dmg 0, hits nothing): the damage, falloff and attack timing are unchanged and still land instantly. Other players' ranged
+  normal attacks show the bolt too (08_network_social.js, 'sw' message). Files: 02_combat.js, 05_render2d.js, 08_network_social.js, rebuilt web/game.js. Not seen in the game yet.
+  Melee normal attacks (Cultivator, Night Blade, Iron Guardian) now play a small sword slash (R 38) on every swing, alternating sides, texture sword_slash_3.png (tx:1), tinted per class
+  (MELEE_BASIC_COL in 02_combat.js). TABLE.basic_a / basic_b in web/skillfx3d.js; other players' melee swings show it within 900 units. Basic slashes are skipped when the effect pool is nearly full so they
+  never push skill effects out. No sound, damage or timing change. Not seen in the game yet.
+
+v5_342 NEW SKILL MOVES (web/anim3d.js)
+  Skills that shared one pose now look different, using clips that only /emote played before (kneeling, torch, pick up, interact, long slide). Spirit Summoner gets the most:
+  Ghost Chains no longer pushes forward (reach out, then pull back); Spirit Wolves / Pack Frenzy / Phantom Legion kneel to the ground; Phantom Guardian raises a hand then calls; Soul Burst reaches
+  forward; Wraith Wail clenches then bursts; Soul Web, Phantom Procession, Ancestral Chorus and Spectral Dragon each have their own move. Others: Arrow Volley (double shot), Thunder Trap and Trap
+  Field (bend down to place), Gale Step / Windrunner / Afterimage (long slide), War Cry, Iron Banner, Stone Sentinels, Nightshade Bloom, Dao Clone. tools/test_skillmoves.js passes (86 skills). Not seen in the game yet.
+
+v5_341 WORLD TRANSFER SCREEN
+  Choosing a world at the World Gate now shows a full-screen loading screen (spinning gate in the new world's colour, 'Entering <world>', moving bar) and the player stands still until the new world is
+  built: no walking, jumping, clicking to move or attacking. It stays at least 0.7 s so it does not flicker, ends with an arrival flash, and gives up after 15 s without an answer (you stay where you were
+  and get a message) or if the connection drops. Reduced-motion users get slower animation. Files: web/index.html (screen + CSS), 03_items_forge_bag.js (enterWorld / xferShow / xferHide),
+  05_render2d.js (freeze), 08_network_social.js (server answer, connection loss). web/game.js rebuilt.
+
+v5_340 HUB IS SAFE: NO DAMAGE SHOWN / TAKEN IN THE HUB AFTER A TELEPORT
+  The server stops monsters from attacking a player in the hub, but it only knows your position from your last position message. After a Home Scroll (or walking into the hub) on a slow
+  connection, monster hits it had already sent still arrived and were applied. The client now ignores monster hits while you are inside the hub. File: web-src/client/08_network_social.js.
+
+v5_339 SLOW CONNECTION: MONSTERS AT 0 HP NO LONGER STAND AROUND
+  When your hit brings a monster to 0 HP the client only predicts the kill and waits for the server's death message; on a slow connection the monster stayed fully drawn at 0 HP until it arrived.
+  Now such a monster (pend) fades out in 0.35 s with no name / health bar, in 2D and 3D. If the server says it is still alive (snapshot hp > 0) it reappears. If nothing confirms it within 4 s it is
+  hidden as a ghost and brought back by the next snapshot that lists it. Files: web-src/client/08_network_social.js, 05_render2d.js, 06_render3d.js. web/game.js rebuilt.
+
+v5_338 FOLLOW THE LEADER: when you click the party LEADER in the party window (and you are not the leader) the menu also offers Follow (Stop following when already following).
+  Following runs after the leader in the same world: it starts when you are more than 260 away and runs until you are within 110; in between you fight / auto-hunt normally.
+  It ends when you steer (keys / joystick), click the ground, a monster or an ore, die, when the leader changes or leaves your world, or when you press Stop following.
+  Files: web-src/client/08_network_social.js (menu + folStep), 05_render2d.js (movement branch), 04_input_wardrobe.js, 02_combat.js (respawn). web/game.js rebuilt.
+
+v5_337 PARTY WINDOW: click a party mate (not yourself, not on the buttons) to open a small menu: Whisper / Move / Inspect.
+  Whisper opens the private chat with them. Move walks you to where that player is right now (same world only). Inspect opens their gear window (same world only). A mate in another
+  world gets a short message instead. Click the same row again, click elsewhere or press Esc to close the menu. Dragging the window by a row still works (a dragged click does not open it).
+  Files: web-src/client/08_network_social.js, web/index.html (CSS). web/game.js rebuilt.
+
+v5_336 PLAYER CONTROLS (mouse): LEFT click on another player SELECTS them (target frame + action bar), RIGHT click on a player ATTACKS (PvP rules still apply: mode, hub, level range).
+  Before, the left click only walked and the right click needed two clicks (select, then attack). Touch is unchanged (tap = select, double tap = attack). Right-drag still rotates the camera.
+  File: web-src/client/04_input_wardrobe.js. web/game.js rebuilt.
+
+v5_335 AUTO-HUNT: RUN BACK AFTER A DEATH (instead of being teleported)
+  After a monster kills you with auto-hunt on, you respawn in the hub and now RUN back to the spot where auto-hunt was started, at normal speed. Before, the realm limit
+  (autoRealmClamp) teleported you to the inner edge of the allowed zones straight away. While running: monsters are ignored, the anchor is not changed, steering by hand
+  cancels the run (then the old rules apply), and if the run makes no progress (distance to the anchor not shrinking by 40 in 2.5 s, e.g. blocked by a building) or takes over 40 s, the old teleport takes over. Auto-hunt off / another world / Arena = no run.
+  Files: web-src/client/02_combat.js (autoAnchorNow keeps x,y; respawn sets P.arRun; autoRealmClamp waits while P.arRun), web-src/client/05_render2d.js (the run branch). web/game.js rebuilt.
+
 v5_331 MOTION FOR SLOWER PHONES: CHEAPER ANIMATION MATHS + LEVEL OF DETAIL FOR OTHER PLAYERS, FAR MONSTERS AND PETS  (client only, game.go unchanged; web/anim3d.js, web/vrm3d.js, 01_core / 03_pets / 06_render3d -> rebuilt web/game.js, tools/bench_anim3d.js + test_anim_lod.js + test_vrm_lod.js NEW, README.txt)
   - What cost time: every avatar, every frame, was posed TWICE (the old procedural pose on 14 bones, then the clips overwrote all of them), the clip sampling + blending used Math.hypot / acos / sin on 20 bones several times, and every other player in range was drawn and animated even when it was off screen (the VRM meshes are not frustum culled).
   - Cheaper maths (all devices, same look): sqrt instead of Math.hypot; plain nlerp instead of slerp for bones less than 23 degrees apart (the common case in a crossfade, speed error < .5 %); fully weighted bones skip the blend. Measured against v5_330 over 10 rigs x 40 s of running / attacking / skills / hits: mean bone difference .013 degrees, max .12 degrees.

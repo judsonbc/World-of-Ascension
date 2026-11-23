@@ -49,6 +49,7 @@ function netConnect(){
     if(NET.ws!==ws)return; /* an old socket: already handled */
     const was=NET.on;NET.on=false;NET.joined=false;NET.ws=null;
     setParty([]);pinvHide();
+    if(P.xfer){NET.pendingEnter=-1;xferHide(true)} /* v5_341 */
     if(MP){MP=false;NET.peers.clear();buildWorld(curWorld);P.target=null;P.pvpT=0;say('Connection lost \u2014 playing solo while reconnecting\u2026','#d9503f')}
     if(!was)NET.fails++;
     setNetStatus();
@@ -169,8 +170,63 @@ function renderParty(){
       a.insertBefore(k,l);
     }b.className='pb';f.style.width=clamp(x.hp/x.mh,0,1)*100+'%';b.appendChild(f);
     r.appendChild(a);r.appendChild(b);box.appendChild(r);
+    if(!me)pmBind(r,x);
   }
-  partyPlace();
+  pmCheck();partyPlace();
+}
+/* v5_337 click a party mate in the party window: a small menu with Whisper / Move / Inspect. Move = walk to where that player is now (same world only); Inspect = the gear window (needs them in your world). */
+const PM={id:-1,el:null};
+function pmClose(){PM.id=-1;if(PM.el)PM.el.style.display='none'}
+function pmCheck(){if(PM.id>=0&&!PARTY.m.some(x=>x.id===PM.id))pmClose()}
+function pmPeer(x,why){const q=(MP&&x.w===curWorld)?NET.peers.get(x.id):null;if(!q)say(x.n+' is not in your world, so you cannot '+why+' them.','#8d9aa2');return q}
+function pmOpen(r,x){
+  const hud=$('hud');
+  if(!PM.el){
+    const m=document.createElement('div');m.id='pmenu';hud.appendChild(m);PM.el=m;
+    document.addEventListener('pointerdown',e=>{if(PM.id>=0&&!(e.target.closest&&(e.target.closest('#pmenu')||e.target.closest('#party .pmr'))))pmClose()},true);
+    addEventListener('keydown',e=>{if(e.key==='Escape'&&PM.id>=0)pmClose()});
+  }
+  const m=PM.el;m.innerHTML='';PM.id=x.id;
+  const mk=(txt,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=txt;b.addEventListener('click',e=>{e.stopPropagation();pmClose();fn()});b.addEventListener('pointerdown',e=>e.stopPropagation());m.appendChild(b)};
+  const hd=document.createElement('div');hd.className='pmh';hd.textContent=x.n;m.appendChild(hd);
+  mk('\u{1F4AC} Whisper',()=>whisperTo(x.n));
+  mk('\u{1F3C3} Move',()=>{if(P.dead>0)return;const q=pmPeer(x,'move to');if(!q)return;P.sel=null;P.target=null;P.task=null;stopMine('Auto-mine off.');P.mv={x:q.x,y:q.y};ring(q.x,q.y,46,'#8ff0c4')});
+  mk('\u{1F50D} Inspect',()=>{const q=pmPeer(x,'inspect');if(q)pgOpen(q)});
+  /* v5_338 only the party LEADER's row offers Follow, and only to the other members */
+  if(x.id===PARTY.lead&&!isLeader()){
+    if(P.fol&&P.fol.id===x.id)mk('\u23F9 Stop following',()=>{P.fol=null;say('You stopped following '+x.n+'.','#8d9aa2')});
+    else mk('\u{1F463} Follow',()=>{if(P.dead>0)return;const q=pmPeer(x,'follow');if(!q)return;P.sel=null;P.target=null;P.task=null;P.mv=null;stopMine('Auto-mine off.');P.fol={id:x.id,go:true};say('Following '+x.n+'. Walk, click the ground or pick a target to stop.','#5fd3a5')});
+  }
+  m.style.display='flex';
+  const hr=hud.getBoundingClientRect(),rr=r.getBoundingClientRect(),w=m.offsetWidth||130,h=m.offsetHeight||120;
+  let lx=rr.right-hr.left+6;if(lx+w>hr.width)lx=Math.max(0,rr.left-hr.left-w-6);
+  m.style.left=lx+'px';m.style.top=clamp(rr.top-hr.top,0,Math.max(0,hr.height-h))+'px';
+}
+/* v5_338 FOLLOW THE LEADER: run after the party leader (same world). It starts when you are more than FOL_FAR away and runs until you are within FOL_NEAR; in between your normal
+   fighting / auto-hunt rules apply, so you can fight next to the leader. It ends when you steer, click the ground / a monster / an ore, die, the leader changes or is not in your world. */
+const FOL_FAR=260,FOL_NEAR=110;
+function folStep(dt,speed){
+  const f=P.fol;if(!f)return false;
+  if(!MP||PARTY.m.length<2||PARTY.lead!==f.id||PARTY.lead===NET.id){P.fol=null;return false}
+  const q=NET.peers.get(f.id);
+  if(!q){const m=PARTY.m.find(x=>x.id===f.id);P.fol=null;say('Stopped following'+(m?' '+m.n:'')+': not in your world.','#8d9aa2');return false}
+  if(q.dead)return false;
+  const d=dist(q.x,q.y,P.x,P.y);
+  if(!f.go&&d>FOL_FAR){f.go=true;P.target=null;P.fatk=false}
+  if(!f.go)return false;
+  if(moveToward(q.x,q.y,FOL_NEAR,dt,speed)){f.go=false;return false}
+  P.arMvNow=true; /* counts as walking: the auto-hunt realm limit waits and the anchor is set where you stop */
+  return true;
+}
+function pmBind(r,x){
+  r.classList.add('pk');let dn=null;
+  r.addEventListener('pointerdown',e=>{dn={x:e.clientX,y:e.clientY}}); /* the window is also dragged by its rows: only a click that did not move opens the menu */
+  r.addEventListener('click',e=>{
+    if(e.target.closest&&e.target.closest('button'))return;
+    if(dn&&Math.hypot(e.clientX-dn.x,e.clientY-dn.y)>6)return;
+    if(PM.id===x.id){pmClose();return}
+    pmOpen(r,x);
+  });
 }
 $('pinvY').addEventListener('click',()=>partyCmd('accept'));
 $('pinvN').addEventListener('click',()=>partyCmd('decline'));
@@ -377,6 +433,7 @@ function netMsg(m){
       MP=true;
       if(entering)arriveWorld(m.w,m.mons);else buildWorld(m.w,m.mons);
       for(const e of (m.ores||[]))if(ores[e[0]])ores[e[0]].cd=e[1];
+      if(!entering)xferHide(); /* v5_341 */
       if(!entering)say('Joined the shared world of '+W[m.w].n+' \u00b7 '+(NET.peers.size+1)+' here.',W[m.w].acc);
       break}
     case 's':onSnap(m);break;
@@ -397,7 +454,7 @@ function netMsg(m){
       }
       announceBosses(out);break}
     case 'bx':{const o=monAt(m.i);if(o&&!o.dead){o.dead=true;o.dieT=0;o.respawn=1e9;o.pend=false;if(P.target===o)P.target=null;say(o.name+' (Lv '+o.lvl+') has vanished.','#8d9aa2')}break}
-    case 'hurt':if(MP&&P.dead<=0){const o=monAt(m.i);if(o)o.atkT=.25;hurtPlayer(Math.max(1,m.d|0),false,o?o.lvl:P.lvl,o);retaliate(o)}break;
+    case 'hurt':if(MP&&P.dead<=0&&!inTown()){const o=monAt(m.i); /* v5_340 the hub is safe: a hit the server sent before it learned you were in the hub (slow link) is ignored */if(o)o.atkT=.25;hurtPlayer(Math.max(1,m.d|0),false,o?o.lvl:P.lvl,o);retaliate(o)}break;
     case 'o':if(ores[m.i])ores[m.i].cd=+m.cd||30;break;
     case 'pj':{const i=m.p;if(i&&i.id!==NET.id&&MP){NET.peers.set(i.id,mkPeer(i));say(String(i.n)+' entered the world.','#5fd3a5')}break}
     case 'pl':{const q=NET.peers.get(m.id);if(q){NET.peers.delete(m.id);say(q.name+' left.','#8d9aa2');if(PG.id===m.id)pgClose()}break}
@@ -541,6 +598,9 @@ function updateMonstersMP(dt){
   for(const m of mons){
     if(m.flash>0)m.flash-=dt;
     if(m.predT>0)m.predT-=dt;
+    /* v5_339 a predicted kill (hp 0, waiting for the server's 'd') fades out at once instead of standing there at 0 hp while a slow connection delivers the message. It comes back by itself if the
+       server says it is still alive (onSnap hp > 0 clears pend). If nothing confirms it for 4 s it is hidden as a ghost; a later snapshot entry brings it back (onSnap 'respawned'). */
+    if(m.pend){m.pendT=(m.pendT||0)+dt;if(m.pendT>4){m.dead=true;m.dieT=0;m.pend=false;m.pendT=0;if(P.target===m)P.target=null}}else m.pendT=0;
     if(m.dead){m.dieT=Math.max(0,(m.dieT||0)-dt);continue}
     m.atkT=Math.max(0,(m.atkT||0)-dt);
     if(m.tx!==undefined){const dx=m.tx-m.x,dy=m.ty-m.y;if(dx*dx+dy*dy>90000){m.x=m.tx;m.y=m.ty}else{m.x+=dx*k;m.y+=dy*k}}
@@ -564,7 +624,7 @@ function playFx(m){
         ring(p[i+2],p[i+3],40,col);
       }
       break}
-    case 'sw':if(q){q.swing=.18;q.skT='';q.face=+m.f||0}break;
+    case 'sw':if(q){q.swing=.18;q.skT='';q.face=+m.f||0;const bc=(q.sk>>>21)&7;if(BASIC_RANGE[bc]&&projs.length<200&&dist(q.x,q.y,P.x,P.y)<1600){const l=BASIC_RANGE[bc]*BASIC_STAND/BASIC_PSPD;projs.push({x:q.x,y:q.y,vx:Math.cos(q.face)*BASIC_PSPD,vy:Math.sin(q.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:q.face,col:BASIC_COL[bc],cos:true})}else if(bc<3&&dist(q.x,q.y,P.x,P.y)<900)skfxCast({t:(basicSwN^=1)?'basic_a':'basic_b',cls:bc,x:q.x,y:q.y,face:q.face,r:70,col:MELEE_BASIC_COL[bc]})}break; /* v5_343 other players' ranged normal attack: a cosmetic bolt over the usual standing distance */
     case 'an':if(q){q.skT=String(m.s||'').slice(0,14);q.skTi=(q.skTi|0)+1;q.swing=.2;if(dist(q.x,q.y,P.x,P.y)<1600)skfxCast({t:q.skT,cls:(q.sk>>>21)&7,x:q.x,y:q.y,face:q.face,r:150,col:col})}break;   /* v5_322 another player's skill: its move (anim3d.js) */
     case 'em':if(q){q.emo={n:String(m.e||'').slice(0,12)||null,id:(q.emo?q.emo.id:0)+1}}break;   /* v5_322 another player's emote (/dance ...) */
     case 'ac':if(q){q.act={n:String(m.e||'').slice(0,12),id:(q.act?q.act.id:0)+1}}break;   /* v5_322 another player's one-shot move (drinking ...) */
