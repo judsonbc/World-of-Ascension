@@ -363,7 +363,7 @@ function updatePlayer(dt){
     if(P.target&&dist(m.x,m.y,P.x,P.y)<=reach&&P.atkCd<=0){
       P.face=Math.atan2(m.y-P.y,m.x-P.x);
       const c=rnd()<critChance(),dd=dist(m.x,m.y,P.x,P.y);let d=Math.round(atkVal()*(.9+rnd()*.2)*(c?critMul():1)*(1+babVal()/100));
-      if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));{const l=Math.max(.06,dd/BASIC_PSPD);projs.push({x:P.x,y:P.y,vx:Math.cos(P.face)*BASIC_PSPD,vy:Math.sin(P.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:P.face,col:BASIC_COL[P.cls],cos:true})}} /* ranged normal attack: damage falloff + a visible bolt (v5_343: cosmetic projectile flying to the target, replaces the old 6-spark trail; cos:true = it never hits anything) */
+      if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));{const l=Math.max(.06,dd/BASIC_PSPD);projs.push({x:P.x,y:P.y,vx:Math.cos(P.face)*BASIC_PSPD,vy:Math.sin(P.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:P.face,col:BASIC_COL[P.cls],cos:true,sc:BASIC_PSC})}} /* ranged normal attack: damage falloff + a visible bolt (v5_343: cosmetic projectile flying to the target, replaces the old 6-spark trail; cos:true = it never hits anything) */
       if(m.isPl)hitPeer(m,d,c);else hitMonster(m,d,c);
       P.qi=Math.min(maxQi(),P.qi+3);P.atkCd=atkCd();P.skT='';P.swing=.18;SFX('swing');fxs({k:'sw',f:+P.face.toFixed(2)});if(!rng)skfxCast({t:(basicSwN^=1)?'basic_a':'basic_b',cls:P.cls,x:P.x,y:P.y,face:P.face,tx:m.x,ty:m.y,r:70,col:MELEE_BASIC_COL[P.cls]}); /* v5_343 small sword slash on a melee normal attack */
     }
@@ -397,6 +397,7 @@ function updatePlayer(dt){
     }
   }
   if(P.cast>0)P.cast-=dt;
+  if(P.pend){const q=P.pend;q.t+=dt;if(P.dead>0){P.pend=null;teleClearOwn()}else if(q.t>=q.D){P.pend=null;P.teleOn=q.spec;try{useSkill(q.i,q.auto,true)}finally{P.teleOn=null}}} /* v5_349 second half of a telegraphed cast: the hit, only inside the shown area */
   if(P.skipT>0){P.skipT-=dt;if(P.skipT<=0)P.skipM=null} /* v5_315 */
   P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);
   if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1,P.dg)-dashEase(e0,P.dg));P.x+=P.dvx*st;P.y+=P.dvy*st;P.dgU=e1;
@@ -529,6 +530,7 @@ function updateMisc(dt){
     if(p.life<=0)projs.splice(i,1);
   }
   for(let i=fx.length-1;i>=0;i--){fx[i].t+=dt;if(fx[i].t>=fx[i].max)fx.splice(i,1)}
+  for(let i=tele.length-1;i>=0;i--){tele[i].t+=dt;if(tele[i].t>=tele[i].max||(P.dead>0&&tele[i].own))tele.splice(i,1)} /* v5_345 */
   for(let i=texts.length-1;i>=0;i--){const t=texts[i];t.t+=dt;t.y-=28*dt;if(t.t>1)texts.splice(i,1)}
   for(let i=items.length-1;i>=0;i--){
     const it=items[i];it.t+=dt;
@@ -1034,7 +1036,7 @@ function drawFx(){
   const ox=-cam.x,oy=-cam.y;
   for(const p of projs){
     const x=p.x+ox,y=p.y+oy;
-    ctx.save();ctx.translate(x,y);ctx.rotate(p.ang);
+    ctx.save();ctx.translate(x,y);ctx.rotate(p.ang);if(p.sc)ctx.scale(p.sc,p.sc);
     ctx.globalAlpha=.88;ctx.fillStyle=p.col||'#cfe3f0';
     ctx.beginPath();ctx.moveTo(18,0);ctx.quadraticCurveTo(0,-16,-10,0);ctx.quadraticCurveTo(0,-6,-10,0);ctx.quadraticCurveTo(0,16,18,0);ctx.fill();
     ctx.restore();
@@ -1045,6 +1047,15 @@ function drawFx(){
     g.addColorStop(0,'rgba(255,215,120,0)');g.addColorStop(1,'rgba(255,225,150,'+(.7*(1-k))+')');
     ctx.fillStyle=g;ctx.fillRect(b.x+ox-w/2,b.y+oy-hg,w,hg);
   }
+  for(const e of tele){   /* v5_345 telegraph: flashing area of the skill being cast */
+    const k=e.t/e.max,env=Math.min(1,(1-k)*5),fl=.5+.5*Math.sin(e.t*22);
+    ctx.save();ctx.translate(e.x+ox,e.y+oy);ctx.fillStyle='#ff2a1a';ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.beginPath();
+    if(e.k==='c')ctx.arc(0,0,e.r,0,6.2832);
+    else if(e.k==='l'){ctx.rotate(e.ang);ctx.rect(0,-e.w,e.L,e.w*2)}
+    else{ctx.rotate(e.ang);ctx.moveTo(0,0);ctx.arc(0,0,e.r,-e.h,e.h);ctx.closePath()}
+    ctx.globalAlpha=env*(.15+.2*fl);ctx.fill();ctx.globalAlpha=env*(.35+.25*fl);ctx.stroke();ctx.restore(); /* v5_346 solid */
+  }
+  ctx.globalAlpha=1;
   for(const f of fx){
     const k=f.t/f.max;ctx.globalAlpha=1-k;
     if(f.kind==='whirl'){

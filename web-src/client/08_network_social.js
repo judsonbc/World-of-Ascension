@@ -75,8 +75,11 @@ setInterval(()=>{
 /* network ticks run on a timer, not requestAnimationFrame, so a backgrounded tab keeps reporting its position */
 /* v5_251 the position sender now ticks from a Worker: main-thread timers of a hidden tab are slowed to ~1 per second (or 1 per minute after a while), which made other players look frozen / stuck on everybody else's screen */
 (function(){
+  let ppTick=0;
   const sendPos=()=>{
     if(!NET.joined)return;
+    if(P.pet&&P.pf&&(ppTick^=1)){const f=P.pf,fg=!inTown()&&P.dead<=0&&(combatT>0||time-petFightAt<4);   /* v5_353 PET SYNC: where my pet really is (+ its attack counter / fight flag / facing in 'yw': NOT 'w', the server parses a top-level "w" as an int and drops the whole message on a fractional one), relayed to nearby players as a cosmetic fx message */
+      fxs({k:'pp',x:+f.x.toFixed(1),y:+f.y.toFixed(1),n:petAtkN&1023,f:fg?1:0,yw:f.yaw===undefined?undefined:+f.yaw.toFixed(2)})}
     netSend({t:'p',x:+P.x.toFixed(1),y:+P.y.toFixed(1),f:+P.face.toFixed(2),hp:Math.round(P.hp),
       fl:(P.dead>0?1:0)|(P.bfT>0?2:0)|(P.sh>0?4:0)|(document.hidden?16:0)});
   };
@@ -624,7 +627,23 @@ function playFx(m){
         ring(p[i+2],p[i+3],40,col);
       }
       break}
-    case 'sw':if(q){q.swing=.18;q.skT='';q.face=+m.f||0;const bc=(q.sk>>>21)&7;if(BASIC_RANGE[bc]&&projs.length<200&&dist(q.x,q.y,P.x,P.y)<1600){const l=BASIC_RANGE[bc]*BASIC_STAND/BASIC_PSPD;projs.push({x:q.x,y:q.y,vx:Math.cos(q.face)*BASIC_PSPD,vy:Math.sin(q.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:q.face,col:BASIC_COL[bc],cos:true})}else if(bc<3&&dist(q.x,q.y,P.x,P.y)<900)skfxCast({t:(basicSwN^=1)?'basic_a':'basic_b',cls:bc,x:q.x,y:q.y,face:q.face,r:70,col:MELEE_BASIC_COL[bc]})}break; /* v5_343 other players' ranged normal attack: a cosmetic bolt over the usual standing distance */
+    case 'sw':if(q){q.swing=.18;q.skT='';q.face=+m.f||0;const bc=(q.sk>>>21)&7;if(BASIC_RANGE[bc]&&projs.length<200&&dist(q.x,q.y,P.x,P.y)<1600){const l=BASIC_RANGE[bc]*BASIC_STAND/BASIC_PSPD;projs.push({x:q.x,y:q.y,vx:Math.cos(q.face)*BASIC_PSPD,vy:Math.sin(q.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:q.face,col:BASIC_COL[bc],cos:true,sc:BASIC_PSC})}else if(bc<3&&dist(q.x,q.y,P.x,P.y)<900)skfxCast({t:(basicSwN^=1)?'basic_a':'basic_b',cls:bc,x:q.x,y:q.y,face:q.face,r:70,col:MELEE_BASIC_COL[bc]})}break; /* v5_343 other players' ranged normal attack: a cosmetic bolt over the usual standing distance */
+    case 'pp':{ /* v5_353 another player's real pet position / attack counter (cosmetic) */
+      const px=+m.x,py=+m.y;if(!q||!q.pet||!isFinite(px)||!isFinite(py))break;   /* (x / y above turn a bad number into 0: check the raw values) */
+      const n=(+m.n|0)&1023,fresh=peerPetLive(q);
+      if(fresh&&q.pr.n!==n){q.petAtkAt=time;q.petAtkN=(q.petAtkN|0)+1;q.fightUntil=time+4}   /* their pet struck: play its attack animation */
+      if(+m.f)q.fightUntil=Math.max(q.fightUntil||0,time+1.2);
+      q.pr={x:clamp(px,-1e5,1e5),y:clamp(py,-1e5,1e5),n,w:(m.yw===undefined||!isFinite(+m.yw))?undefined:+m.yw,t:performance.now()};
+      break}
+    case 'tl':{ /* v5_352 another player's telegraph: the red area of the skill they just pressed (before its hit lands). Cosmetic only. */
+      if(!TELE_ON)break;const A=Array.isArray(m.a)?m.a.slice(0,6):[];
+      for(let i=tele.length-1;i>=0;i--)if(tele[i].oid===m.id)tele.splice(i,1);
+      for(const g of A){if(!Array.isArray(g))continue;const n=g.slice(1).map(Number);if(n.length<3||n.some(v=>!isFinite(v)))continue;let e=null;
+        if(g[0]==='c')e={k:'c',x:n[0],y:n[1],r:clamp(n[2],5,700)};
+        else if(g[0]==='l'&&n.length>=5)e={k:'l',x:n[0],y:n[1],ang:n[2],L:clamp(n[3],5,900),w:clamp(n[4],3,300)};
+        else if(g[0]==='a'&&n.length>=5)e={k:'a',x:n[0],y:n[1],ang:n[2],r:clamp(n[3],5,900),h:clamp(n[4],.02,1.6)};
+        if(e&&tele.length<12)tele.push(Object.assign({col:'#ff2a1a',t:0,max:SKILL_WIND+.3,oid:m.id},e))}
+      break}
     case 'an':if(q){q.skT=String(m.s||'').slice(0,14);q.skTi=(q.skTi|0)+1;q.swing=.2;if(dist(q.x,q.y,P.x,P.y)<1600)skfxCast({t:q.skT,cls:(q.sk>>>21)&7,x:q.x,y:q.y,face:q.face,r:150,col:col})}break;   /* v5_322 another player's skill: its move (anim3d.js) */
     case 'em':if(q){q.emo={n:String(m.e||'').slice(0,12)||null,id:(q.emo?q.emo.id:0)+1}}break;   /* v5_322 another player's emote (/dance ...) */
     case 'ac':if(q){q.act={n:String(m.e||'').slice(0,12),id:(q.act?q.act.id:0)+1}}break;   /* v5_322 another player's one-shot move (drinking ...) */

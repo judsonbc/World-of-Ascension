@@ -1,8 +1,60 @@
+v5_359 SKILL RIPPLES HUG THE GROUND (the round rings on the ground)
+  The ripple rings of skills (fx rings, 06_render3d.js) were flat discs placed at the ground height of their centre + 4, so on a slope or hill one side cut into the terrain and the other floated. Each ring is now its own 32-segment strip whose vertices are put on the terrain every frame (gh3 at each point, +2.5), with a polygon offset against z-fighting. Same size, colour, fade and pool of 40 as before; cost = at most 40 x 66 terrain lookups per frame, only while ripples are active. The selection ring and the move marker are unchanged. Tune RSEG / RING_LIFT before gh3 in 06_render3d.js. Not seen in the game yet.
+
+v5_359 SKILL RIPPLES HUG THE GROUND (the round rings on the ground)
+  The ripple rings of skills (fx rings, 06_render3d.js) were flat discs placed at the ground height of their centre + 4, so on a slope or hill one side cut into the terrain and the other floated. Each ring is now its own 32-segment strip whose vertices are put on the terrain every frame (gh3 at each point, +2.5), with a polygon offset against z-fighting. Same size, colour, fade and pool of 40 as before; cost = at most 40 x 66 terrain lookups per frame, only while ripples are active. The selection ring and the move marker are unchanged. Tune RSEG / RING_LIFT before gh3 in 06_render3d.js. Not seen in the game yet.
+
+v5_358 SKILL EFFECTS HUG THE GROUND
+  The slash meshes of the skills (web/skillfx3d.js, also what you see of other players' skills) floated 34 units above the ground and banked up to almost vertical (tilt 1.4 = chop), so they covered the monsters and the view. Now the arc lies close to the ground (GROUND_H = 6) and only 12 % of the table's tilt is kept (TILT_K, capped at .2 rad), with a polygon offset so a flat arc does not sink into slopes. The ground rings of the main renderer were already at +4. Tune GROUND_H / TILT_K / TILT_MAX at the top of the casting section; TILT_K 1 + GROUND_H 0 = old look. Only web/skillfx3d.js changed, so rebuild the exe (build.bat) and reload. Not seen in the game yet.
+
+v5_357 PET SYNC FIX: other players now really receive your pet's position
+  Cause: the pet message carried its facing in a field called 'w', but the server parses every incoming message into inMsg where "w" is an int (world index). A fractional facing (e.g. 1.57) made json.Unmarshal fail and the server dropped the whole message, so in 3D nobody ever received 'pp' and peers fell back to the old local roaming (pet stays by its owner, only plays an attack when the owner swings). 2D never sent a facing, which is why it could work there.
+  Fix: the facing is sent as 'yw' (client only, no Go change). Files: web-src/client/08_network_social.js (sender in sendPos, receiver in playFx 'pp'). Old clients still send 'w' and are still dropped by the server (they keep the fallback). Not seen in the game with two players yet.
+
+v5_353 PET MOVEMENTS ARE VISIBLE TO OTHER PLAYERS
+  Before, every client drew other players' pets with its OWN random roaming (peerPetStep), so you never saw where their pet really was: not the chase after enemies (Tiger / Wolf run up to the enemy), not the trailing while they walk, not the real attack timing.
+  Now the owner's client sends its pet's real position about 8 times a second as a cosmetic fx message {k:'pp', x, y, n: attack counter, f: fighting, w: facing} (the server already relays fx messages to players within 1900 units: no Go change, about 4 tokens/s of the 40/s budget). Other clients glide their copy of the pet to that position (exponential smoothing, ~100 ms behind), play its attack animation when the counter changes, keep the fight pose (dragon flies) while f is set and face where the owner's pet faces when it stands still.
+  No data for 1.5 s (old client, hidden tab, out of range): the old local roaming is used. Files: web-src/client/03_pets.js, 08_network_social.js. Position / counter / facing are validated. Not seen in the game with two players yet.
+
+v5_352 OTHER PLAYERS SEE YOUR TELEGRAPH
+  When you press a telegraphed skill, the area is also sent as a cosmetic fx message {k:'tl', a:[['c',x,y,r] | ['l',x,y,ang,L,w] | ['a',x,y,ang,r,h] ...]} (the server already relays every fx message to players within 1900 units, no Go change). Their client draws the same red area for the wind-up (SKILL_WIND + .3 s) and drops it when you cast again. Received values are checked and clamped; at most 12 areas on screen (3D pool 12).
+  tele[] now holds my own entries (own:1) and other players' (oid): casting, dodging or dying only clears MY entries. Damage still uses only my own area (P.teleOn). Not seen in the game yet.
+
+v5_351 TELEGRAPH IS RED (#ff2a1a, every skill; only a faint light flash toward white), fill opacity 15-35 % (flashing), fine white rim unchanged. web-src/client/06_render3d.js, 05_render2d.js.
+
+v5_350 TELEGRAPH: the white rim of a circle is now a very fine line (2.5 world units wide, was 10 % of the radius; 2D line 1.5 px), fill opacity about 10-18 % (was 20-36 %), rim 35-60 %. web-src/client/06_render3d.js, 05_render2d.js.
+
+v5_349 TELEGRAPH FIRST, DAMAGE AFTER (dodgeable skills)
+  A damaging skill no longer hits at the instant you press it. Press = the ground area flashes (SKILL_WIND = .6 s, web-src/client/02_combat.js), you are rooted and play the skill move; then the hit lands (spend, cooldown, effects, damage happen at that moment).
+  The hit only counts on units that are STILL inside the shown area (teleCovers in hitMonster / hitPeer): a monster or a player who steps out of the circle / lane / fan takes no damage. Projectile skills launch when the area has been shown and fly as before.
+  Global lock is still 1.5 s counted from the PRESS (pose 1.5 s from the press, slashes and rings end with the lock). Dodging (the dodge roll) cancels a wind-up that has not hit yet; death or a world change cancels it too.
+  Unchanged: priority skills R / T (instant), heals / buffs / summons (instant), basic attacks, single-target skills with no target (refused as before). Set SKILL_WIND = 0 to get the old instant hits back.
+  Edited in web-src, web/game.js rebuilt (--check passes), web/skillfx3d.js SKILL_FX_T .9. Area test (teleCovers 9 cases) passes; not seen in the game yet.
+
+v5_348 TELEGRAPH CLAMPED TO THE GROUND + MORE TRANSPARENT: in 3D the area is now a grid mesh (about 30 units) whose every vertex takes the terrain height under it (teleGeom in web-src/client/06_render3d.js), so no part sinks into a hill; built once per cast. Fill opacity about 20-36 % (was 62-87 %), circle rim band 40-70 %; 2D the same. Edited in web-src, web/game.js rebuilt (--check passes).
+
+v5_347 BUILD FIX: my changes of v5_344 - v5_346 (global lock 1.5 s, stretched skill moves / effects, ground telegraph, solid look) were only in web/game.js, which build.bat REBUILDS from web-src/client, so a build would have thrown them away. They are now in the web-src/client parts too (02_combat.js, 05_render2d.js, 06_render3d.js, 10_main_loop.js ...); `node tools/build_client.js --check` passes and web/game.js is identical to the build. anim3d.js and skillfx3d.js have no web-src copy.
+
+v5_346 TELEGRAPH IS SOLID: opaque flashing fill (about 60-90 % opacity, normal blending instead of additive light, which washed out on bright ground), white outline on circles / 2D shapes, the colour pulses toward white. web/game.js only.
+
+v5_345 SKILL TELEGRAPH: THE GROUND AREA OF A SKILL FLASHES WHILE IT IS BEING CAST
+  When you cast a damaging skill, the ground area it can hit now flashes in the skill's colour for the whole global lock (1.5 s) and fades out at the end: circle around you (Whirling Blade, Quake, Roar, Wail ...), circle on the target / ground spot (Blast, Rain, Trap, Meteor, Spirit Bomb ...),
+  lane (Rush, Shockwave, Pierce, Arrow, the line signature skills), fan (Cleave, Fan, Kunai, Volley, Rain of arrows signature) and a small circle on the target for single-target skills. Sizes come from the same numbers the skills use (skTeleSpec / SIGTL in web/game.js), the area is taken before a dash moves you.
+  Visual only: no damage, timing or range change. Drawn in 2D (draw loop) and 3D (T3.tl pool, additive light on the ground). Your own casts only (other players' casts show no telegraph). Buffs / heals / summons show none. Off switch: localStorage woa_tele = '0'.
+  File: web/game.js (edited directly, web-src is not in this zip). Shape table unit-tested (59 skill types); not seen in the game yet.
+
+v5_344 SKILL GLOBAL LOCK 1.5 s, SKILL MOVES AND EFFECTS PLAY OVER THE WHOLE LOCK
+  The global lock between two skill casts (SKILL_GCD in web/game.js, manual and auto) is now 1.5 s (was 1). Skill cooldowns, the basic attack and the priority slots (R / T ignore the lock) are unchanged.
+  Skill moves (web/anim3d.js, SKILL_T = 1.5): every skill's body move is slowed by one common factor so it ends 1.5 s after the cast (stretchSkill; moves already longer are left alone). Basic attacks, the short cast-root pose and emotes are unchanged.
+  Skill slashes (web/skillfx3d.js, SKILL_FX_T = 1.5): they stay visible and fade out until 1.5 s after the cast (multi-hit slashes still start one after the other). Normal-attack slashes keep their .34 s.
+  2D rings made by a skill (useSkill in web/game.js) also last 1.5 s. Note: the swing / strike of a stretched move now lands later than before (about 1.5 / old length x). Edited web/game.js directly (web-src is not in this zip).
+  Tests: tools/test_anim3d.js, test_skillfx3d.js, check_constants.js pass. Not seen in the game yet.
+
 v5_343 SHADOW STEP SLASH, RANGED BASIC ATTACK BOLT, MELEE BASIC ATTACK SLASH
   Night Blade Shadow Step (every tier) now plays a sword slash through the target 0.08 s after you land, using the sl_sword_slash_4.png texture (TABLE.shadowstep, tx:2). One entry, no other file touched.
   Other players see it too, but it is placed from their position when the message arrives. Not seen in the game yet.
   Storm Archer and Spirit Summoner normal attacks now fire a visible bolt (the glowing orb with a trail, mint green / light blue) that flies to the target at BASIC_PSPD = 1500 (02_combat.js). It replaces
-  the old instant 6-spark trail and is cosmetic only (cos:true projectile, dmg 0, hits nothing): the damage, falloff and attack timing are unchanged and still land instantly. Other players' ranged
+  the old instant 6-spark trail (drawn at half size, BASIC_PSC = .5 in 02_combat.js; projectiles take an optional sc scale in the 3D sync, the 2D draw and the glow) and is cosmetic only (cos:true projectile, dmg 0, hits nothing): the damage, falloff and attack timing are unchanged and still land instantly. Other players' ranged
   normal attacks show the bolt too (08_network_social.js, 'sw' message). Files: 02_combat.js, 05_render2d.js, 08_network_social.js, rebuilt web/game.js. Not seen in the game yet.
   Melee normal attacks (Cultivator, Night Blade, Iron Guardian) now play a small sword slash (R 38) on every swing, alternating sides, texture sword_slash_3.png (tx:1), tinted per class
   (MELEE_BASIC_COL in 02_combat.js). TABLE.basic_a / basic_b in web/skillfx3d.js; other players' melee swings show it within 900 units. Basic slashes are skipped when the effect pool is nearly full so they

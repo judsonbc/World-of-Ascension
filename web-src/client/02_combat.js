@@ -26,6 +26,7 @@ function gainExp(n){
   if(gained)lvBanner(P.lvl,gained,bt);
 }
 function hitMonster(m,dmg,crit,sure){ /* sure (v5_219): skip the accuracy roll, used for pet burn ticks */
+  if(P.teleOn&&!teleCovers(m))return 0; /* v5_349 the hit of a telegraphed skill only lands inside the shown area: step out = dodged */
   if(m.dead||m.pend||pvpOnly()||inTown())return 0; /* v5_90 no attacking inside the safe hub */
   if(!sure&&rnd()>hitChance(m)){ /* missed: no damage, but the monster still notices you */
     if(m.state==='idle'&&!inTown())m.state='chase';
@@ -107,10 +108,11 @@ function takeGear(it){
 const RANGE_FALL=.5,RANGED_CAP=.5;
 /* v5_80 NORMAL ATTACK RANGE per class [Cultivator, Night Blade, Iron Guardian, Storm Archer, Spirit Summoner]: 0 = melee (body size + 30), otherwise the attack
    reaches that many units. Ranged normal attacks lose up to BASIC_FALL of their damage at full range and you stand at BASIC_STAND of the range from the target. */
-const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','','','#9fe8c8','#9fe0ff'],BASIC_PSPD=1500,MELEE_BASIC_COL=['#cfe8ff','#c7a8ff','#ffcf8a'];let basicSwN=0; /* v5_343 MELEE_BASIC_COL = tint of the small slash of the melee normal attack (Cultivator, Night Blade, Iron Guardian); basicSwN alternates its side */ /* v5_343 BASIC_PSPD = speed of the visible bolt of the ranged normal attack (Storm Archer / Spirit Summoner); cosmetic only, the damage is still instant */
+const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','','','#9fe8c8','#9fe0ff'],BASIC_PSPD=1500,BASIC_PSC=.5,MELEE_BASIC_COL=['#cfe8ff','#c7a8ff','#ffcf8a'];let basicSwN=0; /* BASIC_PSC = size of the ranged normal attack bolt (1 = the size of a skill projectile). v5_343 MELEE_BASIC_COL = tint of the small slash of the melee normal attack (Cultivator, Night Blade, Iron Guardian); basicSwN alternates its side */ /* v5_343 BASIC_PSPD = speed of the visible bolt of the ranged normal attack (Storm Archer / Spirit Summoner); cosmetic only, the damage is still instant */
 function rangedDmg(m,d,fr){d=Math.round(d*(1-RANGE_FALL*clamp(fr,0,1)));if(!m.boss)d=Math.min(d,Math.max(1,Math.round(m.maxhp*RANGED_CAP)));return d}
 const CRIT_MUL=1.8;
-const SKILL_GCD=1; /* seconds between two skill casts (manual or auto); v5_190: 0.45 -> 1; v5_192: 2; v5_193: back to 1 */
+const SKILL_WIND=.6; /* v5_349 TELEGRAPH FIRST, DAMAGE AFTER: a damaging skill shows its ground area for SKILL_WIND seconds (you are rooted and play the move), then the hit lands - only on what is still inside the area, so enemies / players can step out. 0 = old instant hits */
+const SKILL_GCD=1.5; /* seconds between two skill casts (manual or auto); v5_190: 0.45 -> 1; v5_192: 2; v5_193: back to 1; v5_344: 1.5 (skill poses and effects are stretched to this length, see SKILL_T in anim3d.js / SKILL_FX_T in skillfx3d.js) */
 function sd(m,x,fr){const c=rnd()<critChance();let d=Math.round(atkVal()*x*(c?critMul():1)*(.9+rnd()*.2));if(fr!==undefined)d=rangedDmg(m,d,fr);return hitMonster(m,d,c)}
 /* the thing skills aim at: the attack target, else the selected monster (or selected player while PvP-flagged) */
 function aimT(){const t=P.target&&!P.target.dead?P.target:null;if(t)return t;const q=P.sel;return q&&!q.dead&&(!q.isPl||pvpOk(q))?q:null}
@@ -151,6 +153,49 @@ function skillReach(t,tr,mel,mr){if(SIGR[t])return[SIGR[t],0];switch(t){
   case 'pierce':case 'fan':return [mel?mr+40:364,1];case 'kunai':return [mel?mr+40:418,1];case 'arrow':return [720,1];case 'volley':return [490,1];
   case 'blast':case 'stormarrow':case 'rain':case 'trap':case 'spiritbomb':return [520,0];case 'meteor':return [450,0];case 'chain':return [600,0];
 }return null}
+/* v5_345 TELEGRAPH: while a skill is being cast (the whole global lock, SKILL_GCD) its ground area flashes, so you can see where it can deal damage.
+   skTeleSpec(...) returns the shapes the skill really uses (same numbers as useSkill / sigCast): {k:'c',x,y,r} circle, {k:'l',x,y,ang,L,w} lane (w = half width),
+   {k:'a',x,y,ang,r,h} fan (h = half angle). useSkill pushes them into tele[] when the cast succeeds; drawn in 2D (draw loop) and 3D (T3.tl pool). Off switch: localStorage woa_tele='0'. */
+const TELE_ON=(()=>{try{return localStorage.getItem('woa_tele')!=='0'}catch(e){return true}})();
+/* v5_349 is unit q (monster / player) inside one of the shown shapes (circle / lane / fan), counting its radius? */
+function teleClearOwn(){for(let i=tele.length-1;i>=0;i--)if(tele[i].own)tele.splice(i,1)} /* v5_352 tele[] also holds other players' areas: a cast / dodge / death only clears MY entries */
+function teleCovers(q){const S=P.teleOn;if(!S)return true;
+  for(const e of S){
+    if(e.k==='c'){if(dist(q.x,q.y,e.x,e.y)<e.r+q.r)return true}
+    else if(e.k==='l'){if(sigInLine(q,e.x,e.y,e.ang,e.L,e.w))return true}
+    else{const d=dist(q.x,q.y,e.x,e.y);if(d<e.r+q.r){let da=Math.abs(Math.atan2(q.y-e.y,q.x-e.x)-e.ang);if(da>Math.PI)da=Math.PI*2-da;if(da<=e.h+Math.atan2(q.r,Math.max(d,1)))return true}}
+  }return false}
+function skTeleSpec(t,tr,mel,mr,a,tg0){
+  const at=(rng,fd)=>{const n=tg0&&!tg0.dead&&(!tg0.isPl||pvpOk(tg0))?tg0:nearest(rng);return n?{x:n.x,y:n.y}:{x:P.x+Math.cos(P.face)*fd,y:P.y+Math.sin(P.face)*fd}};
+  const C=(x,y,r)=>({k:'c',x,y,r}),Ln=(len,w)=>({k:'l',x:P.x,y:P.y,ang:a,L:len,w}),F=(r,h)=>({k:'a',x:P.x,y:P.y,ang:a,r,h});
+  const self=r=>[C(P.x,P.y,r)],one=(rng,r)=>{const n=(tg0&&!tg0.dead&&(!tg0.isPl||pvpOk(tg0)))?tg0:nearest(rng);return n?[C(n.x,n.y,r)]:null},grd=(rng,fd,r)=>{const n=at(rng,fd);return [C(n.x,n.y,r)]};
+  if(SIGTL[t])return SIGTL[t](self,one,grd,Ln,F,at,C);
+  switch(t){
+    case 'nova':return self(tr<0?120:150+tr*14);case 'drain':return self(170);case 'bladestorm':return self(120+tr*8);
+    case 'quake':return self(160+tr*12);case 'roar':return self(240);case 'counter':return self(150+tr*8);
+    case 'soulburst':return self(140+tr*10);case 'wail':return self(240);case 'harvest':return self(200);case 'chains':return self(400);
+    case 'rush':return [Ln(280+tr*10,45)];case 'shockwave':return [Ln(420,70)];
+    case 'cleave':return [F(150+tr*10,1.25)];
+    case 'hammer':return one(200,100+tr*6);case 'bash':return one(170,50);case 'strike':return one(170,50);case 'flurry':return one(170,40);
+    case 'execute':return one(200,55);case 'siphon':return one(170,45);case 'venom':return one(mel?mr:460,36);
+    case 'leap':return one(360,70);case 'charge':return one(400,70);case 'shadowstep':return one(420,60);
+    case 'pierce':return [Ln(mel?Math.min(364,mr+40):364,26)];
+    case 'fan':{const n=3+Math.floor(tr/2);return [F(mel?Math.min(364,mr+40):364,(n-1)/2*.17+.08)]}
+    case 'kunai':{const n=3+Math.floor(tr/3);return [F(mel?Math.min(418,mr+40):418,(n-1)/2*.08+.06)]}
+    case 'arrow':return [Ln(720,22)];
+    case 'volley':{const n=5+Math.floor(tr/2);return [F(490,(n-1)/2*.13+.08)]}
+    case 'rain':return grd(520,240,110+tr*6);case 'trap':return grd(520,240,100+tr*5);case 'blast':return one(520,110+tr*5);
+    case 'spiritbomb':return grd(520,240,160+tr*12);case 'meteor':return grd(450,220,110+tr*10);
+    case 'stormarrow':case 'chain':return one(600,40);
+  }
+  return null}
+const SIGTL={ /* signature skills that damage: [shapes] from the numbers in their SIGF entries */
+  sg_c100:(S)=>S(250),sg_n200:(S)=>S(300),sg_n1000:(S)=>S(520),sg_g300:(S)=>S(280),sg_g500:(S)=>S(300),sg_s100:(S)=>S(440),
+  sg_c200:(S,O,G)=>G(520,260,280),sg_c300:(S,O,G)=>G(520,240,150),sg_a200:(S,O,G)=>G(520,260,200),sg_a750:(S,O,G)=>G(520,260,330),sg_s1000:(S,O,G)=>G(520,260,340),
+  sg_n300:(S,O)=>O(420,230),sg_n100:(S,O)=>O(460,80),sg_n500:(S,O)=>O(460,80),sg_a50:(S,O)=>O(720,80),sg_a500:(S,O)=>O(900,80),sg_a300:(S,O)=>O(520,60),
+  sg_c750:(S,O,G,Ln)=>[Ln(720,130)],sg_g100:(S,O,G,Ln)=>[Ln(420,110)],sg_s500:(S,O,G,Ln)=>[Ln(760,130)],sg_a100:(S,O,G,Ln,F)=>[F(570,.48)],
+  sg_n750:(S,O,G,Ln,F,at,C)=>{const n=at(420,260),b=Math.atan2(n.y-P.y,n.x-P.x),H=330,o=[];for(const an of [b+Math.PI/4,b-Math.PI/4])o.push({k:'l',x:n.x-Math.cos(an)*H,y:n.y-Math.sin(an)*H,ang:an,L:H*2,w:55});return o}
+};
 /* v5_189 RESERVED SKILL: a skill pressed / tapped while it (or the global lock) is not ready is RESERVED and cast the moment it is ready; pressing another skill replaces the reservation.
    With no manual reservation the HUD shows the auto-cast skill that will fire next, also labelled Reserved. A reservation expires after RSV_MAX seconds. */
 const RSV_MAX=10;
@@ -162,7 +207,7 @@ function manualSkill(i){
   /* v5_191 only a READY skill (off cooldown, Qi / HP paid) can be reserved; it then waits only for the 1 s lock between casts. A skill on cooldown or without Qi / HP cannot be clicked at all. */
   if(SCD[id]<=0&&skCanPay(SKILLS[id])&&P.skLock>0&&i<AUTO_SLOTS){P.rsv=i;P.rsvT=RSV_MAX}
 }
-function useSkill(i,auto){
+function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphed cast: the hit itself, called by the wind-up timer */
   if(P.dead>0||!started)return false;
   const id=EQ[i];if(id<0){say('Empty slot. Press K to equip a skill.','#8d9aa2');return false}
   /* v5_84 ranged classes (Storm Archer, Spirit Summoner) cannot cast any skill inside the safe hub (manual, hotkey or auto-hunt). Nothing is spent. */
@@ -170,13 +215,15 @@ function useSkill(i,auto){
   /* v5_90 no attacking in the safe hub: ranged classes cannot cast anything; every class loses its damaging skills (heals / shields / buffs still work) */
   if(inTown()&&(P.cls>=3||(s.m>0&&!HEAL_SKILL_T[t]))){if(!(P.hubSkMsg>0)){say('You cannot attack or use attack skills inside the safe hub.','#8d9aa2');P.hubSkMsg=2}return false}
   const prio=!auto&&i>=AUTO_SLOTS; /* v5_156 slots R and T (13, 14) are PRIORITY skills: pressed / clicked / tapped by hand they cast at any moment - they ignore the short global lock and interrupt a cast pose in progress */
-  if(SCD[id]>0||!skCanPay(s)||(P.skLock>0&&!prio))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack is NOT blocked by it */
+  if(SCD[id]>0||!skCanPay(s)||(P.skLock>0&&!prio&&!res))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack is NOT blocked by it */
   const hpc=skHp(s)?skHpCost(s):0; /* v5_188b HP price fixed BEFORE the heal below */
+  const _fx0=fx.length; /* v5_344 rings made by this cast are stretched to the global lock below */
   /* v5_122 skills work outside attack mode too: when nothing is targeted or selected and a monster is inside THIS skill's reach, the nearest one is selected
      (target frame shows it, you do not start auto-attacking) and the skill aims at it. Heals / buffs and the hub rules are unchanged. */
   if(!aimT()&&s.m>0&&!HEAL_SKILL_T[t]&&!inTown()){const e=nearest(AIM_REACH[t]||(P.cls<3?MELEE_SKILL_RANGE:520));if(e&&!e.dead&&!e.isPl)P.sel=e}
   const tg0=aimT(),a=tg0?Math.atan2(tg0.y-P.y,tg0.x-P.x):P.face,A=atkVal();
   const mel=P.cls<3,mr=MELEE_SKILL_RANGE;
+  let _tl=null;if(TELE_ON&&!res&&((s.m>0&&!HEAL_SKILL_T[t])||SIGTL[t])){try{_tl=skTeleSpec(t,tr,mel,mr,a,tg0)}catch(e){_tl=null}} /* v5_345 ground area of this cast, taken BEFORE a dash moves you */
   if(auto&&P.cls===2&&IG_DMG_T[t]){const e=tg0||nearest(IG_PAD+80);if(!e||dist(e.x,e.y,P.x,P.y)>P.r+e.r+IG_PAD)return false}
   if(auto&&mel&&MELEE_RANGED_T[t]){const e=tg0?(dist(tg0.x,tg0.y,P.x,P.y)<=mr+tg0.r?tg0:null):nearest(mr);if(!e)return false}
   const pr=(g,dm)=>projs.push({x:P.x,y:P.y,vx:Math.cos(g)*520,vy:Math.sin(g)*520,life:mel?Math.min(.7,(mr+40)/520):.7,l0:mel?Math.min(.7,(mr+40)/520):.7,dmg:dm,hit:new Set(),ang:g,col:s.col});
@@ -187,6 +234,12 @@ function useSkill(i,auto){
     if(rc){const ok=tg0?dist(tg0.x,tg0.y,P.x,P.y)<=rc[0]+(rc[1]?tg0.r:0):!!nearest(rc[0]);
       if(!ok){if(!auto&&!(P.rngMsg>0)){say(s.n+': target is out of range.','#8d9aa2');P.rngMsg=1.5}return false}}
   }
+  if(_tl&&!res&&!prio&&SKILL_WIND>0){ /* v5_349 first half: show the area, root + play the move, lock the skills; the hit comes from the timer in the update loop (P.pend) */
+    teleClearOwn();for(const q of _tl)if(tele.length<12)tele.push(Object.assign({col:s.col,t:0,max:SKILL_WIND+.3,own:1},q));
+    {const r0=Math.round,r2=v=>Math.round(v*100)/100;fxs({k:'tl',a:_tl.slice(0,6).map(q=>q.k==='c'?['c',r0(q.x),r0(q.y),r0(q.r)]:q.k==='l'?['l',r0(q.x),r0(q.y),r2(q.ang),r0(q.L),r0(q.w)]:['a',r0(q.x),r0(q.y),r2(q.ang),r0(q.r),r2(q.h)])})} /* v5_352 other players see the area too (cosmetic fx message, the server relays it to nearby players) */
+    P.pend={i,auto,t:0,D:SKILL_WIND,spec:_tl};if(tg0)P.face=a;
+    P.skT=t;P.skTi=(P.skTi|0)+1;P.swing=.2;P.skLock=SKILL_GCD;P.cast=SKILL_WIND;P.castMax=SKILL_WIND;P.mv=null;
+    return true}
   if(s.sig){if(sigCast(s,id,tg0,a,A,auto)===false)return false} /* v5_160 signature skills */
   else if(!auto&&WHIFF_R[t]&&!hasFoeFor(t,tg0,mel,mr))whiffCast(t,s);
   else if(t==='pierce'){P.face=a;pr(a,A*s.m);fxs({k:'pr',x:P.x,y:P.y,a:[+a.toFixed(2)],c:s.col})}
@@ -388,10 +441,12 @@ function useSkill(i,auto){
     if(t==='mend'){P.sh=Math.round(maxHp()*(.1+tr*.03));P.shT=8;P.qi=Math.min(maxQi(),P.qi+maxQi()*.1)}
     ring(P.x,P.y,70,'#5fd3a5');fxs({k:'ri',x:P.x,y:P.y,r:70,c:'#5fd3a5'});pop(P.x,P.y-30,'+'+h,'#5fd3a5',15);spark(P.x,P.y,'#f4b3c8',14,70,1,3,60);spark(P.x,P.y,'#8ff0c4',10,60,1,2.4,50);
   }
-  skPay(s,hpc);SCD[id]=s.cd;P.skT=t;P.skTi=(P.skTi|0)+1;fxs({k:'an',s:t});P.swing=.2;P.skLock=SKILL_GCD;sfxSkill(t);
+  if(_tl){teleClearOwn();for(const q of _tl)if(tele.length<12)tele.push(Object.assign({col:s.col,t:0,max:SKILL_GCD,own:1},q))} /* v5_345 flash the area for the whole lock */
+  {const RS=res?SKILL_GCD-SKILL_WIND:SKILL_GCD;for(let q=_fx0;q<fx.length;q++)if(fx[q].max<RS)fx[q].max=RS} /* v5_344 2D rings of this skill play over the whole lock */
+  skPay(s,hpc);SCD[id]=s.cd;if(!res){P.skT=t;P.skTi=(P.skTi|0)+1;P.skLock=SKILL_GCD}fxs({k:'an',s:t});P.swing=.2;sfxSkill(t);
   {const rc=skillReach(t,tr,mel,mr),tp=aimT();skfxCast({t,cls:P.cls,x:P.x,y:P.y,face:P.face,tx:tp?tp.x:null,ty:tp?tp.y:null,r:rc?rc[0]:150,col:s.col})} /* v5_327 spell sprites + slash meshes of the skill (web/skillfx3d.js) */
   /* v5_109 CASTING: casting a skill stops you for a moment and plays a cast pose (arms raised). Dash skills (CAST_NOROOT) keep moving you instead. Tune CAST_T / CAST_T_LONG. */
-  if(!CAST_NOROOT[t]){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null} /* v5_153 casting roots you again (v5_152 removed the root while moving); v5_154 a move input does NOT cancel it, you move when the pose ends */
+  if(!CAST_NOROOT[t]&&!res){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null} /* v5_153 casting roots you again (v5_152 removed the root while moving); v5_154 a move input does NOT cancel it, you move when the pose ends */
   return true;
 }
 /* ---------- v5_160 SIGNATURE SKILL CASTING ----------
@@ -793,6 +848,7 @@ function foes(){ /* players I may hit right now: needs ATK Players Only, the Are
   if(!(PVPMODE||curWorld===ARENA||(P.target&&P.target.isPl)))return a;
   for(const q of NET.peers.values())if(pvpOk(q))a.push(q);return a}
 function hitPeer(q,dmg,crit){
+  if(P.teleOn&&!teleCovers(q))return 0; /* v5_349 see hitMonster */
   if(!pvpOk(q))return 0;
   dmg=Math.max(1,Math.round(dmg*(1+pabVal()/100)));
   netSend({t:'phit',i:q.id,d:dmg,cr:crit?1:0});

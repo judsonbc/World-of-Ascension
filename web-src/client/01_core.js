@@ -489,7 +489,7 @@ function loadLooks(s){
 }
 
 /* ---------- world ---------- */
-const mons=[],ores=[],items=[],projs=[],fx=[],texts=[],deco=[],delayed=[],bld=[];
+const mons=[],ores=[],items=[],projs=[],fx=[],tele=[],texts=[],deco=[],delayed=[],bld=[];
 /* v5_168 spatial grid of the scenery (trees, rocks, crystals, ruin blocks ...) so the player can collide with it: cell -> list of indexes into deco */
 let DG=new Map();
 /* v5_171 VILLAGES: every world has villages of houses, halls and watchtowers (bld). b = {x,y,hw,hh (half sizes), t (0 house, 1 hall, 2 watchtower), wh (wall height drawn),
@@ -709,7 +709,7 @@ let worldGen=0;
 function buildWorld(i,spawn){
   worldGen++;P.sel=null;
   setWorld(i);
-  mons.length=0;ores.length=0;items.length=0;projs.length=0;fx.length=0;texts.length=0;deco.length=0;parts.length=0;beams.length=0;delayed.length=0;
+  mons.length=0;ores.length=0;items.length=0;projs.length=0;fx.length=0;tele.length=0;P.pend=null;texts.length=0;deco.length=0;parts.length=0;beams.length=0;delayed.length=0;
   const R2=rngSeed(20261101+i*7919);
   for(let k=0;k<9;k++){ /* fixed monster count per ring, even per AREA inside each ring (keep equal to ringMons in game.go) */
     const lo=k?ZD[k-1]:500,hi=k<8?ZD[k]:RIM-40;

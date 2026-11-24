@@ -365,11 +365,20 @@ function petDraw2D(){
 
 /* ---------- OTHER PLAYERS' PETS (v5_201): each peer reports its summoned pet key (q.pet, from the server 'pt' field); it is drawn following that player. ---------- */
 /* follower position for a peer (same roaming as your own pet, see petRoamStep) */
+const peerPetLive=q=>!!(q.pr&&performance.now()-q.pr.t<1500);   /* v5_353 the owner's real pet position arrived in the last 1.5 s */
 function peerPetStep(q,is3){
   if(!q.pet)return 0;
   const now=performance.now(),dt=Math.min(.1,q.pfT?(now-q.pfT)/1000:.016);q.pfT=now;
+  if(peerPetLive(q)){ /* v5_353 PET SYNC: the pet is drawn where the OWNER's pet really is (their client sends it ~8 times a second, see the 'pp' fx message): it runs after enemies, trails them while they walk, rests where it rests. It glides to each new position. */
+    const r=q.pr;if(!q.pf||Math.hypot(q.pf.x-r.x,q.pf.y-r.y)>PET_SNAP)q.pf={x:r.x,y:r.y,mv:0};
+    const f=q.pf,ox=f.x,oy=f.y,dx=r.x-f.x,dy=r.y-f.y;
+    if(Math.hypot(dx,dy)>350){f.x=r.x;f.y=r.y}else{const k=Math.min(1,dt*9);f.x+=dx*k;f.y+=dy*k}
+    f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sp=Math.hypot(f.vx,f.vy)/Math.max(dt,.001);f.mv=f.mv||0;f.mv+=((sp>40?1:0)-f.mv)*Math.min(1,dt*10);
+    f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
+    return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+  }
   if(!q.pf||Math.hypot(q.pf.x-q.x,q.pf.y-q.y)>PET_SNAP)q.pf={x:q.x+54,y:q.y,mv:0};
-  return petRoamStep(q.pf,q.x,q.y,dt);
+  return petRoamStep(q.pf,q.x,q.y,dt);   /* no pet data from that player (old client / far away): the old local roaming */
 }
 /* 3D: list = the peers drawn this frame (rpl). Pets of peers that left, were dismissed or are out of range are removed. */
 function peerPets3(list){
@@ -381,13 +390,13 @@ function peerPets3(list){
     const rig=petRigFor(h,T.sc,q.pet),f=q.pf;
     if(!rig||!f)continue;
     seen.add(q);
-    const want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):Math.PI/2-q.face;
+    const want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):(peerPetLive(q)&&q.pr.w!==undefined?q.pr.w:Math.PI/2-q.face);   /* v5_353 standing: face where the owner's pet faces (its enemy) */
     if(f.yaw===undefined)f.yaw=want;
     let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*7);
     rig.root.visible=true;rig.root.scale.setScalar(PET_WORLD_K);
     rig.root.position.set(f.x-C,gh3(f.x,f.y),f.y-C);rig.root.rotation.y=f.yaw;
-    if(q.swing>0||q.hurt>0)q.fightUntil=time+5;   /* v5_221 a peer is fighting while it swings / gets hurt (+5 s): its dragon flies */
-    if(q.swing>.1&&time-(q.petAtkAt||-99)>1.2){q.petAtkAt=time;q.petAtkN=(q.petAtkN|0)+1}   /* v5_222 their pet strikes along with each of their swings (at most every 1.2 s) */
+    if(!peerPetLive(q)&&(q.swing>0||q.hurt>0))q.fightUntil=time+5;   /* v5_221 a peer is fighting while it swings / gets hurt (+5 s): its dragon flies */
+    if(!peerPetLive(q)&&q.swing>.1&&time-(q.petAtkAt||-99)>1.2){q.petAtkAt=time;q.petAtkN=(q.petAtkN|0)+1}   /* v5_222 their pet strikes along with each of their swings (at most every 1.2 s) */
     {const ps=ALOD&&(LOW||T.al)?(PQ.lock?PQ.am:2)+(T.al>1?1:0):1;if(ps<2||(T.fr+pn++)%ps===0||time<(q.fightUntil||0))rig.anim(time,f.mv,time<(q.fightUntil||0),q.petAtkAt,q.petAtkN)}   /* v5_331 a peer's pet moves every 2nd frame on a weak device (its pose is a function of time); never while it fights */
   }
   for(const [q,h] of map)if(!seen.has(q)){

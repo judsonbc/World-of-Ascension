@@ -10,6 +10,17 @@ const KOF=[0,2,4,1,3,3,0,1,4,2,3,1];
 const kitOf=i=>i===ARENA?1:KOF[tIx(i)%12]%5; /* scenery kit of a world; v5_260 the PvP Arena uses the CRYSTAL kit (1) again (v5_259 had the forest kit) */
 /* v5_107 gh3 = the height of the DRAWN terrain mesh (triangle interpolation of its vertex grid), not the smooth height function. The mesh cells are 90-200 units wide, so on
    narrow hills the true function and the mesh disagreed and a character / monster could sink into the hill (and be hidden). Same triangles as THREE.PlaneGeometry. */
+/* v5_348 telegraph mesh DRAPED on the terrain: a grid (about 30 units) whose every vertex takes the ground height under it (+6), so no part of a lane / circle / fan sinks into a hill.
+   Built once per cast (the area never moves). edge=1: thin band along the rim of a circle. */
+function teleGeom(e,edge){
+  const LIFT=6,pos=[],idx=[];let rows,cols,fn;
+  if(e.k==='c'){cols=48;rows=edge?1:Math.max(3,Math.ceil(e.r/32));fn=(i,j)=>{const a=j/cols*6.2832,rr=edge?Math.max(0,e.r-2.5+2.5*i):e.r*i/rows;return [e.x+Math.cos(a)*rr,e.y+Math.sin(a)*rr]}}
+  else if(e.k==='l'){rows=Math.max(1,Math.ceil(e.L/30));cols=Math.max(1,Math.ceil(e.w*2/30));fn=(i,j)=>{const u=e.L*i/rows,v=-e.w+2*e.w*j/cols,c=Math.cos(e.ang),s=Math.sin(e.ang);return [e.x+c*u-s*v,e.y+s*u+c*v]}}
+  else{rows=Math.max(3,Math.ceil(e.r/32));cols=Math.max(2,Math.ceil(e.h*2/.1));fn=(i,j)=>{const a=e.ang-e.h+2*e.h*j/cols,rr=e.r*i/rows;return [e.x+Math.cos(a)*rr,e.y+Math.sin(a)*rr]}}
+  for(let i=0;i<=rows;i++)for(let j=0;j<=cols;j++){const q=fn(i,j);pos.push(q[0]-C,gh3(q[0],q[1])+LIFT,q[1]-C)}
+  const w=cols+1;for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){const a=i*w+j;idx.push(a,a+w,a+1,a+1,a+w,a+w+1)}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);return g}
+const RSEG=32,RING_LIFT=2.5; /* v5_359 skill ripple: segments around, height above the ground */
 const gh3=(x,y)=>{const g=T3.hg;if(!g)return hfn(x-C,y-C);
   const u=(x-C+g.S)/g.c,v=(y-C+g.S)/g.c,N=g.N;let ix=Math.floor(u),iz=Math.floor(v);
   if(ix<0)ix=0;else if(ix>N-1)ix=N-1;if(iz<0)iz=0;else if(iz>N-1)iz=N-1;
@@ -38,7 +49,13 @@ function init3(){
   G3={box:new THREE.BoxGeometry(1,1,1),cyl:new THREE.CylinderGeometry(.5,.5,1,8),cone:new THREE.ConeGeometry(.5,1,7),sph:new THREE.SphereGeometry(.5,10,8),dod:new THREE.DodecahedronGeometry(.5),oct:new THREE.OctahedronGeometry(.5),tor:new THREE.TorusGeometry(.8,.08,6,18),ring:new THREE.RingGeometry(.9,1,40).rotateX(-Math.PI/2)};
   AL3D.init(THREE,LOW);T3.rig=AL3D.makePlayer(SKW());T3.pl=T3.rig.root;T3.sc.add(T3.pl);
   const bm=()=>new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide});
-  T3.rings=[];for(let i=0;i<40;i++){const m=new THREE.Mesh(G3.ring,bm());m.visible=false;T3.sc.add(m);T3.rings.push(m)}
+  /* v5_359 the skill ripples (fx rings) follow the terrain: every ring is its own strip of RSEG quads whose vertices are put on the ground each frame (see the ring loop in render3D), so on a slope or a hill the ripple hugs the ground instead of cutting into it on one side and floating on the other */
+  T3.rings=[];for(let i=0;i<40;i++){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array((RSEG+1)*6),3));const id=[];for(let j=0;j<RSEG;j++){const q=j*2;id.push(q,q+1,q+2,q+1,q+3,q+2)}g.setIndex(id);
+    const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));m.frustumCulled=false;m.visible=false;T3.sc.add(m);T3.rings.push(m)}
+  /* v5_345 telegraph pool (v5_348: draped on the terrain, see teleGeom): per slot a fill mesh + an edge band (circles only); plain transparent, no additive light */
+  T3.tl=[];{const tm=()=>new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+    for(let i=0;i<12;i++){const o={d:new THREE.Mesh(new THREE.BufferGeometry(),tm()),r:new THREE.Mesh(new THREE.BufferGeometry(),tm()),e:null};
+      for(const k of ['d','r']){o[k].visible=false;o[k].frustumCulled=false;o[k].renderOrder=59;T3.sc.add(o[k])}T3.tl.push(o)}}
   T3.dest=new THREE.Mesh(G3.ring,bm());T3.dest.material.color.set('#8fffd0');T3.dest.visible=false;T3.sc.add(T3.dest);
   T3.sel=new THREE.Mesh(G3.ring,bm());T3.sel.material.color.set('#e3b559');T3.sc.add(T3.sel);
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(3600),3));geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(3600),3));
@@ -363,9 +380,19 @@ function render3D(){
     {const rg=((LOW?650:900)+(LOW?200:300)*T3.zoom)*(PQ.lock?PQ.mon:1);sync3(T3.mp,mons,mkMon,updMon,m=>(!m.dead||m.dieT>0)&&Math.abs(m.x-P.x)<rg+(T3.mp.has(m)?150:0)&&Math.abs(m.y-P.y)<rg-100+(T3.mp.has(m)?150:0))}
     sync3(T3.or,ores,()=>AL3D.makeOre(),(q,o)=>q.position.set(o.x-C,gh3(o.x,o.y),o.y-C),o=>o.cd<=0&&Math.abs(o.x-P.x)<(LOW?900:1400)+(T3.or.has(o)?150:0)&&Math.abs(o.y-P.y)<(LOW?850:1300)+(T3.or.has(o)?150:0));
     sync3(T3.it,items,it=>AL3D.makeItem(it.k,it.slot,it.col),(q,it)=>{q.position.set(it.x-C,gh3(it.x,it.y)+14+Math.sin(it.t*5)*3,it.y-C);AL3D.animItem(q,it,time)});
-    sync3(T3.pj,projs,p=>AL3D.makeProj(p.col),(q,p)=>{q.position.set(p.x-C,gh3(p.x,p.y)+22,p.y-C);q.rotation.y=Math.atan2(p.vx,p.vy)});
-    let n=0;for(const f of fx){if(n>=T3.rings.length||(PQ.lock&&n>=PQ.rings))break;const m=T3.rings[n++],k=Math.min(1,f.t/f.max);m.visible=true;m.position.set(f.x-C,gh3(f.x,f.y)+4,f.y-C);m.scale.setScalar(Math.max(1,f.r*(.3+.7*Math.min(1,k*1.4))));m.material.color.set(f.col);m.material.opacity=1-k}
+    sync3(T3.pj,projs,p=>AL3D.makeProj(p.col),(q,p)=>{q.position.set(p.x-C,gh3(p.x,p.y)+22,p.y-C);q.rotation.y=Math.atan2(p.vx,p.vy);q.scale.setScalar(p.sc||1)});
+    let n=0;for(const f of fx){if(n>=T3.rings.length||(PQ.lock&&n>=PQ.rings))break;const m=T3.rings[n++],k=Math.min(1,f.t/f.max),R=Math.max(1,f.r*(.3+.7*Math.min(1,k*1.4))),pa=m.geometry.attributes.position.array;m.visible=true;
+      for(let j=0;j<=RSEG;j++){const an=j/RSEG*6.2831853,co=Math.cos(an),si=Math.sin(an),o=j*6;
+        for(let e=0;e<2;e++){const rr=R*(e?1:.9),wx=f.x+co*rr,wy=f.y+si*rr;pa[o+e*3]=wx-C;pa[o+e*3+1]=gh3(wx,wy)+RING_LIFT;pa[o+e*3+2]=wy-C}}
+      m.geometry.attributes.position.needsUpdate=true;m.material.color.set(f.col);m.material.opacity=1-k}
     for(;n<T3.rings.length;n++)T3.rings[n].visible=false;
+    for(let i=0;i<T3.tl.length;i++){   /* v5_345 telegraph, v5_348 clamped to the ground + more transparent */
+      const o=T3.tl[i],e=tele[i];o.d.visible=o.r.visible=false;if(!e)continue;
+      if(o.e!==e){o.d.geometry.dispose();o.d.geometry=teleGeom(e,0);o.r.geometry.dispose();o.r.geometry=e.k==='c'?teleGeom(e,1):new THREE.BufferGeometry();o.e=e}
+      const k=e.t/e.max,env=Math.min(1,(1-k)*5),fl=.5+.5*Math.sin(e.t*22),fa=env*(.15+.2*fl),ea=env*(.35+.25*fl),lt=.1+.3*fl,W=T3.tlw||(T3.tlw=new THREE.Color(1,1,1));
+      o.d.visible=true;o.d.material.color.set('#ff2a1a').lerp(W,.12*fl);o.d.material.opacity=fa;
+      if(e.k==='c'){o.r.visible=true;o.r.material.color.set('#ffffff');o.r.material.opacity=ea}
+    }
     if(P.mv&&P.dead<=0){const d=T3.dest,k=(time*1.6)%1;d.visible=true;d.position.set(P.mv.x-C,gh3(P.mv.x,P.mv.y)+5,P.mv.y-C);d.scale.setScalar(16+k*22);d.material.opacity=.95-k*.7} else T3.dest.visible=false; /* v5_110 where you are walking to */
     const tg=P.target||P.sel;T3.sel.visible=!!(tg&&!tg.dead);if(T3.sel.visible){T3.sel.position.set(tg.x-C,gh3(tg.x,tg.y)+5,tg.y-C);T3.sel.scale.setScalar(tg.r+12);T3.sel.material.opacity=.8;const atk=!!(P.target&&!P.target.dead);if(T3.selAtk!==atk){T3.selAtk=atk;T3.sel.material.color.set(atk?'#ff3a2a':'#e3b559')}} /* v5_112 red ring while attacking, gold while only selected */
     const pa=T3.pp.geometry.attributes,np=Math.min(parts.length,LOW?(PQ.lock?PQ.parts:350):1200);
@@ -418,7 +445,7 @@ function collectLights(){
     else if(m.t===TYPES[7])add(m.x,m.y,80,'255,90,70',.6);
     else if(m.t===TYPES[8])add(m.x,m.y,80,'200,160,255',.7);
   }
-  for(const p of projs)add(p.x,p.y,110,'180,220,255',.9);
+  for(const p of projs)add(p.x,p.y,110*(p.sc||1),'180,220,255',.9);
   for(const f of fx)add(f.x,f.y,f.r*1.4,hexRgb(f.col),Math.max(0,1-f.t/f.max));
   for(const b of beams)add(b.x,b.y,200,'255,220,140',1-b.t/b.max);
   for(const it of items)it.k==='g'?add(it.x,it.y,70,'255,235,170',.8):add(it.x,it.y,34,it.k==='c'?'255,210,90':'120,230,245',.6);

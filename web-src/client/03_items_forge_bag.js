@@ -210,7 +210,7 @@ function addPot(k,n){if(n<=0)return;lootIcon('p'+k,k==='tp'?'&#10162;':'&#9879;'
 const DASH_DIST=210,DASH_T=.45,DASH_CD=5,DODGE_INV=.35; /* v5_304 DASH_T .34 -> .45 s (same distance) so the roll / dive animation has time; invulnerability stays .35 s */ /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
 function doDodge(dx,dy){
   if(!started||P.dead>0||P.dcd>0)return;
-  P.cast=0; /* dodging cancels a cast */
+  P.cast=0;if(P.pend){P.pend=null;teleClearOwn()} /* dodging cancels a cast (v5_349: also a telegraphed skill that has not hit yet) */
   let l=Math.hypot(dx,dy);
   if(l<.01){dx=-Math.cos(P.face);dy=-Math.sin(P.face);l=1}   /* v5_305 no direction held (Shift alone, dodge button tapped without a swipe) = BACK DIVE away from where the character looks */
   P.dvx=dx/l;P.dvy=dy/l;
