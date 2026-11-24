@@ -156,6 +156,7 @@ function cast(o){
   if(S===null||DST!==2){if(PEND.length<6)PEND.push(o);if(DST===0)loadData();return}
   try{run(o)}catch(e){console.warn('SKFX cast failed:',e)}
 }
+const SKILL_FX_T=.9;   /* v5_349 slashes start when the hit lands (SKILL_WIND = .6 s after the press) and end with the 1.5 s lock: 1.5 - .6 */   /* v5_344 = SKILL_GCD in game.js: skill slashes stay visible (and fade out) until the global skill lock ends */
 function run(o){
   let list=SIGT[o.t];
   if(!list){const ov=CLS_OVR[o.t];list=(ov&&ov[o.cls|0])||TABLE[o.t];}
@@ -170,7 +171,7 @@ function run(o){
     else if(e.at==='tgt'){if(o.tx!=null&&o.ty!=null){px=o.tx;py=o.ty}else front(clamp(R*.6,60,240))}
     const ang=e.at==='tgt'&&o.tx!=null?Math.atan2(py-o.y,px-o.x):f;
     if(e.p)spawnSprite(e,px,py,R,now+(e.d||0));
-    else spawnSlash(e,e.at==='tgt'?px:o.x,e.at==='tgt'?py:o.y,ang,o.col,now+(e.d||0));   /* 'front' slashes start at the caster, the arc is pushed forward by e.f */
+    else spawnSlash(e,e.at==='tgt'?px:o.x,e.at==='tgt'?py:o.y,ang,o.col,now+(e.d||0),o.t.indexOf('basic')===0?.34:Math.max(.34,SKILL_FX_T-(e.d||0)));   /* 'front' slashes start at the caster, the arc is pushed forward by e.f */
   }
   while(FX.length>(S.max||14))kill(FX.shift());
 }
@@ -190,7 +191,7 @@ function spawnSprite(e,x,y,R,t0){
   S.sc.add(mesh);
   FX.push({k:0,mesh,mat,t0,x,y,ms,cols:m.cols,rows:m.rows,dur:tot/1000/rate,rate,h:gr?3:1+(e.y!==undefined?e.y:(lk.lift||0)*size)});
 }
-function spawnSlash(e,x,y,ang,col,t0){
+function spawnSlash(e,x,y,ang,col,t0,life){   /* v5_344 life = how long one slash lives (skills: until SKILL_FX_T after the cast, normal attacks: .34) */
   const T=S.T,n=e.n||1,vars=SLX[e.s];
   for(let i=0;i<n;i++){
     const name=vars[e.tx!==undefined?e.tx%vars.length:(Math.random()*vars.length)|0],t=tex(name,true);if(!t.userData.ok)continue;
@@ -200,7 +201,7 @@ function spawnSlash(e,x,y,ang,col,t0){
     const sgn=i&1?-1:1,sc=(e.R||90)/7.25;
     mesh.rotation.set(-Math.PI/2,0,Math.PI);mesh.scale.set(sc,sc*(i&1?-1:1),sc);   /* native ring (axis Z, opening toward +X) -> flat ring, the arc in front; every second hit is mirrored */
     tilt.rotation.x=(e.tilt||0)*sgn;tilt.add(mesh);root.add(tilt);root.rotation.y=-ang;root.visible=false;mesh.frustumCulled=false;mesh.renderOrder=61;S.sc.add(root);
-    FX.push({k:1,mesh:root,mat,t0:t0+i*(e.gap||.1),x,y,ang,fwd:(e.f===undefined?.3:e.f)*(e.R||90),h:e.h||34,dur:.34+(i?0:0),rate:1,sw:sgn,seed:0});
+    FX.push({k:1,mesh:root,mat,t0:t0+i*(e.gap||.1),x,y,ang,fwd:(e.f===undefined?.3:e.f)*(e.R||90),h:e.h||34,dur:Math.max(.2,(life||.34)-i*(e.gap||.1)),rate:1,sw:sgn,seed:0});
   }
 }
 function kill(f){if(!f)return;try{S.sc.remove(f.mesh);f.mat.dispose()}catch(e){}}

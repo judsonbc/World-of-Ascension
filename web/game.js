@@ -491,7 +491,7 @@ function loadLooks(s){
 }
 
 /* ---------- world ---------- */
-const mons=[],ores=[],items=[],projs=[],fx=[],texts=[],deco=[],delayed=[],bld=[];
+const mons=[],ores=[],items=[],projs=[],fx=[],tele=[],texts=[],deco=[],delayed=[],bld=[];
 /* v5_168 spatial grid of the scenery (trees, rocks, crystals, ruin blocks ...) so the player can collide with it: cell -> list of indexes into deco */
 let DG=new Map();
 /* v5_171 VILLAGES: every world has villages of houses, halls and watchtowers (bld). b = {x,y,hw,hh (half sizes), t (0 house, 1 hall, 2 watchtower), wh (wall height drawn),
@@ -711,7 +711,7 @@ let worldGen=0;
 function buildWorld(i,spawn){
   worldGen++;P.sel=null;
   setWorld(i);
-  mons.length=0;ores.length=0;items.length=0;projs.length=0;fx.length=0;texts.length=0;deco.length=0;parts.length=0;beams.length=0;delayed.length=0;
+  mons.length=0;ores.length=0;items.length=0;projs.length=0;fx.length=0;tele.length=0;P.pend=null;texts.length=0;deco.length=0;parts.length=0;beams.length=0;delayed.length=0;
   const R2=rngSeed(20261101+i*7919);
   for(let k=0;k<9;k++){ /* fixed monster count per ring, even per AREA inside each ring (keep equal to ringMons in game.go) */
     const lo=k?ZD[k-1]:500,hi=k<8?ZD[k]:RIM-40;
@@ -906,6 +906,7 @@ function gainExp(n){
   if(gained)lvBanner(P.lvl,gained,bt);
 }
 function hitMonster(m,dmg,crit,sure){ /* sure (v5_219): skip the accuracy roll, used for pet burn ticks */
+  if(P.teleOn&&!teleCovers(m))return 0; /* v5_349 the hit of a telegraphed skill only lands inside the shown area: step out = dodged */
   if(m.dead||m.pend||pvpOnly()||inTown())return 0; /* v5_90 no attacking inside the safe hub */
   if(!sure&&rnd()>hitChance(m)){ /* missed: no damage, but the monster still notices you */
     if(m.state==='idle'&&!inTown())m.state='chase';
@@ -987,10 +988,11 @@ function takeGear(it){
 const RANGE_FALL=.5,RANGED_CAP=.5;
 /* v5_80 NORMAL ATTACK RANGE per class [Cultivator, Night Blade, Iron Guardian, Storm Archer, Spirit Summoner]: 0 = melee (body size + 30), otherwise the attack
    reaches that many units. Ranged normal attacks lose up to BASIC_FALL of their damage at full range and you stand at BASIC_STAND of the range from the target. */
-const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','','','#9fe8c8','#9fe0ff'],BASIC_PSPD=1500,MELEE_BASIC_COL=['#cfe8ff','#c7a8ff','#ffcf8a'];let basicSwN=0; /* v5_343 MELEE_BASIC_COL = tint of the small slash of the melee normal attack (Cultivator, Night Blade, Iron Guardian); basicSwN alternates its side */ /* v5_343 BASIC_PSPD = speed of the visible bolt of the ranged normal attack (Storm Archer / Spirit Summoner); cosmetic only, the damage is still instant */
+const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','','','#9fe8c8','#9fe0ff'],BASIC_PSPD=1500,BASIC_PSC=.5,MELEE_BASIC_COL=['#cfe8ff','#c7a8ff','#ffcf8a'];let basicSwN=0; /* BASIC_PSC = size of the ranged normal attack bolt (1 = the size of a skill projectile). v5_343 MELEE_BASIC_COL = tint of the small slash of the melee normal attack (Cultivator, Night Blade, Iron Guardian); basicSwN alternates its side */ /* v5_343 BASIC_PSPD = speed of the visible bolt of the ranged normal attack (Storm Archer / Spirit Summoner); cosmetic only, the damage is still instant */
 function rangedDmg(m,d,fr){d=Math.round(d*(1-RANGE_FALL*clamp(fr,0,1)));if(!m.boss)d=Math.min(d,Math.max(1,Math.round(m.maxhp*RANGED_CAP)));return d}
 const CRIT_MUL=1.8;
-const SKILL_GCD=1; /* seconds between two skill casts (manual or auto); v5_190: 0.45 -> 1; v5_192: 2; v5_193: back to 1 */
+const SKILL_WIND=.6; /* v5_349 TELEGRAPH FIRST, DAMAGE AFTER: a damaging skill shows its ground area for SKILL_WIND seconds (you are rooted and play the move), then the hit lands - only on what is still inside the area, so enemies / players can step out. 0 = old instant hits */
+const SKILL_GCD=1.5; /* seconds between two skill casts (manual or auto); v5_190: 0.45 -> 1; v5_192: 2; v5_193: back to 1; v5_344: 1.5 (skill poses and effects are stretched to this length, see SKILL_T in anim3d.js / SKILL_FX_T in skillfx3d.js) */
 function sd(m,x,fr){const c=rnd()<critChance();let d=Math.round(atkVal()*x*(c?critMul():1)*(.9+rnd()*.2));if(fr!==undefined)d=rangedDmg(m,d,fr);return hitMonster(m,d,c)}
 /* the thing skills aim at: the attack target, else the selected monster (or selected player while PvP-flagged) */
 function aimT(){const t=P.target&&!P.target.dead?P.target:null;if(t)return t;const q=P.sel;return q&&!q.dead&&(!q.isPl||pvpOk(q))?q:null}
@@ -1031,6 +1033,49 @@ function skillReach(t,tr,mel,mr){if(SIGR[t])return[SIGR[t],0];switch(t){
   case 'pierce':case 'fan':return [mel?mr+40:364,1];case 'kunai':return [mel?mr+40:418,1];case 'arrow':return [720,1];case 'volley':return [490,1];
   case 'blast':case 'stormarrow':case 'rain':case 'trap':case 'spiritbomb':return [520,0];case 'meteor':return [450,0];case 'chain':return [600,0];
 }return null}
+/* v5_345 TELEGRAPH: while a skill is being cast (the whole global lock, SKILL_GCD) its ground area flashes, so you can see where it can deal damage.
+   skTeleSpec(...) returns the shapes the skill really uses (same numbers as useSkill / sigCast): {k:'c',x,y,r} circle, {k:'l',x,y,ang,L,w} lane (w = half width),
+   {k:'a',x,y,ang,r,h} fan (h = half angle). useSkill pushes them into tele[] when the cast succeeds; drawn in 2D (draw loop) and 3D (T3.tl pool). Off switch: localStorage woa_tele='0'. */
+const TELE_ON=(()=>{try{return localStorage.getItem('woa_tele')!=='0'}catch(e){return true}})();
+/* v5_349 is unit q (monster / player) inside one of the shown shapes (circle / lane / fan), counting its radius? */
+function teleClearOwn(){for(let i=tele.length-1;i>=0;i--)if(tele[i].own)tele.splice(i,1)} /* v5_352 tele[] also holds other players' areas: a cast / dodge / death only clears MY entries */
+function teleCovers(q){const S=P.teleOn;if(!S)return true;
+  for(const e of S){
+    if(e.k==='c'){if(dist(q.x,q.y,e.x,e.y)<e.r+q.r)return true}
+    else if(e.k==='l'){if(sigInLine(q,e.x,e.y,e.ang,e.L,e.w))return true}
+    else{const d=dist(q.x,q.y,e.x,e.y);if(d<e.r+q.r){let da=Math.abs(Math.atan2(q.y-e.y,q.x-e.x)-e.ang);if(da>Math.PI)da=Math.PI*2-da;if(da<=e.h+Math.atan2(q.r,Math.max(d,1)))return true}}
+  }return false}
+function skTeleSpec(t,tr,mel,mr,a,tg0){
+  const at=(rng,fd)=>{const n=tg0&&!tg0.dead&&(!tg0.isPl||pvpOk(tg0))?tg0:nearest(rng);return n?{x:n.x,y:n.y}:{x:P.x+Math.cos(P.face)*fd,y:P.y+Math.sin(P.face)*fd}};
+  const C=(x,y,r)=>({k:'c',x,y,r}),Ln=(len,w)=>({k:'l',x:P.x,y:P.y,ang:a,L:len,w}),F=(r,h)=>({k:'a',x:P.x,y:P.y,ang:a,r,h});
+  const self=r=>[C(P.x,P.y,r)],one=(rng,r)=>{const n=(tg0&&!tg0.dead&&(!tg0.isPl||pvpOk(tg0)))?tg0:nearest(rng);return n?[C(n.x,n.y,r)]:null},grd=(rng,fd,r)=>{const n=at(rng,fd);return [C(n.x,n.y,r)]};
+  if(SIGTL[t])return SIGTL[t](self,one,grd,Ln,F,at,C);
+  switch(t){
+    case 'nova':return self(tr<0?120:150+tr*14);case 'drain':return self(170);case 'bladestorm':return self(120+tr*8);
+    case 'quake':return self(160+tr*12);case 'roar':return self(240);case 'counter':return self(150+tr*8);
+    case 'soulburst':return self(140+tr*10);case 'wail':return self(240);case 'harvest':return self(200);case 'chains':return self(400);
+    case 'rush':return [Ln(280+tr*10,45)];case 'shockwave':return [Ln(420,70)];
+    case 'cleave':return [F(150+tr*10,1.25)];
+    case 'hammer':return one(200,100+tr*6);case 'bash':return one(170,50);case 'strike':return one(170,50);case 'flurry':return one(170,40);
+    case 'execute':return one(200,55);case 'siphon':return one(170,45);case 'venom':return one(mel?mr:460,36);
+    case 'leap':return one(360,70);case 'charge':return one(400,70);case 'shadowstep':return one(420,60);
+    case 'pierce':return [Ln(mel?Math.min(364,mr+40):364,26)];
+    case 'fan':{const n=3+Math.floor(tr/2);return [F(mel?Math.min(364,mr+40):364,(n-1)/2*.17+.08)]}
+    case 'kunai':{const n=3+Math.floor(tr/3);return [F(mel?Math.min(418,mr+40):418,(n-1)/2*.08+.06)]}
+    case 'arrow':return [Ln(720,22)];
+    case 'volley':{const n=5+Math.floor(tr/2);return [F(490,(n-1)/2*.13+.08)]}
+    case 'rain':return grd(520,240,110+tr*6);case 'trap':return grd(520,240,100+tr*5);case 'blast':return one(520,110+tr*5);
+    case 'spiritbomb':return grd(520,240,160+tr*12);case 'meteor':return grd(450,220,110+tr*10);
+    case 'stormarrow':case 'chain':return one(600,40);
+  }
+  return null}
+const SIGTL={ /* signature skills that damage: [shapes] from the numbers in their SIGF entries */
+  sg_c100:(S)=>S(250),sg_n200:(S)=>S(300),sg_n1000:(S)=>S(520),sg_g300:(S)=>S(280),sg_g500:(S)=>S(300),sg_s100:(S)=>S(440),
+  sg_c200:(S,O,G)=>G(520,260,280),sg_c300:(S,O,G)=>G(520,240,150),sg_a200:(S,O,G)=>G(520,260,200),sg_a750:(S,O,G)=>G(520,260,330),sg_s1000:(S,O,G)=>G(520,260,340),
+  sg_n300:(S,O)=>O(420,230),sg_n100:(S,O)=>O(460,80),sg_n500:(S,O)=>O(460,80),sg_a50:(S,O)=>O(720,80),sg_a500:(S,O)=>O(900,80),sg_a300:(S,O)=>O(520,60),
+  sg_c750:(S,O,G,Ln)=>[Ln(720,130)],sg_g100:(S,O,G,Ln)=>[Ln(420,110)],sg_s500:(S,O,G,Ln)=>[Ln(760,130)],sg_a100:(S,O,G,Ln,F)=>[F(570,.48)],
+  sg_n750:(S,O,G,Ln,F,at,C)=>{const n=at(420,260),b=Math.atan2(n.y-P.y,n.x-P.x),H=330,o=[];for(const an of [b+Math.PI/4,b-Math.PI/4])o.push({k:'l',x:n.x-Math.cos(an)*H,y:n.y-Math.sin(an)*H,ang:an,L:H*2,w:55});return o}
+};
 /* v5_189 RESERVED SKILL: a skill pressed / tapped while it (or the global lock) is not ready is RESERVED and cast the moment it is ready; pressing another skill replaces the reservation.
    With no manual reservation the HUD shows the auto-cast skill that will fire next, also labelled Reserved. A reservation expires after RSV_MAX seconds. */
 const RSV_MAX=10;
@@ -1042,7 +1087,7 @@ function manualSkill(i){
   /* v5_191 only a READY skill (off cooldown, Qi / HP paid) can be reserved; it then waits only for the 1 s lock between casts. A skill on cooldown or without Qi / HP cannot be clicked at all. */
   if(SCD[id]<=0&&skCanPay(SKILLS[id])&&P.skLock>0&&i<AUTO_SLOTS){P.rsv=i;P.rsvT=RSV_MAX}
 }
-function useSkill(i,auto){
+function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphed cast: the hit itself, called by the wind-up timer */
   if(P.dead>0||!started)return false;
   const id=EQ[i];if(id<0){say('Empty slot. Press K to equip a skill.','#8d9aa2');return false}
   /* v5_84 ranged classes (Storm Archer, Spirit Summoner) cannot cast any skill inside the safe hub (manual, hotkey or auto-hunt). Nothing is spent. */
@@ -1050,13 +1095,15 @@ function useSkill(i,auto){
   /* v5_90 no attacking in the safe hub: ranged classes cannot cast anything; every class loses its damaging skills (heals / shields / buffs still work) */
   if(inTown()&&(P.cls>=3||(s.m>0&&!HEAL_SKILL_T[t]))){if(!(P.hubSkMsg>0)){say('You cannot attack or use attack skills inside the safe hub.','#8d9aa2');P.hubSkMsg=2}return false}
   const prio=!auto&&i>=AUTO_SLOTS; /* v5_156 slots R and T (13, 14) are PRIORITY skills: pressed / clicked / tapped by hand they cast at any moment - they ignore the short global lock and interrupt a cast pose in progress */
-  if(SCD[id]>0||!skCanPay(s)||(P.skLock>0&&!prio))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack is NOT blocked by it */
+  if(SCD[id]>0||!skCanPay(s)||(P.skLock>0&&!prio&&!res))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack is NOT blocked by it */
   const hpc=skHp(s)?skHpCost(s):0; /* v5_188b HP price fixed BEFORE the heal below */
+  const _fx0=fx.length; /* v5_344 rings made by this cast are stretched to the global lock below */
   /* v5_122 skills work outside attack mode too: when nothing is targeted or selected and a monster is inside THIS skill's reach, the nearest one is selected
      (target frame shows it, you do not start auto-attacking) and the skill aims at it. Heals / buffs and the hub rules are unchanged. */
   if(!aimT()&&s.m>0&&!HEAL_SKILL_T[t]&&!inTown()){const e=nearest(AIM_REACH[t]||(P.cls<3?MELEE_SKILL_RANGE:520));if(e&&!e.dead&&!e.isPl)P.sel=e}
   const tg0=aimT(),a=tg0?Math.atan2(tg0.y-P.y,tg0.x-P.x):P.face,A=atkVal();
   const mel=P.cls<3,mr=MELEE_SKILL_RANGE;
+  let _tl=null;if(TELE_ON&&!res&&((s.m>0&&!HEAL_SKILL_T[t])||SIGTL[t])){try{_tl=skTeleSpec(t,tr,mel,mr,a,tg0)}catch(e){_tl=null}} /* v5_345 ground area of this cast, taken BEFORE a dash moves you */
   if(auto&&P.cls===2&&IG_DMG_T[t]){const e=tg0||nearest(IG_PAD+80);if(!e||dist(e.x,e.y,P.x,P.y)>P.r+e.r+IG_PAD)return false}
   if(auto&&mel&&MELEE_RANGED_T[t]){const e=tg0?(dist(tg0.x,tg0.y,P.x,P.y)<=mr+tg0.r?tg0:null):nearest(mr);if(!e)return false}
   const pr=(g,dm)=>projs.push({x:P.x,y:P.y,vx:Math.cos(g)*520,vy:Math.sin(g)*520,life:mel?Math.min(.7,(mr+40)/520):.7,l0:mel?Math.min(.7,(mr+40)/520):.7,dmg:dm,hit:new Set(),ang:g,col:s.col});
@@ -1067,6 +1114,12 @@ function useSkill(i,auto){
     if(rc){const ok=tg0?dist(tg0.x,tg0.y,P.x,P.y)<=rc[0]+(rc[1]?tg0.r:0):!!nearest(rc[0]);
       if(!ok){if(!auto&&!(P.rngMsg>0)){say(s.n+': target is out of range.','#8d9aa2');P.rngMsg=1.5}return false}}
   }
+  if(_tl&&!res&&!prio&&SKILL_WIND>0){ /* v5_349 first half: show the area, root + play the move, lock the skills; the hit comes from the timer in the update loop (P.pend) */
+    teleClearOwn();for(const q of _tl)if(tele.length<12)tele.push(Object.assign({col:s.col,t:0,max:SKILL_WIND+.3,own:1},q));
+    {const r0=Math.round,r2=v=>Math.round(v*100)/100;fxs({k:'tl',a:_tl.slice(0,6).map(q=>q.k==='c'?['c',r0(q.x),r0(q.y),r0(q.r)]:q.k==='l'?['l',r0(q.x),r0(q.y),r2(q.ang),r0(q.L),r0(q.w)]:['a',r0(q.x),r0(q.y),r2(q.ang),r0(q.r),r2(q.h)])})} /* v5_352 other players see the area too (cosmetic fx message, the server relays it to nearby players) */
+    P.pend={i,auto,t:0,D:SKILL_WIND,spec:_tl};if(tg0)P.face=a;
+    P.skT=t;P.skTi=(P.skTi|0)+1;P.swing=.2;P.skLock=SKILL_GCD;P.cast=SKILL_WIND;P.castMax=SKILL_WIND;P.mv=null;
+    return true}
   if(s.sig){if(sigCast(s,id,tg0,a,A,auto)===false)return false} /* v5_160 signature skills */
   else if(!auto&&WHIFF_R[t]&&!hasFoeFor(t,tg0,mel,mr))whiffCast(t,s);
   else if(t==='pierce'){P.face=a;pr(a,A*s.m);fxs({k:'pr',x:P.x,y:P.y,a:[+a.toFixed(2)],c:s.col})}
@@ -1268,10 +1321,12 @@ function useSkill(i,auto){
     if(t==='mend'){P.sh=Math.round(maxHp()*(.1+tr*.03));P.shT=8;P.qi=Math.min(maxQi(),P.qi+maxQi()*.1)}
     ring(P.x,P.y,70,'#5fd3a5');fxs({k:'ri',x:P.x,y:P.y,r:70,c:'#5fd3a5'});pop(P.x,P.y-30,'+'+h,'#5fd3a5',15);spark(P.x,P.y,'#f4b3c8',14,70,1,3,60);spark(P.x,P.y,'#8ff0c4',10,60,1,2.4,50);
   }
-  skPay(s,hpc);SCD[id]=s.cd;P.skT=t;P.skTi=(P.skTi|0)+1;fxs({k:'an',s:t});P.swing=.2;P.skLock=SKILL_GCD;sfxSkill(t);
+  if(_tl){teleClearOwn();for(const q of _tl)if(tele.length<12)tele.push(Object.assign({col:s.col,t:0,max:SKILL_GCD,own:1},q))} /* v5_345 flash the area for the whole lock */
+  {const RS=res?SKILL_GCD-SKILL_WIND:SKILL_GCD;for(let q=_fx0;q<fx.length;q++)if(fx[q].max<RS)fx[q].max=RS} /* v5_344 2D rings of this skill play over the whole lock */
+  skPay(s,hpc);SCD[id]=s.cd;if(!res){P.skT=t;P.skTi=(P.skTi|0)+1;P.skLock=SKILL_GCD}fxs({k:'an',s:t});P.swing=.2;sfxSkill(t);
   {const rc=skillReach(t,tr,mel,mr),tp=aimT();skfxCast({t,cls:P.cls,x:P.x,y:P.y,face:P.face,tx:tp?tp.x:null,ty:tp?tp.y:null,r:rc?rc[0]:150,col:s.col})} /* v5_327 spell sprites + slash meshes of the skill (web/skillfx3d.js) */
   /* v5_109 CASTING: casting a skill stops you for a moment and plays a cast pose (arms raised). Dash skills (CAST_NOROOT) keep moving you instead. Tune CAST_T / CAST_T_LONG. */
-  if(!CAST_NOROOT[t]){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null} /* v5_153 casting roots you again (v5_152 removed the root while moving); v5_154 a move input does NOT cancel it, you move when the pose ends */
+  if(!CAST_NOROOT[t]&&!res){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null} /* v5_153 casting roots you again (v5_152 removed the root while moving); v5_154 a move input does NOT cancel it, you move when the pose ends */
   return true;
 }
 /* ---------- v5_160 SIGNATURE SKILL CASTING ----------
@@ -1673,6 +1728,7 @@ function foes(){ /* players I may hit right now: needs ATK Players Only, the Are
   if(!(PVPMODE||curWorld===ARENA||(P.target&&P.target.isPl)))return a;
   for(const q of NET.peers.values())if(pvpOk(q))a.push(q);return a}
 function hitPeer(q,dmg,crit){
+  if(P.teleOn&&!teleCovers(q))return 0; /* v5_349 see hitMonster */
   if(!pvpOk(q))return 0;
   dmg=Math.max(1,Math.round(dmg*(1+pabVal()/100)));
   netSend({t:'phit',i:q.id,d:dmg,cr:crit?1:0});
@@ -1932,7 +1988,7 @@ function addPot(k,n){if(n<=0)return;lootIcon('p'+k,k==='tp'?'&#10162;':'&#9879;'
 const DASH_DIST=210,DASH_T=.45,DASH_CD=5,DODGE_INV=.35; /* v5_304 DASH_T .34 -> .45 s (same distance) so the roll / dive animation has time; invulnerability stays .35 s */ /* v5_142 DASH_T .2 -> .34 s and the dash now eases out (fast launch, soft landing) with a ghost trail, so it no longer looks like a blink */ /* v5_78: DODGE_INV = invulnerability time, and for that time you cannot cast skills or basic attack */
 function doDodge(dx,dy){
   if(!started||P.dead>0||P.dcd>0)return;
-  P.cast=0; /* dodging cancels a cast */
+  P.cast=0;if(P.pend){P.pend=null;teleClearOwn()} /* dodging cancels a cast (v5_349: also a telegraphed skill that has not hit yet) */
   let l=Math.hypot(dx,dy);
   if(l<.01){dx=-Math.cos(P.face);dy=-Math.sin(P.face);l=1}   /* v5_305 no direction held (Shift alone, dodge button tapped without a swipe) = BACK DIVE away from where the character looks */
   P.dvx=dx/l;P.dvy=dy/l;
@@ -2733,11 +2789,20 @@ function petDraw2D(){
 
 /* ---------- OTHER PLAYERS' PETS (v5_201): each peer reports its summoned pet key (q.pet, from the server 'pt' field); it is drawn following that player. ---------- */
 /* follower position for a peer (same roaming as your own pet, see petRoamStep) */
+const peerPetLive=q=>!!(q.pr&&performance.now()-q.pr.t<1500);   /* v5_353 the owner's real pet position arrived in the last 1.5 s */
 function peerPetStep(q,is3){
   if(!q.pet)return 0;
   const now=performance.now(),dt=Math.min(.1,q.pfT?(now-q.pfT)/1000:.016);q.pfT=now;
+  if(peerPetLive(q)){ /* v5_353 PET SYNC: the pet is drawn where the OWNER's pet really is (their client sends it ~8 times a second, see the 'pp' fx message): it runs after enemies, trails them while they walk, rests where it rests. It glides to each new position. */
+    const r=q.pr;if(!q.pf||Math.hypot(q.pf.x-r.x,q.pf.y-r.y)>PET_SNAP)q.pf={x:r.x,y:r.y,mv:0};
+    const f=q.pf,ox=f.x,oy=f.y,dx=r.x-f.x,dy=r.y-f.y;
+    if(Math.hypot(dx,dy)>350){f.x=r.x;f.y=r.y}else{const k=Math.min(1,dt*9);f.x+=dx*k;f.y+=dy*k}
+    f.vx=f.x-ox;f.vy=f.y-oy;f.dt=dt;const sp=Math.hypot(f.vx,f.vy)/Math.max(dt,.001);f.mv=f.mv||0;f.mv+=((sp>40?1:0)-f.mv)*Math.min(1,dt*10);
+    f.ph=(f.ph||0)+dt*(2.5+f.mv*7);
+    return f.mv>.05?Math.abs(Math.sin(f.ph))*7*f.mv+2:Math.sin(f.ph)*1.6+2.5;
+  }
   if(!q.pf||Math.hypot(q.pf.x-q.x,q.pf.y-q.y)>PET_SNAP)q.pf={x:q.x+54,y:q.y,mv:0};
-  return petRoamStep(q.pf,q.x,q.y,dt);
+  return petRoamStep(q.pf,q.x,q.y,dt);   /* no pet data from that player (old client / far away): the old local roaming */
 }
 /* 3D: list = the peers drawn this frame (rpl). Pets of peers that left, were dismissed or are out of range are removed. */
 function peerPets3(list){
@@ -2749,13 +2814,13 @@ function peerPets3(list){
     const rig=petRigFor(h,T.sc,q.pet),f=q.pf;
     if(!rig||!f)continue;
     seen.add(q);
-    const want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):Math.PI/2-q.face;
+    const want=f.mv>.3&&Math.hypot(f.vx||0,f.vy||0)>.05?Math.atan2(f.vx,f.vy):(peerPetLive(q)&&q.pr.w!==undefined?q.pr.w:Math.PI/2-q.face);   /* v5_353 standing: face where the owner's pet faces (its enemy) */
     if(f.yaw===undefined)f.yaw=want;
     let d=want-f.yaw;d=Math.atan2(Math.sin(d),Math.cos(d));f.yaw+=d*Math.min(1,(f.dt||.016)*7);
     rig.root.visible=true;rig.root.scale.setScalar(PET_WORLD_K);
     rig.root.position.set(f.x-C,gh3(f.x,f.y),f.y-C);rig.root.rotation.y=f.yaw;
-    if(q.swing>0||q.hurt>0)q.fightUntil=time+5;   /* v5_221 a peer is fighting while it swings / gets hurt (+5 s): its dragon flies */
-    if(q.swing>.1&&time-(q.petAtkAt||-99)>1.2){q.petAtkAt=time;q.petAtkN=(q.petAtkN|0)+1}   /* v5_222 their pet strikes along with each of their swings (at most every 1.2 s) */
+    if(!peerPetLive(q)&&(q.swing>0||q.hurt>0))q.fightUntil=time+5;   /* v5_221 a peer is fighting while it swings / gets hurt (+5 s): its dragon flies */
+    if(!peerPetLive(q)&&q.swing>.1&&time-(q.petAtkAt||-99)>1.2){q.petAtkAt=time;q.petAtkN=(q.petAtkN|0)+1}   /* v5_222 their pet strikes along with each of their swings (at most every 1.2 s) */
     {const ps=ALOD&&(LOW||T.al)?(PQ.lock?PQ.am:2)+(T.al>1?1:0):1;if(ps<2||(T.fr+pn++)%ps===0||time<(q.fightUntil||0))rig.anim(time,f.mv,time<(q.fightUntil||0),q.petAtkAt,q.petAtkN)}   /* v5_331 a peer's pet moves every 2nd frame on a weak device (its pose is a function of time); never while it fights */
   }
   for(const [q,h] of map)if(!seen.has(q)){
@@ -3880,7 +3945,7 @@ function updatePlayer(dt){
     if(P.target&&dist(m.x,m.y,P.x,P.y)<=reach&&P.atkCd<=0){
       P.face=Math.atan2(m.y-P.y,m.x-P.x);
       const c=rnd()<critChance(),dd=dist(m.x,m.y,P.x,P.y);let d=Math.round(atkVal()*(.9+rnd()*.2)*(c?critMul():1)*(1+babVal()/100));
-      if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));{const l=Math.max(.06,dd/BASIC_PSPD);projs.push({x:P.x,y:P.y,vx:Math.cos(P.face)*BASIC_PSPD,vy:Math.sin(P.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:P.face,col:BASIC_COL[P.cls],cos:true})}} /* ranged normal attack: damage falloff + a visible bolt (v5_343: cosmetic projectile flying to the target, replaces the old 6-spark trail; cos:true = it never hits anything) */
+      if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));{const l=Math.max(.06,dd/BASIC_PSPD);projs.push({x:P.x,y:P.y,vx:Math.cos(P.face)*BASIC_PSPD,vy:Math.sin(P.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:P.face,col:BASIC_COL[P.cls],cos:true,sc:BASIC_PSC})}} /* ranged normal attack: damage falloff + a visible bolt (v5_343: cosmetic projectile flying to the target, replaces the old 6-spark trail; cos:true = it never hits anything) */
       if(m.isPl)hitPeer(m,d,c);else hitMonster(m,d,c);
       P.qi=Math.min(maxQi(),P.qi+3);P.atkCd=atkCd();P.skT='';P.swing=.18;SFX('swing');fxs({k:'sw',f:+P.face.toFixed(2)});if(!rng)skfxCast({t:(basicSwN^=1)?'basic_a':'basic_b',cls:P.cls,x:P.x,y:P.y,face:P.face,tx:m.x,ty:m.y,r:70,col:MELEE_BASIC_COL[P.cls]}); /* v5_343 small sword slash on a melee normal attack */
     }
@@ -3914,6 +3979,7 @@ function updatePlayer(dt){
     }
   }
   if(P.cast>0)P.cast-=dt;
+  if(P.pend){const q=P.pend;q.t+=dt;if(P.dead>0){P.pend=null;teleClearOwn()}else if(q.t>=q.D){P.pend=null;P.teleOn=q.spec;try{useSkill(q.i,q.auto,true)}finally{P.teleOn=null}}} /* v5_349 second half of a telegraphed cast: the hit, only inside the shown area */
   if(P.skipT>0){P.skipT-=dt;if(P.skipT<=0)P.skipM=null} /* v5_315 */
   P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);
   if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1,P.dg)-dashEase(e0,P.dg));P.x+=P.dvx*st;P.y+=P.dvy*st;P.dgU=e1;
@@ -4046,6 +4112,7 @@ function updateMisc(dt){
     if(p.life<=0)projs.splice(i,1);
   }
   for(let i=fx.length-1;i>=0;i--){fx[i].t+=dt;if(fx[i].t>=fx[i].max)fx.splice(i,1)}
+  for(let i=tele.length-1;i>=0;i--){tele[i].t+=dt;if(tele[i].t>=tele[i].max||(P.dead>0&&tele[i].own))tele.splice(i,1)} /* v5_345 */
   for(let i=texts.length-1;i>=0;i--){const t=texts[i];t.t+=dt;t.y-=28*dt;if(t.t>1)texts.splice(i,1)}
   for(let i=items.length-1;i>=0;i--){
     const it=items[i];it.t+=dt;
@@ -4551,7 +4618,7 @@ function drawFx(){
   const ox=-cam.x,oy=-cam.y;
   for(const p of projs){
     const x=p.x+ox,y=p.y+oy;
-    ctx.save();ctx.translate(x,y);ctx.rotate(p.ang);
+    ctx.save();ctx.translate(x,y);ctx.rotate(p.ang);if(p.sc)ctx.scale(p.sc,p.sc);
     ctx.globalAlpha=.88;ctx.fillStyle=p.col||'#cfe3f0';
     ctx.beginPath();ctx.moveTo(18,0);ctx.quadraticCurveTo(0,-16,-10,0);ctx.quadraticCurveTo(0,-6,-10,0);ctx.quadraticCurveTo(0,16,18,0);ctx.fill();
     ctx.restore();
@@ -4562,6 +4629,15 @@ function drawFx(){
     g.addColorStop(0,'rgba(255,215,120,0)');g.addColorStop(1,'rgba(255,225,150,'+(.7*(1-k))+')');
     ctx.fillStyle=g;ctx.fillRect(b.x+ox-w/2,b.y+oy-hg,w,hg);
   }
+  for(const e of tele){   /* v5_345 telegraph: flashing area of the skill being cast */
+    const k=e.t/e.max,env=Math.min(1,(1-k)*5),fl=.5+.5*Math.sin(e.t*22);
+    ctx.save();ctx.translate(e.x+ox,e.y+oy);ctx.fillStyle='#ff2a1a';ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.beginPath();
+    if(e.k==='c')ctx.arc(0,0,e.r,0,6.2832);
+    else if(e.k==='l'){ctx.rotate(e.ang);ctx.rect(0,-e.w,e.L,e.w*2)}
+    else{ctx.rotate(e.ang);ctx.moveTo(0,0);ctx.arc(0,0,e.r,-e.h,e.h);ctx.closePath()}
+    ctx.globalAlpha=env*(.15+.2*fl);ctx.fill();ctx.globalAlpha=env*(.35+.25*fl);ctx.stroke();ctx.restore(); /* v5_346 solid */
+  }
+  ctx.globalAlpha=1;
   for(const f of fx){
     const k=f.t/f.max;ctx.globalAlpha=1-k;
     if(f.kind==='whirl'){
@@ -4820,6 +4896,17 @@ const KOF=[0,2,4,1,3,3,0,1,4,2,3,1];
 const kitOf=i=>i===ARENA?1:KOF[tIx(i)%12]%5; /* scenery kit of a world; v5_260 the PvP Arena uses the CRYSTAL kit (1) again (v5_259 had the forest kit) */
 /* v5_107 gh3 = the height of the DRAWN terrain mesh (triangle interpolation of its vertex grid), not the smooth height function. The mesh cells are 90-200 units wide, so on
    narrow hills the true function and the mesh disagreed and a character / monster could sink into the hill (and be hidden). Same triangles as THREE.PlaneGeometry. */
+/* v5_348 telegraph mesh DRAPED on the terrain: a grid (about 30 units) whose every vertex takes the ground height under it (+6), so no part of a lane / circle / fan sinks into a hill.
+   Built once per cast (the area never moves). edge=1: thin band along the rim of a circle. */
+function teleGeom(e,edge){
+  const LIFT=6,pos=[],idx=[];let rows,cols,fn;
+  if(e.k==='c'){cols=48;rows=edge?1:Math.max(3,Math.ceil(e.r/32));fn=(i,j)=>{const a=j/cols*6.2832,rr=edge?Math.max(0,e.r-2.5+2.5*i):e.r*i/rows;return [e.x+Math.cos(a)*rr,e.y+Math.sin(a)*rr]}}
+  else if(e.k==='l'){rows=Math.max(1,Math.ceil(e.L/30));cols=Math.max(1,Math.ceil(e.w*2/30));fn=(i,j)=>{const u=e.L*i/rows,v=-e.w+2*e.w*j/cols,c=Math.cos(e.ang),s=Math.sin(e.ang);return [e.x+c*u-s*v,e.y+s*u+c*v]}}
+  else{rows=Math.max(3,Math.ceil(e.r/32));cols=Math.max(2,Math.ceil(e.h*2/.1));fn=(i,j)=>{const a=e.ang-e.h+2*e.h*j/cols,rr=e.r*i/rows;return [e.x+Math.cos(a)*rr,e.y+Math.sin(a)*rr]}}
+  for(let i=0;i<=rows;i++)for(let j=0;j<=cols;j++){const q=fn(i,j);pos.push(q[0]-C,gh3(q[0],q[1])+LIFT,q[1]-C)}
+  const w=cols+1;for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){const a=i*w+j;idx.push(a,a+w,a+1,a+1,a+w,a+w+1)}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);return g}
+const RSEG=32,RING_LIFT=2.5; /* v5_359 skill ripple: segments around, height above the ground */
 const gh3=(x,y)=>{const g=T3.hg;if(!g)return hfn(x-C,y-C);
   const u=(x-C+g.S)/g.c,v=(y-C+g.S)/g.c,N=g.N;let ix=Math.floor(u),iz=Math.floor(v);
   if(ix<0)ix=0;else if(ix>N-1)ix=N-1;if(iz<0)iz=0;else if(iz>N-1)iz=N-1;
@@ -4848,7 +4935,13 @@ function init3(){
   G3={box:new THREE.BoxGeometry(1,1,1),cyl:new THREE.CylinderGeometry(.5,.5,1,8),cone:new THREE.ConeGeometry(.5,1,7),sph:new THREE.SphereGeometry(.5,10,8),dod:new THREE.DodecahedronGeometry(.5),oct:new THREE.OctahedronGeometry(.5),tor:new THREE.TorusGeometry(.8,.08,6,18),ring:new THREE.RingGeometry(.9,1,40).rotateX(-Math.PI/2)};
   AL3D.init(THREE,LOW);T3.rig=AL3D.makePlayer(SKW());T3.pl=T3.rig.root;T3.sc.add(T3.pl);
   const bm=()=>new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide});
-  T3.rings=[];for(let i=0;i<40;i++){const m=new THREE.Mesh(G3.ring,bm());m.visible=false;T3.sc.add(m);T3.rings.push(m)}
+  /* v5_359 the skill ripples (fx rings) follow the terrain: every ring is its own strip of RSEG quads whose vertices are put on the ground each frame (see the ring loop in render3D), so on a slope or a hill the ripple hugs the ground instead of cutting into it on one side and floating on the other */
+  T3.rings=[];for(let i=0;i<40;i++){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array((RSEG+1)*6),3));const id=[];for(let j=0;j<RSEG;j++){const q=j*2;id.push(q,q+1,q+2,q+1,q+3,q+2)}g.setIndex(id);
+    const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));m.frustumCulled=false;m.visible=false;T3.sc.add(m);T3.rings.push(m)}
+  /* v5_345 telegraph pool (v5_348: draped on the terrain, see teleGeom): per slot a fill mesh + an edge band (circles only); plain transparent, no additive light */
+  T3.tl=[];{const tm=()=>new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+    for(let i=0;i<12;i++){const o={d:new THREE.Mesh(new THREE.BufferGeometry(),tm()),r:new THREE.Mesh(new THREE.BufferGeometry(),tm()),e:null};
+      for(const k of ['d','r']){o[k].visible=false;o[k].frustumCulled=false;o[k].renderOrder=59;T3.sc.add(o[k])}T3.tl.push(o)}}
   T3.dest=new THREE.Mesh(G3.ring,bm());T3.dest.material.color.set('#8fffd0');T3.dest.visible=false;T3.sc.add(T3.dest);
   T3.sel=new THREE.Mesh(G3.ring,bm());T3.sel.material.color.set('#e3b559');T3.sc.add(T3.sel);
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(3600),3));geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(3600),3));
@@ -5173,9 +5266,19 @@ function render3D(){
     {const rg=((LOW?650:900)+(LOW?200:300)*T3.zoom)*(PQ.lock?PQ.mon:1);sync3(T3.mp,mons,mkMon,updMon,m=>(!m.dead||m.dieT>0)&&Math.abs(m.x-P.x)<rg+(T3.mp.has(m)?150:0)&&Math.abs(m.y-P.y)<rg-100+(T3.mp.has(m)?150:0))}
     sync3(T3.or,ores,()=>AL3D.makeOre(),(q,o)=>q.position.set(o.x-C,gh3(o.x,o.y),o.y-C),o=>o.cd<=0&&Math.abs(o.x-P.x)<(LOW?900:1400)+(T3.or.has(o)?150:0)&&Math.abs(o.y-P.y)<(LOW?850:1300)+(T3.or.has(o)?150:0));
     sync3(T3.it,items,it=>AL3D.makeItem(it.k,it.slot,it.col),(q,it)=>{q.position.set(it.x-C,gh3(it.x,it.y)+14+Math.sin(it.t*5)*3,it.y-C);AL3D.animItem(q,it,time)});
-    sync3(T3.pj,projs,p=>AL3D.makeProj(p.col),(q,p)=>{q.position.set(p.x-C,gh3(p.x,p.y)+22,p.y-C);q.rotation.y=Math.atan2(p.vx,p.vy)});
-    let n=0;for(const f of fx){if(n>=T3.rings.length||(PQ.lock&&n>=PQ.rings))break;const m=T3.rings[n++],k=Math.min(1,f.t/f.max);m.visible=true;m.position.set(f.x-C,gh3(f.x,f.y)+4,f.y-C);m.scale.setScalar(Math.max(1,f.r*(.3+.7*Math.min(1,k*1.4))));m.material.color.set(f.col);m.material.opacity=1-k}
+    sync3(T3.pj,projs,p=>AL3D.makeProj(p.col),(q,p)=>{q.position.set(p.x-C,gh3(p.x,p.y)+22,p.y-C);q.rotation.y=Math.atan2(p.vx,p.vy);q.scale.setScalar(p.sc||1)});
+    let n=0;for(const f of fx){if(n>=T3.rings.length||(PQ.lock&&n>=PQ.rings))break;const m=T3.rings[n++],k=Math.min(1,f.t/f.max),R=Math.max(1,f.r*(.3+.7*Math.min(1,k*1.4))),pa=m.geometry.attributes.position.array;m.visible=true;
+      for(let j=0;j<=RSEG;j++){const an=j/RSEG*6.2831853,co=Math.cos(an),si=Math.sin(an),o=j*6;
+        for(let e=0;e<2;e++){const rr=R*(e?1:.9),wx=f.x+co*rr,wy=f.y+si*rr;pa[o+e*3]=wx-C;pa[o+e*3+1]=gh3(wx,wy)+RING_LIFT;pa[o+e*3+2]=wy-C}}
+      m.geometry.attributes.position.needsUpdate=true;m.material.color.set(f.col);m.material.opacity=1-k}
     for(;n<T3.rings.length;n++)T3.rings[n].visible=false;
+    for(let i=0;i<T3.tl.length;i++){   /* v5_345 telegraph, v5_348 clamped to the ground + more transparent */
+      const o=T3.tl[i],e=tele[i];o.d.visible=o.r.visible=false;if(!e)continue;
+      if(o.e!==e){o.d.geometry.dispose();o.d.geometry=teleGeom(e,0);o.r.geometry.dispose();o.r.geometry=e.k==='c'?teleGeom(e,1):new THREE.BufferGeometry();o.e=e}
+      const k=e.t/e.max,env=Math.min(1,(1-k)*5),fl=.5+.5*Math.sin(e.t*22),fa=env*(.15+.2*fl),ea=env*(.35+.25*fl),lt=.1+.3*fl,W=T3.tlw||(T3.tlw=new THREE.Color(1,1,1));
+      o.d.visible=true;o.d.material.color.set('#ff2a1a').lerp(W,.12*fl);o.d.material.opacity=fa;
+      if(e.k==='c'){o.r.visible=true;o.r.material.color.set('#ffffff');o.r.material.opacity=ea}
+    }
     if(P.mv&&P.dead<=0){const d=T3.dest,k=(time*1.6)%1;d.visible=true;d.position.set(P.mv.x-C,gh3(P.mv.x,P.mv.y)+5,P.mv.y-C);d.scale.setScalar(16+k*22);d.material.opacity=.95-k*.7} else T3.dest.visible=false; /* v5_110 where you are walking to */
     const tg=P.target||P.sel;T3.sel.visible=!!(tg&&!tg.dead);if(T3.sel.visible){T3.sel.position.set(tg.x-C,gh3(tg.x,tg.y)+5,tg.y-C);T3.sel.scale.setScalar(tg.r+12);T3.sel.material.opacity=.8;const atk=!!(P.target&&!P.target.dead);if(T3.selAtk!==atk){T3.selAtk=atk;T3.sel.material.color.set(atk?'#ff3a2a':'#e3b559')}} /* v5_112 red ring while attacking, gold while only selected */
     const pa=T3.pp.geometry.attributes,np=Math.min(parts.length,LOW?(PQ.lock?PQ.parts:350):1200);
@@ -5228,7 +5331,7 @@ function collectLights(){
     else if(m.t===TYPES[7])add(m.x,m.y,80,'255,90,70',.6);
     else if(m.t===TYPES[8])add(m.x,m.y,80,'200,160,255',.7);
   }
-  for(const p of projs)add(p.x,p.y,110,'180,220,255',.9);
+  for(const p of projs)add(p.x,p.y,110*(p.sc||1),'180,220,255',.9);
   for(const f of fx)add(f.x,f.y,f.r*1.4,hexRgb(f.col),Math.max(0,1-f.t/f.max));
   for(const b of beams)add(b.x,b.y,200,'255,220,140',1-b.t/b.max);
   for(const it of items)it.k==='g'?add(it.x,it.y,70,'255,235,170',.8):add(it.x,it.y,34,it.k==='c'?'255,210,90':'120,230,245',.6);
@@ -5562,8 +5665,11 @@ setInterval(()=>{
 /* network ticks run on a timer, not requestAnimationFrame, so a backgrounded tab keeps reporting its position */
 /* v5_251 the position sender now ticks from a Worker: main-thread timers of a hidden tab are slowed to ~1 per second (or 1 per minute after a while), which made other players look frozen / stuck on everybody else's screen */
 (function(){
+  let ppTick=0;
   const sendPos=()=>{
     if(!NET.joined)return;
+    if(P.pet&&P.pf&&(ppTick^=1)){const f=P.pf,fg=!inTown()&&P.dead<=0&&(combatT>0||time-petFightAt<4);   /* v5_353 PET SYNC: where my pet really is (+ its attack counter / fight flag / facing in 'yw': NOT 'w', the server parses a top-level "w" as an int and drops the whole message on a fractional one), relayed to nearby players as a cosmetic fx message */
+      fxs({k:'pp',x:+f.x.toFixed(1),y:+f.y.toFixed(1),n:petAtkN&1023,f:fg?1:0,yw:f.yaw===undefined?undefined:+f.yaw.toFixed(2)})}
     netSend({t:'p',x:+P.x.toFixed(1),y:+P.y.toFixed(1),f:+P.face.toFixed(2),hp:Math.round(P.hp),
       fl:(P.dead>0?1:0)|(P.bfT>0?2:0)|(P.sh>0?4:0)|(document.hidden?16:0)});
   };
@@ -6111,7 +6217,23 @@ function playFx(m){
         ring(p[i+2],p[i+3],40,col);
       }
       break}
-    case 'sw':if(q){q.swing=.18;q.skT='';q.face=+m.f||0;const bc=(q.sk>>>21)&7;if(BASIC_RANGE[bc]&&projs.length<200&&dist(q.x,q.y,P.x,P.y)<1600){const l=BASIC_RANGE[bc]*BASIC_STAND/BASIC_PSPD;projs.push({x:q.x,y:q.y,vx:Math.cos(q.face)*BASIC_PSPD,vy:Math.sin(q.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:q.face,col:BASIC_COL[bc],cos:true})}else if(bc<3&&dist(q.x,q.y,P.x,P.y)<900)skfxCast({t:(basicSwN^=1)?'basic_a':'basic_b',cls:bc,x:q.x,y:q.y,face:q.face,r:70,col:MELEE_BASIC_COL[bc]})}break; /* v5_343 other players' ranged normal attack: a cosmetic bolt over the usual standing distance */
+    case 'sw':if(q){q.swing=.18;q.skT='';q.face=+m.f||0;const bc=(q.sk>>>21)&7;if(BASIC_RANGE[bc]&&projs.length<200&&dist(q.x,q.y,P.x,P.y)<1600){const l=BASIC_RANGE[bc]*BASIC_STAND/BASIC_PSPD;projs.push({x:q.x,y:q.y,vx:Math.cos(q.face)*BASIC_PSPD,vy:Math.sin(q.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:q.face,col:BASIC_COL[bc],cos:true,sc:BASIC_PSC})}else if(bc<3&&dist(q.x,q.y,P.x,P.y)<900)skfxCast({t:(basicSwN^=1)?'basic_a':'basic_b',cls:bc,x:q.x,y:q.y,face:q.face,r:70,col:MELEE_BASIC_COL[bc]})}break; /* v5_343 other players' ranged normal attack: a cosmetic bolt over the usual standing distance */
+    case 'pp':{ /* v5_353 another player's real pet position / attack counter (cosmetic) */
+      const px=+m.x,py=+m.y;if(!q||!q.pet||!isFinite(px)||!isFinite(py))break;   /* (x / y above turn a bad number into 0: check the raw values) */
+      const n=(+m.n|0)&1023,fresh=peerPetLive(q);
+      if(fresh&&q.pr.n!==n){q.petAtkAt=time;q.petAtkN=(q.petAtkN|0)+1;q.fightUntil=time+4}   /* their pet struck: play its attack animation */
+      if(+m.f)q.fightUntil=Math.max(q.fightUntil||0,time+1.2);
+      q.pr={x:clamp(px,-1e5,1e5),y:clamp(py,-1e5,1e5),n,w:(m.yw===undefined||!isFinite(+m.yw))?undefined:+m.yw,t:performance.now()};
+      break}
+    case 'tl':{ /* v5_352 another player's telegraph: the red area of the skill they just pressed (before its hit lands). Cosmetic only. */
+      if(!TELE_ON)break;const A=Array.isArray(m.a)?m.a.slice(0,6):[];
+      for(let i=tele.length-1;i>=0;i--)if(tele[i].oid===m.id)tele.splice(i,1);
+      for(const g of A){if(!Array.isArray(g))continue;const n=g.slice(1).map(Number);if(n.length<3||n.some(v=>!isFinite(v)))continue;let e=null;
+        if(g[0]==='c')e={k:'c',x:n[0],y:n[1],r:clamp(n[2],5,700)};
+        else if(g[0]==='l'&&n.length>=5)e={k:'l',x:n[0],y:n[1],ang:n[2],L:clamp(n[3],5,900),w:clamp(n[4],3,300)};
+        else if(g[0]==='a'&&n.length>=5)e={k:'a',x:n[0],y:n[1],ang:n[2],r:clamp(n[3],5,900),h:clamp(n[4],.02,1.6)};
+        if(e&&tele.length<12)tele.push(Object.assign({col:'#ff2a1a',t:0,max:SKILL_WIND+.3,oid:m.id},e))}
+      break}
     case 'an':if(q){q.skT=String(m.s||'').slice(0,14);q.skTi=(q.skTi|0)+1;q.swing=.2;if(dist(q.x,q.y,P.x,P.y)<1600)skfxCast({t:q.skT,cls:(q.sk>>>21)&7,x:q.x,y:q.y,face:q.face,r:150,col:col})}break;   /* v5_322 another player's skill: its move (anim3d.js) */
     case 'em':if(q){q.emo={n:String(m.e||'').slice(0,12)||null,id:(q.emo?q.emo.id:0)+1}}break;   /* v5_322 another player's emote (/dance ...) */
     case 'ac':if(q){q.act={n:String(m.e||'').slice(0,12),id:(q.act?q.act.id:0)+1}}break;   /* v5_322 another player's one-shot move (drinking ...) */

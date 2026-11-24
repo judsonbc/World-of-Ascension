@@ -160,6 +160,14 @@ function setBase(an,key,name,o){
   if(old&&old.loco&&o.loco){t0=(old.t/Math.max(.01,clip(old.name).dur))*c.dur}   /* keep the step phase when the gait changes */
   an.base={name,t:t0,rate:o.rate||1,loco:o.loco||0,drv:false,dur:c.dur};an.key=key;
 }
+/* v5_344 a skill move plays over the whole global skill lock (SKILL_T = SKILL_GCD in game.js): the parts are slowed by one common factor so the move ends at SKILL_T.
+   Moves that are already longer are left alone. Returns a copy; the shared SKILL table is never changed. */
+const SKILL_T=1.5;
+function stretchSkill(segs){
+  let tot=0;for(const g of segs)tot+=(g[2]-g[1])/g[3];
+  if(!(tot>.05)||tot>=SKILL_T-.01)return segs;
+  const k=tot/SKILL_T;return segs.map(g=>[g[0],g[1],g[2],g[3]*k]);
+}
 function startAct(an,segs,o){
   o=o||{};
   if(an.act){an.ao=an.act;an.af=0;an.xl=null}
@@ -227,7 +235,7 @@ function apply(R,P,v){
   if(swEdge&&!dead&&!dg){
     an.em=null;
     const newSk=P.skT&&P.skTi!==an.skI;an.skI=P.skTi;
-    if(newSk)startAct(an,(own.call(SKILL,P.skT)?SKILL[P.skT]:null)||CF.cast,{lower:1,fin:.09,fout:.24});   /* a skill: its own move, else the class cast move */
+    if(newSk)startAct(an,stretchSkill((own.call(SKILL,P.skT)?SKILL[P.skT]:null)||CF.cast),{lower:1,fin:.09,fout:.24});   /* a skill: its own move, else the class cast move */
     else attack(an,CF,time);                                          /* basic attack: next move of the combo */
     if(cl===3)an.drT=0;                                               /* v5_323 archer: draw the bow, release, nock the next arrow */
   }
