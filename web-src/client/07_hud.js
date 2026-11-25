@@ -90,7 +90,7 @@ function hud(){
   st($('viewLb'),MODE3D?'3D':'2D');
   renderOnline();
   if(rsvEl){const ri=P.rsv>=0?P.rsv:P.rsvA,rk=ri>=0?SKILLS[EQ[ri]]:null,key=rk?EQ[ri]+(P.rsv>=0?'m':'a'):'';
-    if(key!==rsvKey){rsvKey=key;rsvEl.hidden=!rk;if(rk){rsvEl.style.borderColor=rk.col;rsvEl.classList.toggle('man',P.rsv>=0);rsvEl.innerHTML='<b style="color:'+rk.col+'">'+(GLYPH[rk.t]||'\u2726')+'</b><u>Reserved</u>'}}} /* v5_189 */
+    if(key!==rsvKey){rsvKey=key;rsvEl.hidden=!rk;if(rk){rsvEl.style.borderColor=rk.col;rsvEl.classList.toggle('man',P.rsv>=0);rsvEl.innerHTML='<b style="color:'+rk.col+'">'+(skIco(rk.t)||GLYPH[rk.t]||'\u2726')+'</b><u>Reserved</u>'}}} /* v5_189 */
   if(sprEl){const vis=P.runT>=SPRINT_SHOW_T||P.sprT>0;if(vis!==sprEl._vis){sprEl._vis=vis;sprEl.style.display=vis?'':'none'}const on=P.sprT>0;if(on!==sprEl._on){sprEl._on=on;sprEl.classList.toggle('on',on)}const t=on?String(Math.ceil(P.sprT)):'';if(t!==sprEl._t){sprEl._t=t;sprEl.children[2].textContent=t}} /* v5_277 */
   skBtns.forEach((b,i)=>{const id=EQ[i],k=SKILLS[id],cd=k?Math.max(0,SCD[id]):0;
     sh(b.lastElementChild,k?(cd/k.cd*100)+'%':'0');

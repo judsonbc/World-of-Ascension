@@ -242,7 +242,7 @@ function buildBar(){
   for(let i=0;i<NSLOT;i++){const s=SKILLS[EQ[i]],b=document.createElement('button');b.type='button';b.className='sk'+(i>=12?' big':'');
     if(i<12)place(b,SLOTPOS[i][0],SLOTPOS[i][1],40); /* R (12) and T (13) are positioned in CSS, left of the dodge pad */
     if(s)b.style.borderColor=s.col;b.title=(s?s.n:'Empty slot (K to equip)')+' ['+SLOTKEYS[i].toUpperCase()+']';
-    b.innerHTML='<b'+(s?' style="color:'+s.col+'"':'')+'>'+(s?GLYPH[s.t]||'\u2726':'')+'</b><span class="kn">'+SLOTKEYS[i].toUpperCase()+'</span><em class="cdn"></em><i class="cdv"></i>';
+    b.innerHTML='<b'+(s?' style="color:'+s.col+'"':'')+'>'+(s?skIco(s.t)||GLYPH[s.t]||'\u2726':'')+'</b>'+(s&&SKL[s.t]?'<span class="sl">'+SKL[s.t]+'</span>':'')+'<span class="kn">'+SLOTKEYS[i].toUpperCase()+'</span><em class="cdn"></em><i class="cdv"></i>';if(s&&SKL[s.t])b.classList.add('lb'); /* v5_360 unique icon + name label at the bottom */
     /* tap = cast, drag upward = toggle auto-cast for this slot */
     b.addEventListener('pointerdown',e=>{
       e.preventDefault();const sy=e.clientY,u=parseFloat(getComputedStyle($('hud')).getPropertyValue('--u'))||1,thr=Math.max(14,14*u);let flipped=false;
@@ -272,7 +272,7 @@ function renderBook(){
   const rows=$('bookRows');rows.innerHTML='';
   SKILLS.map((s,id)=>[s,id]).filter(x=>(x[0].c||0)===P.cls).sort((a,b)=>(P.lvl>=b[0].lv)-(P.lvl>=a[0].lv)||a[1]-b[1]).forEach(([s,id])=>{const ok=P.lvl>=s.lv,row=document.createElement('div');row.className='row'+(ok?'':' lock');
     if(s.sig)row.classList.add('sig');
-    const nm=document.createElement('b');nm.style.color=s.col;const ic=document.createElement('span');ic.className='sic';ic.textContent=GLYPH[s.t]||'\u2726';ic.style.color=s.col;ic.style.borderColor=s.col;nm.appendChild(ic);nm.appendChild(document.createTextNode(s.n));if(s.sig){const u=document.createElement('i');u.className='uq';u.textContent='\u2605 UNIQUE';nm.appendChild(u);row.title=(SIGD[s.c].find(y=>y[0]===s.t)||[])[5]||s.n}row.appendChild(nm);
+    const nm=document.createElement('b');nm.style.color=s.col;const ic=document.createElement('span');ic.className='sic';if(skIco(s.t))ic.innerHTML=skIco(s.t);else ic.textContent=GLYPH[s.t]||'\u2726';ic.style.color=s.col;ic.style.borderColor=s.col;nm.appendChild(ic);nm.appendChild(document.createTextNode(s.n));if(s.sig){const u=document.createElement('i');u.className='uq';u.textContent='\u2605 UNIQUE';nm.appendChild(u);row.title=(SIGD[s.c].find(y=>y[0]===s.t)||[])[5]||s.n}row.appendChild(nm);
     const b=document.createElement('button');b.type='button';const sl=EQ.indexOf(id);b.className='btn'+(sl>=0?' on':'');b.textContent=!ok?'Lv '+s.lv:(sl>=0?SLOTKEYS[sl].toUpperCase():'Equip');if(sl>=0)b.title='Equipped in slot '+SLOTKEYS[sl].toUpperCase()+' (click to move to the selected slot)';b.disabled=!ok;b.addEventListener('click',()=>equip(id));row.appendChild(b);
     const sm=document.createElement('small');sm.textContent=TL[s.t]+(s.m?' · '+s.m.toFixed(1)+'x ATK':'')+' · '+skCostLbl(s)+' · '+s.cd+'s cooldown';row.appendChild(sm);rows.appendChild(row)});
 }

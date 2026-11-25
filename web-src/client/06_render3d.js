@@ -332,7 +332,7 @@ function skyHeading(e){const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-
 const FXC={};
 function fx3dFrame(dl){
   if(FXC.off||!window.FX3)return;
-  try{FXC.T3=T3;FXC.THREE=THREE;FXC.P=P;FXC.C=C;FXC.gh3=gh3;FXC.dl=dl;FXC.time=time;FXC.projs=projs;FXC.mons=mons;FXC.items=items;FXC.ores=ores;FXC.beams=beams;FXC.fx=fx;FXC.LOW=LOW;FXC.PQ=PQ;FXC.world=curWorld;FXC.LK=LK;FX3.frame(FXC)}
+  try{FXC.T3=T3;FXC.THREE=THREE;FXC.P=P;FXC.C=C;FXC.gh3=gh3;FXC.dl=dl;FXC.time=time;FXC.projs=projs;FXC.mons=mons;FXC.items=items;FXC.ores=ores;FXC.beams=beams;FXC.blk=BLK_TR;FXC.fx=fx;FXC.LOW=LOW;FXC.PQ=PQ;FXC.world=curWorld;FXC.LK=LK;FX3.frame(FXC)}
   catch(e){FXC.off=true;console.warn('FX3 off:',e);try{FX3.dispose(FXC)}catch(_){}}
 }
 /* v5_327 skill cast effects (web/skillfx3d.js): spell sprites + slash meshes. Same safety as FX3: an error only switches this layer off. Off switch: ?skfx=0 or localStorage woa_skfx='0'. */

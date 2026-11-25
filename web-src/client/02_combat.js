@@ -112,6 +112,7 @@ const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','
 function rangedDmg(m,d,fr){d=Math.round(d*(1-RANGE_FALL*clamp(fr,0,1)));if(!m.boss)d=Math.min(d,Math.max(1,Math.round(m.maxhp*RANGED_CAP)));return d}
 const CRIT_MUL=1.8;
 const SKILL_WIND=.6; /* v5_349 TELEGRAPH FIRST, DAMAGE AFTER: a damaging skill shows its ground area for SKILL_WIND seconds (you are rooted and play the move), then the hit lands - only on what is still inside the area, so enemies / players can step out. 0 = old instant hits */
+const SKILL_ATK_BLOCK=1; /* v5_362 the normal attack is paused this many seconds after a skill cast starts (shorter than SKILL_GCD) */
 const SKILL_GCD=1.5; /* seconds between two skill casts (manual or auto); v5_190: 0.45 -> 1; v5_192: 2; v5_193: back to 1; v5_344: 1.5 (skill poses and effects are stretched to this length, see SKILL_T in anim3d.js / SKILL_FX_T in skillfx3d.js) */
 function sd(m,x,fr){const c=rnd()<critChance();let d=Math.round(atkVal()*x*(c?critMul():1)*(.9+rnd()*.2));if(fr!==undefined)d=rangedDmg(m,d,fr);return hitMonster(m,d,c)}
 /* the thing skills aim at: the attack target, else the selected monster (or selected player while PvP-flagged) */
@@ -138,7 +139,7 @@ function whiffCast(t,s){
   const a=P.face,cx=Math.cos(a),cy=Math.sin(a);
   if(t==='shadowstep'||t==='leap'){const L=t==='shadowstep'?260:200,sx=P.x,sy=P.y;
     for(let j=0;j<12;j++)spark(sx+cx*L*j/12,sy+cy*L*j/12,s.col,2,60,.4,2.4);
-    P.x=sx+cx*L;P.y=sy+cy*L;P.inv=Math.max(P.inv,.3);ring(P.x,P.y,50,s.col,'whirl');fxs({k:'ri',x:P.x,y:P.y,r:50,c:s.col,q:'whirl',s:1});return}
+    P.x=sx+cx*L;P.y=sy+cy*L;P.inv=Math.max(P.inv,.3);ring(P.x,P.y,50,s.col,'whirl');fxs({k:'ri',x:P.x,y:P.y,r:50,c:s.col,q:'whirl',s:1});blinkStart(sx,sy,s.col);return}
   const D=({blast:200,stormarrow:260,chain:200,chains:160})[t]||90,x=P.x+cx*D,y=P.y+cy*D;
   for(let j=1;j<=6;j++)spark(P.x+cx*D*j/6,P.y+cy*D*j/6,s.col,1,40,.35,2.4);
   ring(x,y,45,s.col);spark(x,y,s.col,14,160,.4,2.4);fxs({k:'ri',x:Math.round(x),y:Math.round(y),r:45,c:s.col})}
@@ -215,7 +216,7 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
   /* v5_90 no attacking in the safe hub: ranged classes cannot cast anything; every class loses its damaging skills (heals / shields / buffs still work) */
   if(inTown()&&(P.cls>=3||(s.m>0&&!HEAL_SKILL_T[t]))){if(!(P.hubSkMsg>0)){say('You cannot attack or use attack skills inside the safe hub.','#8d9aa2');P.hubSkMsg=2}return false}
   const prio=!auto&&i>=AUTO_SLOTS; /* v5_156 slots R and T (13, 14) are PRIORITY skills: pressed / clicked / tapped by hand they cast at any moment - they ignore the short global lock and interrupt a cast pose in progress */
-  if(SCD[id]>0||!skCanPay(s)||(P.skLock>0&&!prio&&!res))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack is NOT blocked by it */
+  if(SCD[id]>0||!skCanPay(s)||(P.skLock>0&&!prio&&!res))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack IS blocked by it (v5_361) */
   const hpc=skHp(s)?skHpCost(s):0; /* v5_188b HP price fixed BEFORE the heal below */
   const _fx0=fx.length; /* v5_344 rings made by this cast are stretched to the global lock below */
   /* v5_122 skills work outside attack mode too: when nothing is targeted or selected and a monster is inside THIS skill's reach, the nearest one is selected
@@ -238,7 +239,7 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
     teleClearOwn();for(const q of _tl)if(tele.length<12)tele.push(Object.assign({col:s.col,t:0,max:SKILL_WIND+.3,own:1},q));
     {const r0=Math.round,r2=v=>Math.round(v*100)/100;fxs({k:'tl',a:_tl.slice(0,6).map(q=>q.k==='c'?['c',r0(q.x),r0(q.y),r0(q.r)]:q.k==='l'?['l',r0(q.x),r0(q.y),r2(q.ang),r0(q.L),r0(q.w)]:['a',r0(q.x),r0(q.y),r2(q.ang),r0(q.r),r2(q.h)])})} /* v5_352 other players see the area too (cosmetic fx message, the server relays it to nearby players) */
     P.pend={i,auto,t:0,D:SKILL_WIND,spec:_tl};if(tg0)P.face=a;
-    P.skT=t;P.skTi=(P.skTi|0)+1;P.swing=.2;P.skLock=SKILL_GCD;P.cast=SKILL_WIND;P.castMax=SKILL_WIND;P.mv=null;
+    P.skT=t;P.skTi=(P.skTi|0)+1;P.swing=.2;P.skLock=SKILL_GCD;P.atkBlk=SKILL_ATK_BLOCK;P.cast=SKILL_WIND;P.castMax=SKILL_WIND;P.mv=null;
     return true}
   if(s.sig){if(sigCast(s,id,tg0,a,A,auto)===false)return false} /* v5_160 signature skills */
   else if(!auto&&WHIFF_R[t]&&!hasFoeFor(t,tg0,mel,mr))whiffCast(t,s);
@@ -256,11 +257,11 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
     const hit=(q,x,f)=>q.isPl?sdp(q,x,f):sd(q,x,f),ma=Math.atan2(c.y-P.y,c.x-P.x);
     P.face=ma;P.target=c;P.task=null;P.mv=null;
     if(t==='shadowstep'){
-      const gap=P.r+c.r+18;
+      const gap=P.r+c.r+18,bx0=P.x,by0=P.y;
       for(let j=0;j<12;j++)spark(P.x+(c.x-P.x)*j/12,P.y+(c.y-P.y)*j/12,s.col,2,60,.4,2.4);
       P.x=c.x+Math.cos(ma)*gap;P.y=c.y+Math.sin(ma)*gap;P.face=ma+Math.PI;P.inv=Math.max(P.inv,.3);
       hit(c,s.m*1.35);ring(c.x,c.y,60,s.col,'whirl');spark(c.x,c.y,s.col,24,240,.5,2.8);shake=Math.max(shake,.4);
-      fxs({k:'ri',x:c.x,y:c.y,r:60,c:s.col,q:'whirl',s:1})}
+      fxs({k:'ri',x:c.x,y:c.y,r:60,c:s.col,q:'whirl',s:1});blinkStart(bx0,by0,s.col)}
     else if(t==='execute'){
       const f=c.maxhp>0?clamp(c.hp/c.maxhp,0,1):1;
       hit(c,s.m*(1+(1-f)*1.2));ring(c.x,c.y,55,s.col);spark(c.x,c.y,s.col,22,220,.5,2.8);shake=Math.max(shake,.35);
@@ -295,7 +296,7 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
     for(const q of foes())if(inLine(q))sdp(q,s.m);
     for(let j=0;j<14;j++)spark(sx+(ex-sx)*j/14,sy+(ey-sy)*j/14,s.col,3,70,.4,2.6);
     P.face=a;P.x=ex;P.y=ey;P.inv=Math.max(P.inv,.4);shake=Math.max(shake,.4);ring(ex,ey,60,s.col,'whirl');
-    fxs({k:'ch',p:[Math.round(sx),Math.round(sy),Math.round(ex),Math.round(ey)],c:s.col})}
+    fxs({k:'ch',p:[Math.round(sx),Math.round(sy),Math.round(ex),Math.round(ey)],c:s.col});blinkStart(sx,sy,s.col)}
   /* ===== IRON GUARDIAN ===== */
   else if(t==='bash'||t==='hammer'){
     const rng=t==='hammer'?200:170,ok=q=>q&&!q.dead&&(!q.isPl||pvpOk(q))&&dist(q.x,q.y,P.x,P.y)<=rng;
@@ -309,13 +310,13 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
        It is the answer to kiting Storm Archers / Summoners; it does nothing when no enemy is in reach (nothing is spent). */
     const rng=400,ok=q=>q&&!q.dead&&(!q.isPl||pvpOk(q))&&dist(q.x,q.y,P.x,P.y)<=rng;
     const c=ok(tg0)?tg0:nearest(rng);if(!c)return false;
-    const ma=Math.atan2(c.y-P.y,c.x-P.x),gap=P.r+c.r+24;
+    const ma=Math.atan2(c.y-P.y,c.x-P.x),gap=P.r+c.r+24,bx0=P.x,by0=P.y;
     for(let j=0;j<12;j++)spark(P.x+(c.x-P.x)*j/12,P.y+(c.y-P.y)*j/12,s.col,2,60,.4,2.4);
     P.x=c.x-Math.cos(ma)*gap;P.y=c.y-Math.sin(ma)*gap;P.face=ma;P.target=c;P.task=null;P.mv=null;P.inv=Math.max(P.inv,.3);
     hitAny(c,s.m);
     P.sh=Math.max(P.sh,Math.round(maxHp()*(.04+tr*.008)));P.shT=Math.max(P.shT||0,5);
     ring(c.x,c.y,70,s.col,'whirl');spark(c.x,c.y,s.col,24,240,.5,2.8);shake=Math.max(shake,.4);
-    fxs({k:'ri',x:c.x,y:c.y,r:70,c:s.col,q:'whirl',s:1})}
+    fxs({k:'ri',x:c.x,y:c.y,r:70,c:s.col,q:'whirl',s:1});blinkStart(bx0,by0,s.col)}
   else if(t==='quake'||t==='roar'||t==='counter'){
     const r=t==='quake'?160+tr*12:t==='roar'?240:150+tr*8;
     if(auto&&!mons.some(m=>!m.dead&&dist(m.x,m.y,P.x,P.y)<r+m.r)&&!foes().some(q=>dist(q.x,q.y,P.x,P.y)<r+q.r))return false;
@@ -361,7 +362,7 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
     P.x+=Math.cos(ba)*240;P.y+=Math.sin(ba)*240;P.galeLock=30;P.vlT=Math.max(P.vlT,4);P.inv=Math.max(P.inv,.3);P.gsT=4;
     for(let j=0;j<12;j++)spark(sx+(P.x-sx)*j/12,sy+(P.y-sy)*j/12,s.col,2,60,.4,2.4);ring(P.x,P.y,60,s.col,'whirl');
     if(c){const fa=Math.atan2(c.y-P.y,c.x-P.x),an=[];P.face=fa;for(let j=0;j<3;j++){const g=fa+(j-1)*.1;an.push(+g.toFixed(2));projs.push({x:P.x,y:P.y,vx:Math.cos(g)*760,vy:Math.sin(g)*760,life:.6,l0:.6,dmg:A*s.m,hit:new Set(),ang:g,col:s.col})}fxs({k:'pr',x:P.x,y:P.y,a:an,c:s.col})}
-    else fxs({k:'ri',x:P.x,y:P.y,r:60,c:s.col,q:'whirl',s:1})}
+    else fxs({k:'ri',x:P.x,y:P.y,r:60,c:s.col,q:'whirl',s:1});blinkStart(sx,sy,s.col)}
   /* ===== SPIRIT SUMMONER ===== */
   else if(t==='wolves'||t==='guardian'){
     if(t==='guardian'){P.sh=Math.round(maxHp()*(.15+tr*.03));P.shT=10}
@@ -408,10 +409,10 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
       for(let j=-3;j<=3;j++){const g=ma+j*.38;spark(P.x+Math.cos(g)*r*.7,P.y+Math.sin(g)*r*.7,s.col,5,140,.35,2.6)}
       shake=Math.max(shake,.3);fxs({k:'ri',x:P.x,y:P.y,r:r*.8,c:s.col,q:'whirl',s:1})}
     else{
-      const gap=P.r+c.r+26,d0=dist(c.x,c.y,P.x,P.y);
+      const gap=P.r+c.r+26,d0=dist(c.x,c.y,P.x,P.y),bx0=P.x,by0=P.y;
       if(d0>gap){const nx=c.x+(P.x-c.x)/d0*gap,ny=c.y+(P.y-c.y)/d0*gap;for(let j=0;j<10;j++)spark(P.x+(nx-P.x)*j/10,P.y+(ny-P.y)*j/10,s.col,2,60,.35,2.4);P.x=nx;P.y=ny}
       hit(c,s.m);ring(c.x,c.y,70,s.col,'whirl');spark(c.x,c.y,s.col,24,240,.5,2.8);shake=Math.max(shake,.45);P.inv=Math.max(P.inv,.25);
-      fxs({k:'ri',x:c.x,y:c.y,r:70,c:s.col,q:'whirl',s:1})}
+      fxs({k:'ri',x:c.x,y:c.y,r:70,c:s.col,q:'whirl',s:1});blinkStart(bx0,by0,s.col)}
   }
   else if(t==='nova'||t==='drain'){
     const r=t==='drain'?170:(tr<0?120:150+tr*14);let tot=0;
@@ -443,7 +444,7 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
   }
   if(_tl){teleClearOwn();for(const q of _tl)if(tele.length<12)tele.push(Object.assign({col:s.col,t:0,max:SKILL_GCD,own:1},q))} /* v5_345 flash the area for the whole lock */
   {const RS=res?SKILL_GCD-SKILL_WIND:SKILL_GCD;for(let q=_fx0;q<fx.length;q++)if(fx[q].max<RS)fx[q].max=RS} /* v5_344 2D rings of this skill play over the whole lock */
-  skPay(s,hpc);SCD[id]=s.cd;if(!res){P.skT=t;P.skTi=(P.skTi|0)+1;P.skLock=SKILL_GCD}fxs({k:'an',s:t});P.swing=.2;sfxSkill(t);
+  skPay(s,hpc);SCD[id]=s.cd;if(!res){P.skT=t;P.skTi=(P.skTi|0)+1;P.skLock=SKILL_GCD;P.atkBlk=SKILL_ATK_BLOCK}fxs({k:'an',s:t});P.swing=.2;sfxSkill(t);
   {const rc=skillReach(t,tr,mel,mr),tp=aimT();skfxCast({t,cls:P.cls,x:P.x,y:P.y,face:P.face,tx:tp?tp.x:null,ty:tp?tp.y:null,r:rc?rc[0]:150,col:s.col})} /* v5_327 spell sprites + slash meshes of the skill (web/skillfx3d.js) */
   /* v5_109 CASTING: casting a skill stops you for a moment and plays a cast pose (arms raised). Dash skills (CAST_NOROOT) keep moving you instead. Tune CAST_T / CAST_T_LONG. */
   if(!CAST_NOROOT[t]&&!res){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null} /* v5_153 casting roots you again (v5_152 removed the root while moving); v5_154 a move input does NOT cancel it, you move when the pose ends */
@@ -534,9 +535,9 @@ sg_n200:({s})=>{const R=300;if(!sigFoes(P.x,P.y,R).length)return false;
 sg_n300:({s,tg0})=>{const c=sigTarget(tg0,420);if(!c)return false;const x=c.x,y=c.y,R=230;P.face=Math.atan2(y-P.y,x-P.x);ring(x,y,R,s.col);fxs({k:'mt',x:Math.round(x),y:Math.round(y),r:R,c:s.col});
   for(let j=0;j<10;j++)sigLater(.5*(j+1),()=>{aoeHit(x,y,R,s.m*(1+j*.15));ring(x,y,R*(.4+.06*j),s.col,'whirl');spark(x,y,s.col,12,R*1.2,.6,2.6)})},
 sg_n500:({s,id,tg0})=>{const c=sigTarget(tg0,460);if(!c)return false;const ma=Math.atan2(c.y-P.y,c.x-P.x),gap=P.r+c.r+18;
-  sigLine(P.x,P.y,c.x,c.y,s.col,12);P.x=c.x+Math.cos(ma)*gap;P.y=c.y+Math.sin(ma)*gap;P.face=ma+Math.PI;P.inv=Math.max(P.inv,.4);P.target=c;P.task=null;P.mv=null;
+  const bx0=P.x,by0=P.y;sigLine(P.x,P.y,c.x,c.y,s.col,12);P.x=c.x+Math.cos(ma)*gap;P.y=c.y+Math.sin(ma)*gap;P.face=ma+Math.PI;P.inv=Math.max(P.inv,.4);P.target=c;P.task=null;P.mv=null;blinkStart(bx0,by0,s.col);
   const f=c.maxhp>0?clamp(c.hp/c.maxhp,0,1):1;hitAny(c,s.m*(1+(1-f)*2.5));sigFx(c.x,c.y,70,s.col,1);spark(c.x,c.y,s.col,30,260,.6,3);shake=Math.max(shake,.5);
-  if(c.dead||c.pend||c.hp<=0){for(let j=0;j<SCD.length;j++)if(j!==id)SCD[j]=0;pop(P.x,P.y-50,'VERDICT: COOLDOWNS RESET','#ffe27a',14);sigFx(P.x,P.y,120,'#ffe27a',1)}},
+  if(c.dead||c.pend||c.hp<=0){for(let j=0;j<SCD.length;j++)if(j!==id)SCD[j]=0;pop(c.x,c.y-50,'VERDICT: COOLDOWNS RESET','#ffe27a',14);sigFx(c.x,c.y,120,'#ffe27a',1)}},
 sg_n750:({s,tg0})=>{const c=sigTarget(tg0,420),x=c?c.x:P.x+Math.cos(P.face)*260,y=c?c.y:P.y+Math.sin(P.face)*260,base=c?Math.atan2(c.y-P.y,c.x-P.x):P.face,H=330,W=55;P.face=base;
   const ang=[base+Math.PI/4,base-Math.PI/4];
   for(const an of ang){sigLine(x-Math.cos(an)*H,y-Math.sin(an)*H,x+Math.cos(an)*H,y+Math.sin(an)*H,s.col,20);for(let j=-3;j<=3;j++)ring(x+Math.cos(an)*H*j/3,y+Math.sin(an)*H*j/3,30,s.col)}
@@ -545,14 +546,14 @@ sg_n750:({s,tg0})=>{const c=sigTarget(tg0,420),x=c?c.x:P.x+Math.cos(P.face)*260,
     aoeHit(x,y,75,s.m);sigFx(x,y,90,s.col,1);spark(x,y,s.col,40,300,.7,3.2);shake=Math.max(shake,.8)})},
 sg_n1000:({s})=>{const R=520;if(!sigFoes(P.x,P.y,R).length)return false;P.inv=Math.max(P.inv,3);pop(P.x,P.y-50,'SHADOWLESS',s.col,15);
   for(let j=0;j<10;j++)sigLater(.25*j,()=>{const L=sigFoes(P.x,P.y,R);if(!L.length)return;const q=L[(rnd()*L.length)|0],ma=Math.atan2(q.y-P.y,q.x-P.x),gap=P.r+q.r+16;
-    sigLine(P.x,P.y,q.x,q.y,s.col,8);P.x=q.x-Math.cos(ma)*gap;P.y=q.y-Math.sin(ma)*gap;P.face=ma;P.inv=Math.max(P.inv,.4);hitAny(q,s.m);ring(q.x,q.y,50,s.col,'whirl');spark(q.x,q.y,s.col,14,220,.4,2.8);shake=Math.max(shake,.3)});
+    const bx0=P.x,by0=P.y;sigLine(P.x,P.y,q.x,q.y,s.col,8);P.x=q.x-Math.cos(ma)*gap;P.y=q.y-Math.sin(ma)*gap;P.face=ma;P.inv=Math.max(P.inv,.4);blinkStart(bx0,by0,s.col);hitAny(q,s.m);ring(q.x,q.y,50,s.col,'whirl');spark(q.x,q.y,s.col,14,220,.4,2.8);shake=Math.max(shake,.3)});
   sigLater(2.6,()=>{aoeHit(P.x,P.y,260,s.m*3.5);sigFx(P.x,P.y,260,s.col,1);spark(P.x,P.y,s.col,50,320,.8,3.4);shake=Math.max(shake,.9)})},
 /* ===== IRON GUARDIAN ===== */
 sg_g25:({s})=>{sigShield(.25,8);sigDR(.25,6);sigFx(P.x,P.y,90,s.col);spark(P.x,P.y,s.col,24,120,.8,3);pop(P.x,P.y-46,'STONESKIN',s.col,14)},
 sg_g50:({s})=>{P.rf=.8;P.rfT=8;sigDR(.3,8);sigFx(P.x,P.y,90,s.col,1);spark(P.x,P.y,'#ffffff',22,140,.7,2.8);pop(P.x,P.y-46,'THORNS',s.col,14)},
 sg_g100:({s,tg0,a})=>{const c=tg0&&!tg0.dead?tg0:null,an=c?Math.atan2(c.y-P.y,c.x-P.x):a,L=420,sx=P.x,sy=P.y,cx=Math.cos(an),cy=Math.sin(an),ex=sx+cx*L,ey=sy+cy*L;
   for(const q of sigFoes((sx+ex)/2,(sy+ey)/2,L*.6))if(sigInLine(q,sx,sy,an,L,110))hitAny(q,s.m);
-  sigLine(sx,sy,ex,ey,s.col,18);P.face=an;P.x=ex;P.y=ey;P.inv=Math.max(P.inv,.5);sigShield(.1,5);shake=Math.max(shake,.5);sigFx(ex,ey,90,s.col,1);fxs({k:'ch',p:[Math.round(sx),Math.round(sy),Math.round(ex),Math.round(ey)],c:s.col})},
+  sigLine(sx,sy,ex,ey,s.col,18);P.face=an;P.x=ex;P.y=ey;blinkStart(sx,sy,s.col);P.inv=Math.max(P.inv,.5);sigShield(.1,5);shake=Math.max(shake,.5);sigFx(ex,ey,90,s.col,1);fxs({k:'ch',p:[Math.round(sx),Math.round(sy),Math.round(ex),Math.round(ey)],c:s.col})},
 sg_g200:({s,A})=>{const T=6;P.abs=0;P.absT=T;sigFx(P.x,P.y,90,s.col);pop(P.x,P.y-46,'VESSEL',s.col,14);
   delayed.push({t:T,f:()=>{const dm=P.abs||0;P.abs=0;P.absT=0;if(P.dead>0)return;const R=300,d=Math.min(dm*1.5,maxHp()*3)+A*s.m;
     for(const q of sigFoes(P.x,P.y,R))sigFixed(q,d,false);sigFx(P.x,P.y,R,s.col,1);sigFx(P.x,P.y,R*.6,'#ffffff');spark(P.x,P.y,s.col,44,R*1.8,.7,3.2);shake=Math.max(shake,.8);pop(P.x,P.y-50,'RELEASE','#ffd27a',15)}})},

@@ -360,7 +360,7 @@ function updatePlayer(dt){
     else if(m.isPl&&(!MP||!NET.peers.has(m.id)||!pvpOk(m)))P.target=null; /* v5_158 a player target is only valid while my PvP mode allows it (outside the hub) */
     else if(dist(m.x,m.y,P.x,P.y)>(m.isPl?900:650)){P.target=null}
     else if(moveToward(m.x,m.y,rng?rng*BASIC_STAND:reach-6,dt,speed)===false){/* chasing */}
-    if(P.target&&dist(m.x,m.y,P.x,P.y)<=reach&&P.atkCd<=0){
+    if(P.target&&dist(m.x,m.y,P.x,P.y)<=reach&&P.atkCd<=0&&!(P.atkBlk>0)){ /* v5_362 no normal attack for SKILL_ATK_BLOCK (1 s) after a skill cast starts; it comes back by itself */
       P.face=Math.atan2(m.y-P.y,m.x-P.x);
       const c=rnd()<critChance(),dd=dist(m.x,m.y,P.x,P.y);let d=Math.round(atkVal()*(.9+rnd()*.2)*(c?critMul():1)*(1+babVal()/100));
       if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));{const l=Math.max(.06,dd/BASIC_PSPD);projs.push({x:P.x,y:P.y,vx:Math.cos(P.face)*BASIC_PSPD,vy:Math.sin(P.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:P.face,col:BASIC_COL[P.cls],cos:true,sc:BASIC_PSC})}} /* ranged normal attack: damage falloff + a visible bolt (v5_343: cosmetic projectile flying to the target, replaces the old 6-spark trail; cos:true = it never hits anything) */
@@ -399,7 +399,8 @@ function updatePlayer(dt){
   if(P.cast>0)P.cast-=dt;
   if(P.pend){const q=P.pend;q.t+=dt;if(P.dead>0){P.pend=null;teleClearOwn()}else if(q.t>=q.D){P.pend=null;P.teleOn=q.spec;try{useSkill(q.i,q.auto,true)}finally{P.teleOn=null}}} /* v5_349 second half of a telegraphed cast: the hit, only inside the shown area */
   if(P.skipT>0){P.skipT-=dt;if(P.skipT<=0)P.skipM=null} /* v5_315 */
-  P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);
+  blinkTick(dt); /* v5_363 blink glide + trails */
+  P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);P.atkBlk=Math.max(0,(P.atkBlk||0)-dt);
   if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1,P.dg)-dashEase(e0,P.dg));P.x+=P.dvx*st;P.y+=P.dvy*st;P.dgU=e1;
     /* v5_142 dash animation: ghost trail left along the path (fades behind you), streak sparks flung backwards, soft landing ring */
     spark(P.x,P.y,'#bfe9ff',3,18,.5,3.6);spark(P.x,P.y,'#ffffff',1,10,.35,2.4);spark(P.x-P.dvx*18,P.y-P.dvy*18,'#7fc4ff',2,70,.3,2.2);
@@ -1069,6 +1070,7 @@ function drawFx(){
     }
     ctx.strokeStyle=f.col;ctx.lineWidth=4;ctx.beginPath();ctx.arc(f.x+ox,f.y+oy,f.r*(.35+.65*k),0,6.2832);ctx.stroke();
   }
+  drawBlink(ox,oy); /* v5_363 */
   for(const q of parts){
     const k=q.life/q.max;ctx.globalAlpha=Math.min(1,k*1.2);ctx.fillStyle=q.col;
     ctx.beginPath();ctx.arc(q.x+ox,q.y+oy,q.size*(.4+k*.8),0,6.2832);ctx.fill();

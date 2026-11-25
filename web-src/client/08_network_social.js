@@ -553,6 +553,7 @@ const PEER_DELAY=.2; /* v5_166 was .12 (< 2 updates): any late packet ran the bu
    and only a huge jump (respawn, Home Scroll, world change: > PEER_SNAP) snaps. A standing player that starts moving (first step is short) still does not slide from the old spot. */
 const PEER_BLINK=110,PEER_SNAP=900,PEER_RUN=450,PEER_STILL=70;
 function peerBlinkFx(ox,oy,nx,ny){
+  if(time-blkNetT<.9)return; /* v5_363 the 'bk' message already draws the real trail */
   const d=Math.hypot(nx-ox,ny-oy),col='#c7b8ff';
   if(d<=700)for(let j=0;j<=10;j++)spark(ox+(nx-ox)*j/10,oy+(ny-oy)*j/10,col,2,60,.4,2.4);
   ring(ox,oy,36,col);ring(nx,ny,50,col,'whirl');spark(nx,ny,col,10,200,.4,2.6);
@@ -618,6 +619,7 @@ function playFx(m){
       for(const g of an)if(typeof g==='number')projs.push({x,y,vx:Math.cos(g)*520,vy:Math.sin(g)*520,life:.7,l0:.7,dmg:0,hit:new Set(),ang:g,col,cos:true});
       if(q&&typeof an[0]==='number'){q.face=an[0];q.swing=.2}
       break}
+    case 'bk':blinkRemote(m.p,col);break; /* v5_363 another player's blink trail */
     case 'ri':ring(x,y,clamp(+m.r||100,20,400),col,m.q==='whirl'?'whirl':0);if(m.s)spark(x,y,col,18,240,.5,2.6);break;
     case 'mt':{const r=clamp(+m.r||110,20,400);ring(x,y,r,col);ring(x,y,r*.6,col);delayed.push({t:.7,f:()=>{ring(x,y,r,col,'whirl');spark(x,y,col,30,300,.7,3.2)}});break}
     case 'ch':{

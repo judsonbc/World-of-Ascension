@@ -1,3 +1,24 @@
+v5_363  FLASH BLINK: smooth glide + trails for every blink skill
+  - Shadow Step, Leaping Slash, Umbral Rush, Iron Charge, Gale Step, Reaper's Verdict, Shadowless Massacre and Juggernaut Rush no longer pop you to the new spot. The skill still decides the hit and the destination at once; at the end of the skill blinkStart() puts you back on the start and glides you there in .13-.22 s (ease in/out, ~45-90 px per frame at 60 fps).
+  - Trail: wide glowing streak with a white core, 4 crackling gold/white lightning bolts with forks, speed lines, 6 smeared afterimages along the path, flashes at both ends, rings and a spray of sparks. Fades in ~.6 s.
+  - Other players see the same trail (new net message k:'bk'); the old jump detector (peerBlinkFx) stays quiet when it arrives.
+  - 3D mode: a row of additive glow sprites along the streak + head / start flash (web/fx3d.js, FXC.blk; sprite pool 36 -> 56, low quality 10 -> 16). The glide itself moves the real player, so it shows in 2D and 3D alike.
+  - Files: NEW web-src/client/02_blink.js, 02_combat.js (8 skill sites + leap with target), 05_render2d.js (tick + draw), 06_render3d.js, 08_network_social.js, web/fx3d.js, web/game.js rebuilt.
+
+v5_362  NORMAL ATTACK PAUSE AFTER A SKILL CAST: 1 s (was the full 1.5 s skill lock)
+  - New SKILL_ATK_BLOCK=1 (02_combat.js) and timer P.atkBlk; skills still lock other skills for SKILL_GCD (1.5 s). Files: 02_combat.js, 05_render2d.js, web/game.js rebuilt.
+
+v5_361  NO NORMAL ATTACK WHILE CASTING A SKILL
+  - The normal attack is paused for the whole skill lock (SKILL_GCD, 1.5 s: telegraph wind-up + cast pose + the skill move). When it ends, the normal attack continues by itself if you still have a target. Dodging and moving are unchanged.
+  - Files: web-src/client/05_render2d.js (attack condition), 02_combat.js (comment), web/game.js rebuilt.
+
+v5_360  UNIQUE SKILL ICONS + NAME LABEL ON EVERY SKILL BUTTON
+  - Many skills shared one text glyph (Fan / Seismic Wave / Wraith Wail all showed the same wave, Mend / Ward / Soul Mend the same cross, Chain / Thunder Trap the same bolt, several unique skills the same star ...).
+  - NEW web-src/client/03_skill_icons.js: every skill type (all 5 classes, 45 base types + the 40 unique signature skills) now has its OWN drawn SVG icon, coloured by the skill colour. A test confirmed all 86 icons exist and no two are identical.
+  - Each skill button now shows the skill's short name at the BOTTOM (Pierce, Nova, Lotus, Sniper ...). The key letter moved to the top of the button. Applies to the round slots and the big R / T slots.
+  - The skill book list and the Reserved indicator use the same icons. Open tools/skill_icons_preview.html in a browser to see all of them.
+  - Files: web-src/client/03_skill_icons.js (new), 04_input_wardrobe.js, 07_hud.js, web/index.html (CSS), web/game.js (rebuilt with tools/build_client.js).
+
 v5_359 SKILL RIPPLES HUG THE GROUND (the round rings on the ground)
   The ripple rings of skills (fx rings, 06_render3d.js) were flat discs placed at the ground height of their centre + 4, so on a slope or hill one side cut into the terrain and the other floated. Each ring is now its own 32-segment strip whose vertices are put on the terrain every frame (gh3 at each point, +2.5), with a polygon offset against z-fighting. Same size, colour, fade and pool of 40 as before; cost = at most 40 x 66 terrain lookups per frame, only while ripples are active. The selection ring and the move marker are unchanged. Tune RSEG / RING_LIFT before gh3 in 06_render3d.js. Not seen in the game yet.
 
