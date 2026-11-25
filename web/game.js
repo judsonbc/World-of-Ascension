@@ -878,6 +878,97 @@ function load(){
   }catch(e){return false}
 }
 
+/* v5_363 FLASH BLINK: every blink skill (Shadow Step, Leaping Slash, Umbral Rush, Iron Charge, Gale Step, Reaper's Verdict, Shadowless Massacre, Juggernaut Rush) no longer pops you to the new spot.
+   The skill code still decides the destination and the hit at once; blinkStart(sx,sy,col) is then called at the END of the skill: it puts you back on the start point and glides you to the destination in ~.13-.22 s
+   (ease in / out, so it reads as one smooth streak), and leaves a trail behind: a glowing streak, forking lightning, speed lines, smeared afterimages, a flash at both ends and a spray of sparks.
+   The same trail is drawn for other players (net message 'bk') and in 3D mode (glow sprites, see fx3d.js: FXC.blk). BLK_TR = the live trails. */
+const BLK_TR=[],BLK_MAX=.62;
+const blkEase=u=>u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;                  /* easeInOutCubic */
+function blkInv(f){let a=0,b=1;for(let i=0;i<14;i++){const m=(a+b)/2;if(blkEase(m)<f)a=m;else b=m}return(a+b)/2}
+const blkDur=d=>clamp(.11+d/2300,.13,.22);
+function blkMake(sx,sy,ex,ey,col,own){
+  const d=Math.hypot(ex-sx,ey-sy);if(!(d>=20)||!isFinite(d))return null;
+  while(BLK_TR.length>=10)BLK_TR.shift();
+  const dur=blkDur(d),gh=[];for(let i=1;i<=6;i++){const f=i/7;gh.push({f,tr:blkInv(f)*dur})}
+  const tr={sx,sy,ex,ey,col,own:!!own,t:0,dur,max:BLK_MAX+dur,sd:(rnd()*9999)|0,gh,ang:Math.atan2(ey-sy,ex-sx),d,hp:0,tp:0,al:1};
+  BLK_TR.push(tr);
+  ring(sx,sy,46,col);ring(sx,sy,84,'#ffffff');spark(sx,sy,col,16,230,.45,3);spark(sx,sy,'#ffffff',8,160,.3,2.4);spark(sx,sy,'#ffe27a',8,200,.35,2.4);
+  return tr}
+/* called by a blink skill AFTER it moved you to the destination (P.x / P.y) and did everything that needs the destination */
+function blinkStart(sx,sy,col){
+  col=/^#[0-9a-f]{6}$/i.test(col)?col:'#cfe8ff';
+  const ex=P.x,ey=P.y,tr=blkMake(sx,sy,ex,ey,col,true);if(!tr)return;
+  P.x=sx;P.y=sy;P.bk={sx,sy,ex,ey,t:0,dur:tr.dur,tr};
+  shake=Math.max(shake,.15);
+  try{fxs({k:'bk',p:[Math.round(sx),Math.round(sy),Math.round(ex),Math.round(ey)],c:col})}catch(e){}
+}
+let blkNetT=-9; /* time of the last 'bk' message from another player: peerBlinkFx stays quiet then (one trail, not two) */
+function blinkRemote(p,col){
+  if(!Array.isArray(p)||p.length<4)return;const v=p.slice(0,4).map(Number);if(v.some(q=>!isFinite(q)))return;
+  col=/^#[0-9a-f]{6}$/i.test(col)?col:'#cfe8ff';blkNetT=time;blkMake(v[0],v[1],v[2],v[3],col,false)}
+function blinkTick(dt){
+  const b=P.bk;
+  if(b){
+    if(P.dead>0){P.bk=null}
+    else{
+      b.t+=dt;const u=Math.min(1,b.t/b.dur),p=blkEase(u),tr=b.tr,dx=Math.cos(tr.ang),dy=Math.sin(tr.ang);
+      P.x=b.sx+(b.ex-b.sx)*p;P.y=b.sy+(b.ey-b.sy)*p;
+      spark(P.x,P.y,tr.col,4,60,.35,3.4);spark(P.x,P.y,'#ffffff',2,40,.25,2.6);spark(P.x,P.y,'#ffe27a',2,130,.3,2.2);spark(P.x-dx*30,P.y-dy*30,tr.col,3,90,.4,2.6);
+      if(u>=1){P.bk=null;P.x=b.ex;P.y=b.ey;ring(P.x,P.y,62,tr.col,'whirl');ring(P.x,P.y,104,'#ffffff');spark(P.x,P.y,tr.col,20,260,.5,3.2);spark(P.x,P.y,'#ffffff',10,200,.35,2.6);spark(P.x,P.y,'#ffe27a',10,240,.4,2.6);shake=Math.max(shake,.25)}
+    }
+  }
+  for(let i=BLK_TR.length-1;i>=0;i--){
+    const t=BLK_TR[i];t.t+=dt;if(t.t>=t.max){BLK_TR.splice(i,1);continue}
+    const u=Math.min(1,t.t/t.dur);t.hp=blkEase(u);
+    const tf=clamp((t.t-t.dur*.45)/(t.max-t.dur*.45),0,1);t.tp=Math.min(t.hp,Math.pow(tf,1.6));      /* the tail of the streak catches up with the head */
+    t.al=1-Math.max(0,(t.t-t.dur)/(t.max-t.dur));
+    if(!t.own&&u<1){const hx=t.sx+(t.ex-t.sx)*t.hp,hy=t.sy+(t.ey-t.sy)*t.hp;spark(hx,hy,t.col,3,60,.35,3.2);spark(hx,hy,'#ffffff',1,40,.25,2.4)}
+  }
+}
+/* 2D drawing (called inside drawFx, additive blending is already on) */
+function drawBlink(ox,oy){
+  for(const t of BLK_TR){
+    const a=t.al;if(a<=.02)continue;
+    const dxp=t.ex-t.sx,dyp=t.ey-t.sy,hx=t.sx+dxp*t.hp+ox,hy=t.sy+dyp*t.hp+oy-20,tx=t.sx+dxp*t.tp+ox,ty=t.sy+dyp*t.tp+oy-20;
+    const L=Math.hypot(hx-tx,hy-ty),ux=Math.cos(t.ang),uy=Math.sin(t.ang),nx=-uy,ny=ux,rg=hexRgb(t.col);
+    const rr=n=>{const q=Math.sin(n*127.1+t.sd*.37)*43758.5453;return q-Math.floor(q)};
+    ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+    /* smeared afterimages left on the path */
+    for(const g of t.gh){
+      if(t.t<g.tr)continue;const age=(t.t-g.tr)/Math.max(.05,t.max-g.tr),ga=Math.max(0,1-age*1.5)*.6;if(ga<=.02)continue;
+      const gx=t.sx+dxp*g.f+ox,gy=t.sy+dyp*g.f+oy;
+      for(let s=0;s<3;s++){const k=s/3,px=gx-ux*k*28,py=gy-uy*k*28;ctx.globalAlpha=ga*(1-k*.55);ctx.strokeStyle='rgba('+rg+',1)';ctx.fillStyle='rgba('+rg+',1)';
+        ctx.lineWidth=16-k*5;ctx.beginPath();ctx.moveTo(px,py-8);ctx.lineTo(px,py-30);ctx.stroke();ctx.beginPath();ctx.arc(px,py-43,7.5-k*2,0,6.2832);ctx.fill()}
+      ctx.globalAlpha=ga*.85;ctx.strokeStyle='#ffffff';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(gx,gy-10);ctx.lineTo(gx,gy-30);ctx.stroke();
+    }
+    if(L>2){
+      /* the streak: wide soft glow, bright body, white core */
+      ctx.strokeStyle='rgba('+rg+',1)';ctx.globalAlpha=a*.28;ctx.lineWidth=36*a+8;ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(hx,hy);ctx.stroke();
+      ctx.globalAlpha=a*.6;ctx.lineWidth=16*a+4;ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(hx,hy);ctx.stroke();
+      ctx.strokeStyle='#ffffff';ctx.globalAlpha=a*.95;ctx.lineWidth=5*a+1.5;ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(hx,hy);ctx.stroke();
+      /* speed lines */
+      for(let i=0;i<8;i++){
+        const off=(rr(i*7.3+1)-.5)*70,ln=L*(.3+.55*rr(i*3.1+2)),f0=rr(i*5.7+3)*Math.max(0,1-ln/L);
+        const x0=tx+(hx-tx)*f0+nx*off,y0=ty+(hy-ty)*f0+ny*off,x1=x0+(hx-tx)/L*ln,y1=y0+(hy-ty)/L*ln;
+        ctx.globalAlpha=a*.7;ctx.strokeStyle=i&1?'#ffffff':'rgba('+rg+',1)';ctx.lineWidth=1.4+rr(i+9)*1.4;ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+      }
+      /* forking lightning around the streak: re-rolled ~30 times a second so it crackles */
+      const fr=Math.floor(t.t*30),N=Math.max(4,Math.round(L/20));
+      for(let b=0;b<4;b++){
+        const sd=fr*97+b*31,amp=11+b*5,pts=[];
+        for(let i=0;i<=N;i++){const f=i/N,env=Math.sin(f*Math.PI)*.85+.15,off=(rr(sd+i*1.7)-.5)*2*amp*env;pts.push([tx+(hx-tx)*f+nx*off,ty+(hy-ty)*f+ny*off])}
+        ctx.globalAlpha=a*.85;ctx.strokeStyle='#ffe27a';ctx.lineWidth=3.2;ctx.beginPath();pts.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.stroke();
+        ctx.globalAlpha=a;ctx.strokeStyle='#ffffff';ctx.lineWidth=1.3;ctx.beginPath();pts.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.stroke();
+        for(let k=0;k<2;k++){const j=1+((rr(sd+k*5.3)*(N-1))|0),q=pts[Math.min(N,j)],an=t.ang+(rr(sd+k*2.9)<.5?-1:1)*(.6+rr(sd+k)*.7),ln=18+rr(sd+k*8.1)*26;
+          ctx.globalAlpha=a*.8;ctx.strokeStyle='#ffe27a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(q[0],q[1]);ctx.lineTo(q[0]+Math.cos(an)*ln*.55+(rr(sd+k*4.4)-.5)*8,q[1]+Math.sin(an)*ln*.55);ctx.lineTo(q[0]+Math.cos(an)*ln,q[1]+Math.sin(an)*ln);ctx.stroke()}
+      }
+    }
+    /* flash at the head while it travels, and at the start point right after the cast */
+    if(t.t<t.dur+.12){const k=Math.max(0,1-Math.max(0,t.t-t.dur)/.12),g=ctx.createRadialGradient(hx,hy,0,hx,hy,58);g.addColorStop(0,'rgba(255,255,255,'+(.85*k)+')');g.addColorStop(.4,'rgba('+rg+','+(.45*k)+')');g.addColorStop(1,'rgba('+rg+',0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.beginPath();ctx.arc(hx,hy,58,0,6.2832);ctx.fill()}
+    if(t.t<.2){const k=1-t.t/.2,sx=t.sx+ox,sy=t.sy+oy-20,g=ctx.createRadialGradient(sx,sy,0,sx,sy,50+30*(1-k));g.addColorStop(0,'rgba(255,255,255,'+(.8*k)+')');g.addColorStop(1,'rgba('+rg+',0)');ctx.globalAlpha=1;ctx.fillStyle=g;ctx.beginPath();ctx.arc(sx,sy,80,0,6.2832);ctx.fill()}
+    ctx.restore();
+  }
+}
 /* ---------- combat ---------- */
 let lvUpT=0,lvUpT2=0;
 function lvBanner(lv,gained,realm){
@@ -992,6 +1083,7 @@ const BASIC_RANGE=[0,0,0,460,380],BASIC_FALL=.25,BASIC_STAND=.75,BASIC_COL=['','
 function rangedDmg(m,d,fr){d=Math.round(d*(1-RANGE_FALL*clamp(fr,0,1)));if(!m.boss)d=Math.min(d,Math.max(1,Math.round(m.maxhp*RANGED_CAP)));return d}
 const CRIT_MUL=1.8;
 const SKILL_WIND=.6; /* v5_349 TELEGRAPH FIRST, DAMAGE AFTER: a damaging skill shows its ground area for SKILL_WIND seconds (you are rooted and play the move), then the hit lands - only on what is still inside the area, so enemies / players can step out. 0 = old instant hits */
+const SKILL_ATK_BLOCK=1; /* v5_362 the normal attack is paused this many seconds after a skill cast starts (shorter than SKILL_GCD) */
 const SKILL_GCD=1.5; /* seconds between two skill casts (manual or auto); v5_190: 0.45 -> 1; v5_192: 2; v5_193: back to 1; v5_344: 1.5 (skill poses and effects are stretched to this length, see SKILL_T in anim3d.js / SKILL_FX_T in skillfx3d.js) */
 function sd(m,x,fr){const c=rnd()<critChance();let d=Math.round(atkVal()*x*(c?critMul():1)*(.9+rnd()*.2));if(fr!==undefined)d=rangedDmg(m,d,fr);return hitMonster(m,d,c)}
 /* the thing skills aim at: the attack target, else the selected monster (or selected player while PvP-flagged) */
@@ -1018,7 +1110,7 @@ function whiffCast(t,s){
   const a=P.face,cx=Math.cos(a),cy=Math.sin(a);
   if(t==='shadowstep'||t==='leap'){const L=t==='shadowstep'?260:200,sx=P.x,sy=P.y;
     for(let j=0;j<12;j++)spark(sx+cx*L*j/12,sy+cy*L*j/12,s.col,2,60,.4,2.4);
-    P.x=sx+cx*L;P.y=sy+cy*L;P.inv=Math.max(P.inv,.3);ring(P.x,P.y,50,s.col,'whirl');fxs({k:'ri',x:P.x,y:P.y,r:50,c:s.col,q:'whirl',s:1});return}
+    P.x=sx+cx*L;P.y=sy+cy*L;P.inv=Math.max(P.inv,.3);ring(P.x,P.y,50,s.col,'whirl');fxs({k:'ri',x:P.x,y:P.y,r:50,c:s.col,q:'whirl',s:1});blinkStart(sx,sy,s.col);return}
   const D=({blast:200,stormarrow:260,chain:200,chains:160})[t]||90,x=P.x+cx*D,y=P.y+cy*D;
   for(let j=1;j<=6;j++)spark(P.x+cx*D*j/6,P.y+cy*D*j/6,s.col,1,40,.35,2.4);
   ring(x,y,45,s.col);spark(x,y,s.col,14,160,.4,2.4);fxs({k:'ri',x:Math.round(x),y:Math.round(y),r:45,c:s.col})}
@@ -1095,7 +1187,7 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
   /* v5_90 no attacking in the safe hub: ranged classes cannot cast anything; every class loses its damaging skills (heals / shields / buffs still work) */
   if(inTown()&&(P.cls>=3||(s.m>0&&!HEAL_SKILL_T[t]))){if(!(P.hubSkMsg>0)){say('You cannot attack or use attack skills inside the safe hub.','#8d9aa2');P.hubSkMsg=2}return false}
   const prio=!auto&&i>=AUTO_SLOTS; /* v5_156 slots R and T (13, 14) are PRIORITY skills: pressed / clicked / tapped by hand they cast at any moment - they ignore the short global lock and interrupt a cast pose in progress */
-  if(SCD[id]>0||!skCanPay(s)||(P.skLock>0&&!prio&&!res))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack is NOT blocked by it */
+  if(SCD[id]>0||!skCanPay(s)||(P.skLock>0&&!prio&&!res))return false;if(prio)P.cast=0; /* one skill at a time: short global lock after any cast; the basic attack IS blocked by it (v5_361) */
   const hpc=skHp(s)?skHpCost(s):0; /* v5_188b HP price fixed BEFORE the heal below */
   const _fx0=fx.length; /* v5_344 rings made by this cast are stretched to the global lock below */
   /* v5_122 skills work outside attack mode too: when nothing is targeted or selected and a monster is inside THIS skill's reach, the nearest one is selected
@@ -1118,7 +1210,7 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
     teleClearOwn();for(const q of _tl)if(tele.length<12)tele.push(Object.assign({col:s.col,t:0,max:SKILL_WIND+.3,own:1},q));
     {const r0=Math.round,r2=v=>Math.round(v*100)/100;fxs({k:'tl',a:_tl.slice(0,6).map(q=>q.k==='c'?['c',r0(q.x),r0(q.y),r0(q.r)]:q.k==='l'?['l',r0(q.x),r0(q.y),r2(q.ang),r0(q.L),r0(q.w)]:['a',r0(q.x),r0(q.y),r2(q.ang),r0(q.r),r2(q.h)])})} /* v5_352 other players see the area too (cosmetic fx message, the server relays it to nearby players) */
     P.pend={i,auto,t:0,D:SKILL_WIND,spec:_tl};if(tg0)P.face=a;
-    P.skT=t;P.skTi=(P.skTi|0)+1;P.swing=.2;P.skLock=SKILL_GCD;P.cast=SKILL_WIND;P.castMax=SKILL_WIND;P.mv=null;
+    P.skT=t;P.skTi=(P.skTi|0)+1;P.swing=.2;P.skLock=SKILL_GCD;P.atkBlk=SKILL_ATK_BLOCK;P.cast=SKILL_WIND;P.castMax=SKILL_WIND;P.mv=null;
     return true}
   if(s.sig){if(sigCast(s,id,tg0,a,A,auto)===false)return false} /* v5_160 signature skills */
   else if(!auto&&WHIFF_R[t]&&!hasFoeFor(t,tg0,mel,mr))whiffCast(t,s);
@@ -1136,11 +1228,11 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
     const hit=(q,x,f)=>q.isPl?sdp(q,x,f):sd(q,x,f),ma=Math.atan2(c.y-P.y,c.x-P.x);
     P.face=ma;P.target=c;P.task=null;P.mv=null;
     if(t==='shadowstep'){
-      const gap=P.r+c.r+18;
+      const gap=P.r+c.r+18,bx0=P.x,by0=P.y;
       for(let j=0;j<12;j++)spark(P.x+(c.x-P.x)*j/12,P.y+(c.y-P.y)*j/12,s.col,2,60,.4,2.4);
       P.x=c.x+Math.cos(ma)*gap;P.y=c.y+Math.sin(ma)*gap;P.face=ma+Math.PI;P.inv=Math.max(P.inv,.3);
       hit(c,s.m*1.35);ring(c.x,c.y,60,s.col,'whirl');spark(c.x,c.y,s.col,24,240,.5,2.8);shake=Math.max(shake,.4);
-      fxs({k:'ri',x:c.x,y:c.y,r:60,c:s.col,q:'whirl',s:1})}
+      fxs({k:'ri',x:c.x,y:c.y,r:60,c:s.col,q:'whirl',s:1});blinkStart(bx0,by0,s.col)}
     else if(t==='execute'){
       const f=c.maxhp>0?clamp(c.hp/c.maxhp,0,1):1;
       hit(c,s.m*(1+(1-f)*1.2));ring(c.x,c.y,55,s.col);spark(c.x,c.y,s.col,22,220,.5,2.8);shake=Math.max(shake,.35);
@@ -1175,7 +1267,7 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
     for(const q of foes())if(inLine(q))sdp(q,s.m);
     for(let j=0;j<14;j++)spark(sx+(ex-sx)*j/14,sy+(ey-sy)*j/14,s.col,3,70,.4,2.6);
     P.face=a;P.x=ex;P.y=ey;P.inv=Math.max(P.inv,.4);shake=Math.max(shake,.4);ring(ex,ey,60,s.col,'whirl');
-    fxs({k:'ch',p:[Math.round(sx),Math.round(sy),Math.round(ex),Math.round(ey)],c:s.col})}
+    fxs({k:'ch',p:[Math.round(sx),Math.round(sy),Math.round(ex),Math.round(ey)],c:s.col});blinkStart(sx,sy,s.col)}
   /* ===== IRON GUARDIAN ===== */
   else if(t==='bash'||t==='hammer'){
     const rng=t==='hammer'?200:170,ok=q=>q&&!q.dead&&(!q.isPl||pvpOk(q))&&dist(q.x,q.y,P.x,P.y)<=rng;
@@ -1189,13 +1281,13 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
        It is the answer to kiting Storm Archers / Summoners; it does nothing when no enemy is in reach (nothing is spent). */
     const rng=400,ok=q=>q&&!q.dead&&(!q.isPl||pvpOk(q))&&dist(q.x,q.y,P.x,P.y)<=rng;
     const c=ok(tg0)?tg0:nearest(rng);if(!c)return false;
-    const ma=Math.atan2(c.y-P.y,c.x-P.x),gap=P.r+c.r+24;
+    const ma=Math.atan2(c.y-P.y,c.x-P.x),gap=P.r+c.r+24,bx0=P.x,by0=P.y;
     for(let j=0;j<12;j++)spark(P.x+(c.x-P.x)*j/12,P.y+(c.y-P.y)*j/12,s.col,2,60,.4,2.4);
     P.x=c.x-Math.cos(ma)*gap;P.y=c.y-Math.sin(ma)*gap;P.face=ma;P.target=c;P.task=null;P.mv=null;P.inv=Math.max(P.inv,.3);
     hitAny(c,s.m);
     P.sh=Math.max(P.sh,Math.round(maxHp()*(.04+tr*.008)));P.shT=Math.max(P.shT||0,5);
     ring(c.x,c.y,70,s.col,'whirl');spark(c.x,c.y,s.col,24,240,.5,2.8);shake=Math.max(shake,.4);
-    fxs({k:'ri',x:c.x,y:c.y,r:70,c:s.col,q:'whirl',s:1})}
+    fxs({k:'ri',x:c.x,y:c.y,r:70,c:s.col,q:'whirl',s:1});blinkStart(bx0,by0,s.col)}
   else if(t==='quake'||t==='roar'||t==='counter'){
     const r=t==='quake'?160+tr*12:t==='roar'?240:150+tr*8;
     if(auto&&!mons.some(m=>!m.dead&&dist(m.x,m.y,P.x,P.y)<r+m.r)&&!foes().some(q=>dist(q.x,q.y,P.x,P.y)<r+q.r))return false;
@@ -1241,7 +1333,7 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
     P.x+=Math.cos(ba)*240;P.y+=Math.sin(ba)*240;P.galeLock=30;P.vlT=Math.max(P.vlT,4);P.inv=Math.max(P.inv,.3);P.gsT=4;
     for(let j=0;j<12;j++)spark(sx+(P.x-sx)*j/12,sy+(P.y-sy)*j/12,s.col,2,60,.4,2.4);ring(P.x,P.y,60,s.col,'whirl');
     if(c){const fa=Math.atan2(c.y-P.y,c.x-P.x),an=[];P.face=fa;for(let j=0;j<3;j++){const g=fa+(j-1)*.1;an.push(+g.toFixed(2));projs.push({x:P.x,y:P.y,vx:Math.cos(g)*760,vy:Math.sin(g)*760,life:.6,l0:.6,dmg:A*s.m,hit:new Set(),ang:g,col:s.col})}fxs({k:'pr',x:P.x,y:P.y,a:an,c:s.col})}
-    else fxs({k:'ri',x:P.x,y:P.y,r:60,c:s.col,q:'whirl',s:1})}
+    else fxs({k:'ri',x:P.x,y:P.y,r:60,c:s.col,q:'whirl',s:1});blinkStart(sx,sy,s.col)}
   /* ===== SPIRIT SUMMONER ===== */
   else if(t==='wolves'||t==='guardian'){
     if(t==='guardian'){P.sh=Math.round(maxHp()*(.15+tr*.03));P.shT=10}
@@ -1288,10 +1380,10 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
       for(let j=-3;j<=3;j++){const g=ma+j*.38;spark(P.x+Math.cos(g)*r*.7,P.y+Math.sin(g)*r*.7,s.col,5,140,.35,2.6)}
       shake=Math.max(shake,.3);fxs({k:'ri',x:P.x,y:P.y,r:r*.8,c:s.col,q:'whirl',s:1})}
     else{
-      const gap=P.r+c.r+26,d0=dist(c.x,c.y,P.x,P.y);
+      const gap=P.r+c.r+26,d0=dist(c.x,c.y,P.x,P.y),bx0=P.x,by0=P.y;
       if(d0>gap){const nx=c.x+(P.x-c.x)/d0*gap,ny=c.y+(P.y-c.y)/d0*gap;for(let j=0;j<10;j++)spark(P.x+(nx-P.x)*j/10,P.y+(ny-P.y)*j/10,s.col,2,60,.35,2.4);P.x=nx;P.y=ny}
       hit(c,s.m);ring(c.x,c.y,70,s.col,'whirl');spark(c.x,c.y,s.col,24,240,.5,2.8);shake=Math.max(shake,.45);P.inv=Math.max(P.inv,.25);
-      fxs({k:'ri',x:c.x,y:c.y,r:70,c:s.col,q:'whirl',s:1})}
+      fxs({k:'ri',x:c.x,y:c.y,r:70,c:s.col,q:'whirl',s:1});blinkStart(bx0,by0,s.col)}
   }
   else if(t==='nova'||t==='drain'){
     const r=t==='drain'?170:(tr<0?120:150+tr*14);let tot=0;
@@ -1323,7 +1415,7 @@ function useSkill(i,auto,res){ /* res (v5_349) = the second half of a telegraphe
   }
   if(_tl){teleClearOwn();for(const q of _tl)if(tele.length<12)tele.push(Object.assign({col:s.col,t:0,max:SKILL_GCD,own:1},q))} /* v5_345 flash the area for the whole lock */
   {const RS=res?SKILL_GCD-SKILL_WIND:SKILL_GCD;for(let q=_fx0;q<fx.length;q++)if(fx[q].max<RS)fx[q].max=RS} /* v5_344 2D rings of this skill play over the whole lock */
-  skPay(s,hpc);SCD[id]=s.cd;if(!res){P.skT=t;P.skTi=(P.skTi|0)+1;P.skLock=SKILL_GCD}fxs({k:'an',s:t});P.swing=.2;sfxSkill(t);
+  skPay(s,hpc);SCD[id]=s.cd;if(!res){P.skT=t;P.skTi=(P.skTi|0)+1;P.skLock=SKILL_GCD;P.atkBlk=SKILL_ATK_BLOCK}fxs({k:'an',s:t});P.swing=.2;sfxSkill(t);
   {const rc=skillReach(t,tr,mel,mr),tp=aimT();skfxCast({t,cls:P.cls,x:P.x,y:P.y,face:P.face,tx:tp?tp.x:null,ty:tp?tp.y:null,r:rc?rc[0]:150,col:s.col})} /* v5_327 spell sprites + slash meshes of the skill (web/skillfx3d.js) */
   /* v5_109 CASTING: casting a skill stops you for a moment and plays a cast pose (arms raised). Dash skills (CAST_NOROOT) keep moving you instead. Tune CAST_T / CAST_T_LONG. */
   if(!CAST_NOROOT[t]&&!res){const ct=CAST_LONG[t]?CAST_T_LONG:CAST_T;P.cast=ct;P.castMax=ct;P.mv=null} /* v5_153 casting roots you again (v5_152 removed the root while moving); v5_154 a move input does NOT cancel it, you move when the pose ends */
@@ -1414,9 +1506,9 @@ sg_n200:({s})=>{const R=300;if(!sigFoes(P.x,P.y,R).length)return false;
 sg_n300:({s,tg0})=>{const c=sigTarget(tg0,420);if(!c)return false;const x=c.x,y=c.y,R=230;P.face=Math.atan2(y-P.y,x-P.x);ring(x,y,R,s.col);fxs({k:'mt',x:Math.round(x),y:Math.round(y),r:R,c:s.col});
   for(let j=0;j<10;j++)sigLater(.5*(j+1),()=>{aoeHit(x,y,R,s.m*(1+j*.15));ring(x,y,R*(.4+.06*j),s.col,'whirl');spark(x,y,s.col,12,R*1.2,.6,2.6)})},
 sg_n500:({s,id,tg0})=>{const c=sigTarget(tg0,460);if(!c)return false;const ma=Math.atan2(c.y-P.y,c.x-P.x),gap=P.r+c.r+18;
-  sigLine(P.x,P.y,c.x,c.y,s.col,12);P.x=c.x+Math.cos(ma)*gap;P.y=c.y+Math.sin(ma)*gap;P.face=ma+Math.PI;P.inv=Math.max(P.inv,.4);P.target=c;P.task=null;P.mv=null;
+  const bx0=P.x,by0=P.y;sigLine(P.x,P.y,c.x,c.y,s.col,12);P.x=c.x+Math.cos(ma)*gap;P.y=c.y+Math.sin(ma)*gap;P.face=ma+Math.PI;P.inv=Math.max(P.inv,.4);P.target=c;P.task=null;P.mv=null;blinkStart(bx0,by0,s.col);
   const f=c.maxhp>0?clamp(c.hp/c.maxhp,0,1):1;hitAny(c,s.m*(1+(1-f)*2.5));sigFx(c.x,c.y,70,s.col,1);spark(c.x,c.y,s.col,30,260,.6,3);shake=Math.max(shake,.5);
-  if(c.dead||c.pend||c.hp<=0){for(let j=0;j<SCD.length;j++)if(j!==id)SCD[j]=0;pop(P.x,P.y-50,'VERDICT: COOLDOWNS RESET','#ffe27a',14);sigFx(P.x,P.y,120,'#ffe27a',1)}},
+  if(c.dead||c.pend||c.hp<=0){for(let j=0;j<SCD.length;j++)if(j!==id)SCD[j]=0;pop(c.x,c.y-50,'VERDICT: COOLDOWNS RESET','#ffe27a',14);sigFx(c.x,c.y,120,'#ffe27a',1)}},
 sg_n750:({s,tg0})=>{const c=sigTarget(tg0,420),x=c?c.x:P.x+Math.cos(P.face)*260,y=c?c.y:P.y+Math.sin(P.face)*260,base=c?Math.atan2(c.y-P.y,c.x-P.x):P.face,H=330,W=55;P.face=base;
   const ang=[base+Math.PI/4,base-Math.PI/4];
   for(const an of ang){sigLine(x-Math.cos(an)*H,y-Math.sin(an)*H,x+Math.cos(an)*H,y+Math.sin(an)*H,s.col,20);for(let j=-3;j<=3;j++)ring(x+Math.cos(an)*H*j/3,y+Math.sin(an)*H*j/3,30,s.col)}
@@ -1425,14 +1517,14 @@ sg_n750:({s,tg0})=>{const c=sigTarget(tg0,420),x=c?c.x:P.x+Math.cos(P.face)*260,
     aoeHit(x,y,75,s.m);sigFx(x,y,90,s.col,1);spark(x,y,s.col,40,300,.7,3.2);shake=Math.max(shake,.8)})},
 sg_n1000:({s})=>{const R=520;if(!sigFoes(P.x,P.y,R).length)return false;P.inv=Math.max(P.inv,3);pop(P.x,P.y-50,'SHADOWLESS',s.col,15);
   for(let j=0;j<10;j++)sigLater(.25*j,()=>{const L=sigFoes(P.x,P.y,R);if(!L.length)return;const q=L[(rnd()*L.length)|0],ma=Math.atan2(q.y-P.y,q.x-P.x),gap=P.r+q.r+16;
-    sigLine(P.x,P.y,q.x,q.y,s.col,8);P.x=q.x-Math.cos(ma)*gap;P.y=q.y-Math.sin(ma)*gap;P.face=ma;P.inv=Math.max(P.inv,.4);hitAny(q,s.m);ring(q.x,q.y,50,s.col,'whirl');spark(q.x,q.y,s.col,14,220,.4,2.8);shake=Math.max(shake,.3)});
+    const bx0=P.x,by0=P.y;sigLine(P.x,P.y,q.x,q.y,s.col,8);P.x=q.x-Math.cos(ma)*gap;P.y=q.y-Math.sin(ma)*gap;P.face=ma;P.inv=Math.max(P.inv,.4);blinkStart(bx0,by0,s.col);hitAny(q,s.m);ring(q.x,q.y,50,s.col,'whirl');spark(q.x,q.y,s.col,14,220,.4,2.8);shake=Math.max(shake,.3)});
   sigLater(2.6,()=>{aoeHit(P.x,P.y,260,s.m*3.5);sigFx(P.x,P.y,260,s.col,1);spark(P.x,P.y,s.col,50,320,.8,3.4);shake=Math.max(shake,.9)})},
 /* ===== IRON GUARDIAN ===== */
 sg_g25:({s})=>{sigShield(.25,8);sigDR(.25,6);sigFx(P.x,P.y,90,s.col);spark(P.x,P.y,s.col,24,120,.8,3);pop(P.x,P.y-46,'STONESKIN',s.col,14)},
 sg_g50:({s})=>{P.rf=.8;P.rfT=8;sigDR(.3,8);sigFx(P.x,P.y,90,s.col,1);spark(P.x,P.y,'#ffffff',22,140,.7,2.8);pop(P.x,P.y-46,'THORNS',s.col,14)},
 sg_g100:({s,tg0,a})=>{const c=tg0&&!tg0.dead?tg0:null,an=c?Math.atan2(c.y-P.y,c.x-P.x):a,L=420,sx=P.x,sy=P.y,cx=Math.cos(an),cy=Math.sin(an),ex=sx+cx*L,ey=sy+cy*L;
   for(const q of sigFoes((sx+ex)/2,(sy+ey)/2,L*.6))if(sigInLine(q,sx,sy,an,L,110))hitAny(q,s.m);
-  sigLine(sx,sy,ex,ey,s.col,18);P.face=an;P.x=ex;P.y=ey;P.inv=Math.max(P.inv,.5);sigShield(.1,5);shake=Math.max(shake,.5);sigFx(ex,ey,90,s.col,1);fxs({k:'ch',p:[Math.round(sx),Math.round(sy),Math.round(ex),Math.round(ey)],c:s.col})},
+  sigLine(sx,sy,ex,ey,s.col,18);P.face=an;P.x=ex;P.y=ey;blinkStart(sx,sy,s.col);P.inv=Math.max(P.inv,.5);sigShield(.1,5);shake=Math.max(shake,.5);sigFx(ex,ey,90,s.col,1);fxs({k:'ch',p:[Math.round(sx),Math.round(sy),Math.round(ex),Math.round(ey)],c:s.col})},
 sg_g200:({s,A})=>{const T=6;P.abs=0;P.absT=T;sigFx(P.x,P.y,90,s.col);pop(P.x,P.y-46,'VESSEL',s.col,14);
   delayed.push({t:T,f:()=>{const dm=P.abs||0;P.abs=0;P.absT=0;if(P.dead>0)return;const R=300,d=Math.min(dm*1.5,maxHp()*3)+A*s.m;
     for(const q of sigFoes(P.x,P.y,R))sigFixed(q,d,false);sigFx(P.x,P.y,R,s.col,1);sigFx(P.x,P.y,R*.6,'#ffffff');spark(P.x,P.y,s.col,44,R*1.8,.7,3.2);shake=Math.max(shake,.8);pop(P.x,P.y-50,'RELEASE','#ffd27a',15)}})},
@@ -3052,6 +3144,114 @@ $('nTabC').addEventListener('click',()=>{if(nestBusy)return;nestTab='combine';ne
 $('nestClose').addEventListener('click',nestClose);
 $('nest').addEventListener('click',e=>{if(e.target===$('nest'))nestClose()});
 $('bNest').addEventListener('click',()=>{if(started){$('menu').hidden=true;nestOpen()}});
+/* v5_360 SKILL ICONS: every skill type (base + the 40 unique signature skills) has its OWN drawn icon and a short label that is shown at the bottom of the skill button.
+   SKI[type] = inner SVG markup on a 24x24 canvas (stroke = currentColor). SKL[type] = label (7 characters or fewer, so it fits inside the round button). */
+const SKI={
+/* --- Cultivator --- */
+pierce:'<path d="M4 20L18 6"/><path d="M19 5l-6 1.5 4.5 4.5z" fill="currentColor"/><path d="M4 20l3-3"/>',
+nova:'<circle cx="12" cy="12" r="3.2" fill="currentColor"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.8 2.8M16.2 16.2L19 19M19 5l-2.8 2.8M7.8 16.2L5 19"/>',
+mend:'<rect x="4" y="4" width="16" height="16" rx="5"/><path d="M12 8v8M8 12h8"/>',
+heal:'<circle cx="12" cy="12" r="9.5" stroke-dasharray="2.5 2.5"/><path d="M12 7v10M7 12h10"/>',
+meteor:'<circle cx="16" cy="16" r="4.2" fill="currentColor"/><path d="M12.5 12.5L3 3M13 8L8 3M8 13L3 8"/>',
+chain:'<path d="M12 2v7l-5 5M12 9l6 5M7 14v7M18 14v7"/><circle cx="12" cy="2.5" r="1" fill="currentColor"/>',
+might:'<path d="M12 3l7 9h-4.5v9h-5v-9H5z" fill="currentColor" fill-opacity=".35"/>',
+drain:'<path d="M16 3a9 9 0 1 0 5 13A7 7 0 0 1 16 3z" fill="currentColor" fill-opacity=".35"/>',
+fan:'<path d="M12 21L3 9a15 15 0 0 1 18 0z"/><path d="M12 21V7M12 21L7.5 7.8M12 21l4.5-13.2"/>',
+strike:'<path d="M5 5l14 14M19 5L5 19"/><path d="M3 8l5-5M21 8l-5-5M3 16l5 5M21 16l-5 5"/>',
+cleave:'<path d="M4 7c9 0 14 5 16 13C16 12 11 9 4 7z" fill="currentColor" fill-opacity=".4"/>',
+leap:'<path d="M3 20C5 5 19 5 21 20"/><path d="M16.5 16.5l4.5 3.5 1-5.5"/>',
+flurry:'<path d="M5 20L10 4M10.5 20L15.5 4M16 20L21 4"/>',
+/* --- Night Blade --- */
+kunai:'<path d="M12 2l3.5 9L12 17 8.5 11z" fill="currentColor" fill-opacity=".4"/><circle cx="12" cy="20" r="2.4"/>',
+shadowstep:'<ellipse cx="7" cy="17" rx="2.3" ry="3.4"/><ellipse cx="17" cy="7" rx="2.3" ry="3.4" fill="currentColor" fill-opacity=".5"/><path d="M10 13.5l1.2-1.2M12.8 10.8l1.2-1.2" stroke-dasharray="1 2"/>',
+venom:'<path d="M3 21L14 10"/><path d="M14 10l1.5-1.5"/><path d="M18 3c2.4 3.3 3.2 4.8 3.2 6.2a3.2 3.2 0 0 1-6.4 0C14.8 7.8 15.6 6.3 18 3z" fill="currentColor" fill-opacity=".5"/>',
+bladestorm:'<path d="M12 3a9 9 0 0 1 9 9M12 21a9 9 0 0 1-9-9"/><path d="M21 12l-2.4-3.2M21 12l-3.2-2.4M3 12l2.4 3.2M3 12l3.2 2.4"/><circle cx="12" cy="12" r="2" fill="currentColor"/>',
+smoke:'<circle cx="8" cy="14.5" r="4.3"/><circle cx="14" cy="10" r="5.2"/><circle cx="17.5" cy="16" r="3.8"/>',
+execute:'<path d="M12 3a7.5 7.5 0 0 0-4.5 13.5V20h9v-3.5A7.5 7.5 0 0 0 12 3z"/><circle cx="9" cy="11.5" r="1.7" fill="currentColor"/><circle cx="15" cy="11.5" r="1.7" fill="currentColor"/><path d="M10.5 20v-2.5M13.5 20v-2.5"/>',
+siphon:'<path d="M12 2.5c4.2 5 6.2 8.2 6.2 11.2a6.2 6.2 0 0 1-12.4 0c0-3 2-6.2 6.2-11.2z" fill="currentColor" fill-opacity=".45"/><path d="M9 14.5c0 1.8 1 3 2.6 3.4"/>',
+rush:'<path d="M2 8h9M1 12h12M2 16h9"/><path d="M14 5l7 7-7 7"/>',
+/* --- Iron Guardian --- */
+bash:'<path d="M10 3l7 2.5V11c0 4.5-3 7.4-7 8.5-4-1.1-7-4-7-8.5V5.5z"/><path d="M19.5 3.5l1.5-1.5M21.5 8h1.5M19 12l1.5 1.5" /><path d="M10 8v7M7 11.5h6"/>',
+quake:'<path d="M2 15l5 1.5 3-4.5 4 6 3-3.5 5 1.5"/><path d="M12 3v5M6.5 5l2 3.5M17.5 5l-2 3.5"/>',
+bulwark:'<rect x="3.5" y="5" width="17" height="14" rx="1"/><path d="M3.5 9.7h17M3.5 14.3h17M9 5v4.7M15 9.7v4.6M9 14.3V19"/>',
+roar:'<path d="M3 10v4h4l7 4V6L7 10z" fill="currentColor" fill-opacity=".35"/><path d="M17 9a4.2 4.2 0 0 1 0 6M19.5 6a8.5 8.5 0 0 1 0 12"/>',
+counter:'<path d="M4 12a8 8 0 1 1 3 6.3"/><path d="M4 18.5V12h6.5"/><path d="M12 9v6M9 12h6"/>',
+hammer:'<path d="M3 21l9-9"/><path d="M10 5.5l4-2.5 7 7-2.5 4z" fill="currentColor" fill-opacity=".4"/>',
+ironskin:'<path d="M7 3.5h10L21 8l-4 3.5V20.5H7V11.5L3 8z" fill="currentColor" fill-opacity=".3"/><path d="M12 8v9"/>',
+shockwave:'<path d="M2.5 19a9.5 9.5 0 0 1 19 0M6.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/><path d="M12 4v2.5"/>',
+charge:'<path d="M4 4c0 6 3 9 8 9s8-3 8-9"/><path d="M12 13v8M9 17h6"/><path d="M4 4l2 1.5M20 4l-2 1.5"/>',
+/* --- Storm Archer --- */
+arrow:'<path d="M2 12h18"/><path d="M20 12l-5-4.5M20 12l-5 4.5"/><path d="M2 12L.8 8.5M2 12l-1.2 3.5M6 12L4.8 8.5M6 12l-1.2 3.5"/>',
+volley:'<path d="M12 21V6M12 6l-3.2 3.4M12 6l3.2 3.4M5.5 21V11M5.5 11l-2.2 2.4M5.5 11l2.2 2.4M18.5 21V11M18.5 11l-2.2 2.4M18.5 11l2.2 2.4"/>',
+eagle:'<path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.3" fill="currentColor" fill-opacity=".5"/>',
+rain:'<path d="M7 11a4 4 0 0 1-.6-7.9A5.2 5.2 0 0 1 16.5 4a3.6 3.6 0 0 1 .5 7z"/><path d="M8 14.5l-2 6M13 14.5l-2 6M18 14.5l-2 6"/>',
+blast:'<path d="M12 1.5l2.2 6 5.8-2.4-2.6 5.8 5.2 3.1-6 1.3.6 6.2-5.2-3.6L6.8 21l.7-6.2-6-1.4L6.7 10 4 4.2l5.8 2.4z" fill="currentColor" fill-opacity=".4"/>',
+gale:'<path d="M2 8h11a3 3 0 1 0-3-3M2 13h15a3 3 0 1 1-3 3M2 18h7"/>',
+trap:'<path d="M3 15a9 4 0 0 0 18 0"/><path d="M3 15l2.5-6 2.7 6 3.8-6 3.8 6 2.7-6 2.5 6"/>',
+stormarrow:'<path d="M3 21L19 5"/><path d="M19 5h-6.5M19 5v6.5"/><path d="M5 8l4-1-2 4 3.5-1L8 16" />',
+/* --- Spirit Summoner --- */
+wolves:'<path d="M4.5 3l3.7 4.5h7.6L19.5 3v10c0 4.5-3.4 8-7.5 8s-7.5-3.5-7.5-8z" fill="currentColor" fill-opacity=".25"/><circle cx="9" cy="12" r="1.3" fill="currentColor"/><circle cx="15" cy="12" r="1.3" fill="currentColor"/><path d="M10.5 17l1.5 1.2 1.5-1.2"/>',
+soulburst:'<circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity=".5"/><circle cx="12" cy="12" r="8.5" stroke-dasharray="3 3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>',
+soulheal:'<path d="M12 21S3.5 15.5 3.5 9.3A4.8 4.8 0 0 1 12 6.8 4.8 4.8 0 0 1 20.5 9.3C20.5 15.5 12 21 12 21z"/><path d="M12 10v5M9.5 12.5h5"/>',
+wail:'<path d="M5.5 21V10.5a6.5 6.5 0 0 1 13 0V21l-2.2-2.2L14 21l-2-2.2L10 21l-1.8-2.2z"/><circle cx="9.5" cy="10" r="1.2" fill="currentColor"/><circle cx="14.5" cy="10" r="1.2" fill="currentColor"/><ellipse cx="12" cy="14.5" rx="1.4" ry="1.8"/>',
+chains:'<rect x="2.5" y="8" width="11" height="8" rx="4"/><rect x="10.5" y="8" width="11" height="8" rx="4"/>',
+harvest:'<path d="M5 22L16 7"/><path d="M16 7c2.5-3 5-3.5 6.5-2.5-.8 4.5-4.5 7-9 6.5" fill="currentColor" fill-opacity=".4"/>',
+guardian:'<circle cx="12" cy="9" r="3.2"/><path d="M5.5 21c0-4.5 3-7 6.5-7s6.5 2.5 6.5 7z"/><ellipse cx="12" cy="3.3" rx="3.5" ry="1.1"/>',
+spiritbomb:'<circle cx="12" cy="11" r="6" fill="currentColor" fill-opacity=".45"/><path d="M12 2.5v2.2M3.5 11h2.2M18.3 11h2.2M6 5l1.6 1.6M18 5l-1.6 1.6"/><path d="M7 21c1.5-2 3.2-3 5-3s3.5 1 5 3"/>',
+/* --- signature skills --- */
+sg_c25:'<path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z" fill="currentColor" fill-opacity=".4"/>',
+sg_c50:'<path d="M12 2.5l7.5 4.2v10.6L12 21.5l-7.5-4.2V6.7z"/><path d="M8.5 15.5l7-7M8.5 11.5l3.5-3.5"/>',
+sg_c100:'<path d="M12 18c-3.5-1.5-5.5-5-5-9 3 .5 4.5 2.5 5 5 .5-2.5 2-4.5 5-5 .5 4-1.5 7.5-5 9z" fill="currentColor" fill-opacity=".4"/><circle cx="12" cy="12" r="10" stroke-dasharray="1.5 3"/><path d="M12 18v3"/>',
+sg_c200:'<path d="M5.5 2.5v11M3 13.5h5L5.5 20zM12 4.5v11M9.5 15.5h5L12 22zM18.5 2.5v11M16 13.5h5L18.5 20z"/>',
+sg_c300:'<path d="M12 3l8.5 6.2-3.2 10H6.7L3.5 9.2z"/><circle cx="12" cy="3" r="1.6" fill="currentColor"/><circle cx="20.5" cy="9.2" r="1.6" fill="currentColor"/><circle cx="17.3" cy="19.2" r="1.6" fill="currentColor"/><circle cx="6.7" cy="19.2" r="1.6" fill="currentColor"/><circle cx="3.5" cy="9.2" r="1.6" fill="currentColor"/>',
+sg_c500:'<circle cx="8.5" cy="7.5" r="2.6"/><path d="M3.5 20c0-4.5 2.2-6.5 5-6.5s5 2 5 6.5z"/><circle cx="16.5" cy="7.5" r="2.6" stroke-dasharray="2 2"/><path d="M13 14.2c.8-.5 1.7-.7 2.5-.7 2.7 0 5 2 5 6.5h-4.5" stroke-dasharray="2 2"/>',
+sg_c750:'<path d="M12 2v14M9 16h6M12 16v6"/><path d="M12 2l-2 4.5M12 2l2 4.5"/><path d="M4 5l3.5 3M20 5l-3.5 3M3 11h3M18 11h3"/>',
+sg_c1000:'<circle cx="12" cy="12" r="10.5"/><path d="M7 11.5l5-5 5 5M7 17l5-5 5 5"/>',
+sg_n25:'<path d="M3 7l5 5-5 5" opacity=".3"/><path d="M9.5 7l5 5-5 5" opacity=".6"/><path d="M16 7l5 5-5 5"/>',
+sg_n50:'<path d="M12 20.5S3.5 15 3.5 9a4.5 4.5 0 0 1 8.5-2A4.5 4.5 0 0 1 20.5 9c0 6-8.5 11.5-8.5 11.5z"/><path d="M4 4l16 16"/>',
+sg_n100:'<circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/>',
+sg_n200:'<path d="M12 21L3.5 5M12 21L8 3M12 21V2M12 21L16 3M12 21L20.5 5"/><circle cx="3.5" cy="5" r=".9" fill="currentColor"/><circle cx="12" cy="2" r=".9" fill="currentColor"/><circle cx="20.5" cy="5" r=".9" fill="currentColor"/>',
+sg_n300:'<circle cx="12" cy="6" r="3.2"/><circle cx="18" cy="10.5" r="3.2"/><circle cx="15.7" cy="17.5" r="3.2"/><circle cx="8.3" cy="17.5" r="3.2"/><circle cx="6" cy="10.5" r="3.2"/><circle cx="12" cy="12.5" r="1.8" fill="currentColor"/>',
+sg_n500:'<path d="M12 2L5 12v9l3-2 2 2 2-3 2 3 2-2 3 2v-9z" fill="currentColor" fill-opacity=".25"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/>',
+sg_n750:'<circle cx="12" cy="12" r="5" fill="currentColor" fill-opacity=".5"/><path d="M3.5 3.5l17 17M20.5 3.5l-17 17"/>',
+sg_n1000:'<path d="M3.5 3.5l5 5M8.5 3.5l-5 5M15.5 3.5l5 5M20.5 3.5l-5 5M3.5 15.5l5 5M8.5 15.5l-5 5M15.5 15.5l5 5M20.5 15.5l-5 5"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/>',
+sg_g25:'<path d="M5.5 18.5L3.5 12l5-7 7.5 1.5 4.5 6-3 7z" fill="currentColor" fill-opacity=".3"/><path d="M8.5 5l2.5 6 5-5M11 11l-1.5 7M11 11l9.5 1.5"/>',
+sg_g50:'<path d="M4 21C4 10 12 14 12 3"/><path d="M6.5 14.5l-3-1M8.5 12l3-1.2M12 9l-3-2.2M12 6l3.5-.5M5 18.5l-2.5.5M20 8l-4 2M20 14l-4 1"/>',
+sg_g100:'<path d="M3 9h10V4.5l8.5 7.5-8.5 7.5V15H3z" fill="currentColor" fill-opacity=".4"/>',
+sg_g200:'<path d="M8 3h8M9 3c-.5 3-4 4.5-4 9.5C5 17.5 8 21.5 12 21.5s7-4 7-9C19 7.5 15.5 6 15 3"/><circle cx="12" cy="13.5" r="3"/>',
+sg_g300:'<path d="M6 21.5V2.5"/><path d="M6 3.5h13l-3.5 4.5 3.5 4.5H6z" fill="currentColor" fill-opacity=".4"/>',
+sg_g500:'<path d="M1.5 20.5L9 7.5l4 6.5 3-4.5 6.5 11z" fill="currentColor" fill-opacity=".3"/><path d="M12 2v3.5M7.5 3.5l1.2 2.5M16.5 3.5l-1.2 2.5"/>',
+sg_g750:'<path d="M5.5 21V9.5L4 4h4v2.5h2V4h4v2.5h2V4h4l-1.5 5.5V21z" fill="currentColor" fill-opacity=".25"/><path d="M10 21v-4.5a2 2 0 0 1 4 0V21"/>',
+sg_g1000:'<path d="M3 18.5L5 7l4.5 5L12 4l2.5 8L19 7l2 11.5z" fill="currentColor" fill-opacity=".35"/><path d="M4 21.5h16"/>',
+sg_a25:'<path d="M3 20.5C3 11 9 4.5 21 4c-.5 8-5 12.5-12.5 12.5z" fill="currentColor" fill-opacity=".3"/><path d="M3 20.5L15 9M10 15l5-.5M12.5 11.5l4.5-.5"/>',
+sg_a50:'<path d="M12 2c1.5 4 6.5 6.5 6.5 12a6.5 6.5 0 0 1-13 0c0-3 1.5-4.5 3-6.5.5 1.5 1.2 2 2.5 2C10 7 10 4.5 12 2z" fill="currentColor" fill-opacity=".4"/><path d="M12 21.5v-5M9.5 14.5L12 12l2.5 2.5"/>',
+sg_a100:'<path d="M5 2.5l3 11M5.5 13.5L4.5 10.5M5.5 13.5L8 11.5M12 2.5l3 11M12.5 13.5l-1-3M12.5 13.5L15 11.5M19 2.5l3 11M19.5 13.5l-1-3M19.5 13.5L22 11.5"/><path d="M3 20h18" stroke-dasharray="2 2.5"/>',
+sg_a200:'<circle cx="12" cy="4.5" r="2.6"/><circle cx="4.5" cy="17.5" r="2.6"/><circle cx="19.5" cy="17.5" r="2.6"/><circle cx="12" cy="13" r="1.6" fill="currentColor"/><path d="M12 7.1V11.5M6.5 16l4-2.2M17.5 16l-4-2.2" stroke-dasharray="1.5 2"/>',
+sg_a300:'<path d="M2.5 19L8.5 6l5 11 3.5-7.5"/><path d="M17 9.5l4.5-5M21.5 4.5h-5M21.5 4.5v5"/><circle cx="8.5" cy="6" r="1.3" fill="currentColor"/><circle cx="13.5" cy="17" r="1.3" fill="currentColor"/>',
+sg_a500:'<circle cx="12" cy="12" r="7.5"/><path d="M12 1.5v6M12 16.5v6M1.5 12h6M16.5 12h6"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>',
+sg_a750:'<path d="M12 2.5l2.8 5.8 6.4.9-4.6 4.5 1.1 6.3L12 17l-5.7 3 1.1-6.3L2.8 9.2l6.4-.9z" fill="currentColor" fill-opacity=".4"/>',
+sg_a1000:'<path d="M3 5h18M5.5 10h13M8.5 15h7M11 20h2"/><path d="M13.5 8l-2 3 3 .5-2 3" />',
+sg_s25:'<path d="M12 1.5V4M9.5 4h5M8.5 6.5h7c1 3.5 1 7.5 0 11h-7c-1-3.5-1-7.5 0-11z"/><path d="M9.5 20h5"/><path d="M12 9.5c1.3 1.8 2 2.6 2 3.8a2 2 0 0 1-4 0c0-1.2.7-2 2-3.8z" fill="currentColor"/>',
+sg_s50:'<path d="M12 21c-3.2 0-5.5-2.2-5.5-4.5 0-3 3-4.5 5.5-4.5s5.5 1.5 5.5 4.5c0 2.3-2.3 4.5-5.5 4.5z" fill="currentColor" fill-opacity=".35"/><circle cx="5" cy="10.5" r="2"/><circle cx="9.5" cy="5.5" r="2"/><circle cx="14.5" cy="5.5" r="2"/><circle cx="19" cy="10.5" r="2"/>',
+sg_s100:'<circle cx="12" cy="3.5" r="1.8"/><circle cx="19.5" cy="7.8" r="1.8"/><circle cx="19.5" cy="16.2" r="1.8"/><circle cx="12" cy="20.5" r="1.8"/><circle cx="4.5" cy="16.2" r="1.8"/><circle cx="4.5" cy="7.8" r="1.8"/><circle cx="12" cy="12" r="2.6" fill="currentColor" fill-opacity=".5"/>',
+sg_s200:'<path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="8"/>',
+sg_s300:'<path d="M9 18V6.5l10-2.2V16"/><circle cx="6.5" cy="18" r="2.8" fill="currentColor" fill-opacity=".5"/><circle cx="16.5" cy="16" r="2.8" fill="currentColor" fill-opacity=".5"/>',
+sg_s500:'<path d="M2.5 14c3-7 6-7 9.5 0s6.5 7 9.5 0"/><circle cx="21.5" cy="14" r="1.5" fill="currentColor"/><path d="M20 11l1.5-3M22.5 12l1.2-2"/><path d="M8 9.5L7 6.5M12 12.2l.5-3.2M16 9.5l1-3"/>',
+sg_s750:'<path d="M7 3l2.5 3.5h5L17 3v7.5c0 3.5-2.3 6-5 6s-5-2.5-5-6z" fill="currentColor" fill-opacity=".3"/><path d="M2.5 9l1.5 2v4.5l2.5 3" opacity=".6"/><path d="M21.5 9L20 11v4.5L17.5 18.5" opacity=".6"/><path d="M12 16.5v5"/>',
+sg_s1000:'<path d="M4.5 21.5V11a7.5 7.5 0 0 1 15 0v10.5z"/><path d="M9 21.5V12.5a3 3 0 0 1 6 0v9"/><path d="M12 2v2M3 4l1.5 1.5M21 4l-1.5 1.5"/>'
+};
+const SKL={pierce:'Pierce',nova:'Nova',mend:'Mend',heal:'Ward',meteor:'Meteor',chain:'Chain',might:'Might',drain:'Drain',fan:'Fan',strike:'Strike',cleave:'Cleave',leap:'Leap',flurry:'Flurry',
+kunai:'Kunai',shadowstep:'Step',venom:'Venom',bladestorm:'Dance',smoke:'Smoke',execute:'Mark',siphon:'Fang',rush:'Rush',
+bash:'Bash',quake:'Quake',bulwark:'Bulwark',roar:'War Cry',counter:'Counter',hammer:'Hammer',ironskin:'Iron',shockwave:'Seismic',charge:'Charge',
+arrow:'Arrow',volley:'Volley',eagle:'Eagle',rain:'Rain',blast:'Explode',gale:'Gale',trap:'Trap',stormarrow:'Storm',
+wolves:'Wolves',soulburst:'Burst',soulheal:'Soul',wail:'Wail',chains:'Chains',harvest:'Harvest',guardian:'Guard',spiritbomb:'Bomb',
+sg_c25:'Breath',sg_c50:'Mirror',sg_c100:'Lotus',sg_c200:'Swords',sg_c300:'Cycle',sg_c500:'Clone',sg_c750:'Split',sg_c1000:'Ascend',
+sg_n25:'Image',sg_n50:'Vampire',sg_n100:'Death',sg_n200:'Needles',sg_n300:'Bloom',sg_n500:'Verdict',sg_n750:'Eclipse',sg_n1000:'Havoc',
+sg_g25:'Stone',sg_g50:'Thorns',sg_g100:'Rush',sg_g200:'Vessel',sg_g300:'Banner',sg_g500:'Crash',sg_g750:'Golems',sg_g1000:'Avatar',
+sg_a25:'Windrun',sg_a50:'Phoenix',sg_a100:'Skyfall',sg_a200:'Traps',sg_a300:'Bounce',sg_a500:'Sniper',sg_a750:'Stars',sg_a1000:'Tempest',
+sg_s25:'Lantern',sg_s50:'Frenzy',sg_s100:'Ghosts',sg_s200:'Web',sg_s300:'Chorus',sg_s500:'Dragon',sg_s750:'Legion',sg_s1000:'Gate'};
+/* skIco(type) -> the skill's SVG icon (inherits the skill colour through currentColor); '' when the type has none (the caller then falls back to the old glyph) */
+const skIco=t=>SKI[t]?'<svg class="ski" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+SKI[t]+'</svg>':'';
 /* ---------- input ---------- */
 const keys={};
 window.addEventListener('keydown',e=>{
@@ -3296,7 +3496,7 @@ function buildBar(){
   for(let i=0;i<NSLOT;i++){const s=SKILLS[EQ[i]],b=document.createElement('button');b.type='button';b.className='sk'+(i>=12?' big':'');
     if(i<12)place(b,SLOTPOS[i][0],SLOTPOS[i][1],40); /* R (12) and T (13) are positioned in CSS, left of the dodge pad */
     if(s)b.style.borderColor=s.col;b.title=(s?s.n:'Empty slot (K to equip)')+' ['+SLOTKEYS[i].toUpperCase()+']';
-    b.innerHTML='<b'+(s?' style="color:'+s.col+'"':'')+'>'+(s?GLYPH[s.t]||'\u2726':'')+'</b><span class="kn">'+SLOTKEYS[i].toUpperCase()+'</span><em class="cdn"></em><i class="cdv"></i>';
+    b.innerHTML='<b'+(s?' style="color:'+s.col+'"':'')+'>'+(s?skIco(s.t)||GLYPH[s.t]||'\u2726':'')+'</b>'+(s&&SKL[s.t]?'<span class="sl">'+SKL[s.t]+'</span>':'')+'<span class="kn">'+SLOTKEYS[i].toUpperCase()+'</span><em class="cdn"></em><i class="cdv"></i>';if(s&&SKL[s.t])b.classList.add('lb'); /* v5_360 unique icon + name label at the bottom */
     /* tap = cast, drag upward = toggle auto-cast for this slot */
     b.addEventListener('pointerdown',e=>{
       e.preventDefault();const sy=e.clientY,u=parseFloat(getComputedStyle($('hud')).getPropertyValue('--u'))||1,thr=Math.max(14,14*u);let flipped=false;
@@ -3326,7 +3526,7 @@ function renderBook(){
   const rows=$('bookRows');rows.innerHTML='';
   SKILLS.map((s,id)=>[s,id]).filter(x=>(x[0].c||0)===P.cls).sort((a,b)=>(P.lvl>=b[0].lv)-(P.lvl>=a[0].lv)||a[1]-b[1]).forEach(([s,id])=>{const ok=P.lvl>=s.lv,row=document.createElement('div');row.className='row'+(ok?'':' lock');
     if(s.sig)row.classList.add('sig');
-    const nm=document.createElement('b');nm.style.color=s.col;const ic=document.createElement('span');ic.className='sic';ic.textContent=GLYPH[s.t]||'\u2726';ic.style.color=s.col;ic.style.borderColor=s.col;nm.appendChild(ic);nm.appendChild(document.createTextNode(s.n));if(s.sig){const u=document.createElement('i');u.className='uq';u.textContent='\u2605 UNIQUE';nm.appendChild(u);row.title=(SIGD[s.c].find(y=>y[0]===s.t)||[])[5]||s.n}row.appendChild(nm);
+    const nm=document.createElement('b');nm.style.color=s.col;const ic=document.createElement('span');ic.className='sic';if(skIco(s.t))ic.innerHTML=skIco(s.t);else ic.textContent=GLYPH[s.t]||'\u2726';ic.style.color=s.col;ic.style.borderColor=s.col;nm.appendChild(ic);nm.appendChild(document.createTextNode(s.n));if(s.sig){const u=document.createElement('i');u.className='uq';u.textContent='\u2605 UNIQUE';nm.appendChild(u);row.title=(SIGD[s.c].find(y=>y[0]===s.t)||[])[5]||s.n}row.appendChild(nm);
     const b=document.createElement('button');b.type='button';const sl=EQ.indexOf(id);b.className='btn'+(sl>=0?' on':'');b.textContent=!ok?'Lv '+s.lv:(sl>=0?SLOTKEYS[sl].toUpperCase():'Equip');if(sl>=0)b.title='Equipped in slot '+SLOTKEYS[sl].toUpperCase()+' (click to move to the selected slot)';b.disabled=!ok;b.addEventListener('click',()=>equip(id));row.appendChild(b);
     const sm=document.createElement('small');sm.textContent=TL[s.t]+(s.m?' · '+s.m.toFixed(1)+'x ATK':'')+' · '+skCostLbl(s)+' · '+s.cd+'s cooldown';row.appendChild(sm);rows.appendChild(row)});
 }
@@ -3942,7 +4142,7 @@ function updatePlayer(dt){
     else if(m.isPl&&(!MP||!NET.peers.has(m.id)||!pvpOk(m)))P.target=null; /* v5_158 a player target is only valid while my PvP mode allows it (outside the hub) */
     else if(dist(m.x,m.y,P.x,P.y)>(m.isPl?900:650)){P.target=null}
     else if(moveToward(m.x,m.y,rng?rng*BASIC_STAND:reach-6,dt,speed)===false){/* chasing */}
-    if(P.target&&dist(m.x,m.y,P.x,P.y)<=reach&&P.atkCd<=0){
+    if(P.target&&dist(m.x,m.y,P.x,P.y)<=reach&&P.atkCd<=0&&!(P.atkBlk>0)){ /* v5_362 no normal attack for SKILL_ATK_BLOCK (1 s) after a skill cast starts; it comes back by itself */
       P.face=Math.atan2(m.y-P.y,m.x-P.x);
       const c=rnd()<critChance(),dd=dist(m.x,m.y,P.x,P.y);let d=Math.round(atkVal()*(.9+rnd()*.2)*(c?critMul():1)*(1+babVal()/100));
       if(rng){d=Math.max(1,Math.round(d*(1-BASIC_FALL*clamp(dd/reach,0,1))));{const l=Math.max(.06,dd/BASIC_PSPD);projs.push({x:P.x,y:P.y,vx:Math.cos(P.face)*BASIC_PSPD,vy:Math.sin(P.face)*BASIC_PSPD,life:l,l0:l,dmg:0,hit:new Set(),ang:P.face,col:BASIC_COL[P.cls],cos:true,sc:BASIC_PSC})}} /* ranged normal attack: damage falloff + a visible bolt (v5_343: cosmetic projectile flying to the target, replaces the old 6-spark trail; cos:true = it never hits anything) */
@@ -3981,7 +4181,8 @@ function updatePlayer(dt){
   if(P.cast>0)P.cast-=dt;
   if(P.pend){const q=P.pend;q.t+=dt;if(P.dead>0){P.pend=null;teleClearOwn()}else if(q.t>=q.D){P.pend=null;P.teleOn=q.spec;try{useSkill(q.i,q.auto,true)}finally{P.teleOn=null}}} /* v5_349 second half of a telegraphed cast: the hit, only inside the shown area */
   if(P.skipT>0){P.skipT-=dt;if(P.skipT<=0)P.skipM=null} /* v5_315 */
-  P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);
+  blinkTick(dt); /* v5_363 blink glide + trails */
+  P.dcd=Math.max(0,(P.dcd||0)-dt);P.skLock=Math.max(0,(P.skLock||0)-dt);P.atkBlk=Math.max(0,(P.atkBlk||0)-dt);
   if(P.dashT>0){const e0=1-P.dashT/DASH_T;P.dashT-=dt;const e1=1-Math.max(0,P.dashT)/DASH_T,st=DASH_DIST*(dashEase(e1,P.dg)-dashEase(e0,P.dg));P.x+=P.dvx*st;P.y+=P.dvy*st;P.dgU=e1;
     /* v5_142 dash animation: ghost trail left along the path (fades behind you), streak sparks flung backwards, soft landing ring */
     spark(P.x,P.y,'#bfe9ff',3,18,.5,3.6);spark(P.x,P.y,'#ffffff',1,10,.35,2.4);spark(P.x-P.dvx*18,P.y-P.dvy*18,'#7fc4ff',2,70,.3,2.2);
@@ -4651,6 +4852,7 @@ function drawFx(){
     }
     ctx.strokeStyle=f.col;ctx.lineWidth=4;ctx.beginPath();ctx.arc(f.x+ox,f.y+oy,f.r*(.35+.65*k),0,6.2832);ctx.stroke();
   }
+  drawBlink(ox,oy); /* v5_363 */
   for(const q of parts){
     const k=q.life/q.max;ctx.globalAlpha=Math.min(1,k*1.2);ctx.fillStyle=q.col;
     ctx.beginPath();ctx.arc(q.x+ox,q.y+oy,q.size*(.4+k*.8),0,6.2832);ctx.fill();
@@ -5218,7 +5420,7 @@ function skyHeading(e){const r=cv.getBoundingClientRect(),v=T3.v.set((e.clientX-
 const FXC={};
 function fx3dFrame(dl){
   if(FXC.off||!window.FX3)return;
-  try{FXC.T3=T3;FXC.THREE=THREE;FXC.P=P;FXC.C=C;FXC.gh3=gh3;FXC.dl=dl;FXC.time=time;FXC.projs=projs;FXC.mons=mons;FXC.items=items;FXC.ores=ores;FXC.beams=beams;FXC.fx=fx;FXC.LOW=LOW;FXC.PQ=PQ;FXC.world=curWorld;FXC.LK=LK;FX3.frame(FXC)}
+  try{FXC.T3=T3;FXC.THREE=THREE;FXC.P=P;FXC.C=C;FXC.gh3=gh3;FXC.dl=dl;FXC.time=time;FXC.projs=projs;FXC.mons=mons;FXC.items=items;FXC.ores=ores;FXC.beams=beams;FXC.blk=BLK_TR;FXC.fx=fx;FXC.LOW=LOW;FXC.PQ=PQ;FXC.world=curWorld;FXC.LK=LK;FX3.frame(FXC)}
   catch(e){FXC.off=true;console.warn('FX3 off:',e);try{FX3.dispose(FXC)}catch(_){}}
 }
 /* v5_327 skill cast effects (web/skillfx3d.js): spell sprites + slash meshes. Same safety as FX3: an error only switches this layer off. Off switch: ?skfx=0 or localStorage woa_skfx='0'. */
@@ -5479,7 +5681,7 @@ function hud(){
   st($('viewLb'),MODE3D?'3D':'2D');
   renderOnline();
   if(rsvEl){const ri=P.rsv>=0?P.rsv:P.rsvA,rk=ri>=0?SKILLS[EQ[ri]]:null,key=rk?EQ[ri]+(P.rsv>=0?'m':'a'):'';
-    if(key!==rsvKey){rsvKey=key;rsvEl.hidden=!rk;if(rk){rsvEl.style.borderColor=rk.col;rsvEl.classList.toggle('man',P.rsv>=0);rsvEl.innerHTML='<b style="color:'+rk.col+'">'+(GLYPH[rk.t]||'\u2726')+'</b><u>Reserved</u>'}}} /* v5_189 */
+    if(key!==rsvKey){rsvKey=key;rsvEl.hidden=!rk;if(rk){rsvEl.style.borderColor=rk.col;rsvEl.classList.toggle('man',P.rsv>=0);rsvEl.innerHTML='<b style="color:'+rk.col+'">'+(skIco(rk.t)||GLYPH[rk.t]||'\u2726')+'</b><u>Reserved</u>'}}} /* v5_189 */
   if(sprEl){const vis=P.runT>=SPRINT_SHOW_T||P.sprT>0;if(vis!==sprEl._vis){sprEl._vis=vis;sprEl.style.display=vis?'':'none'}const on=P.sprT>0;if(on!==sprEl._on){sprEl._on=on;sprEl.classList.toggle('on',on)}const t=on?String(Math.ceil(P.sprT)):'';if(t!==sprEl._t){sprEl._t=t;sprEl.children[2].textContent=t}} /* v5_277 */
   skBtns.forEach((b,i)=>{const id=EQ[i],k=SKILLS[id],cd=k?Math.max(0,SCD[id]):0;
     sh(b.lastElementChild,k?(cd/k.cd*100)+'%':'0');
@@ -6143,6 +6345,7 @@ const PEER_DELAY=.2; /* v5_166 was .12 (< 2 updates): any late packet ran the bu
    and only a huge jump (respawn, Home Scroll, world change: > PEER_SNAP) snaps. A standing player that starts moving (first step is short) still does not slide from the old spot. */
 const PEER_BLINK=110,PEER_SNAP=900,PEER_RUN=450,PEER_STILL=70;
 function peerBlinkFx(ox,oy,nx,ny){
+  if(time-blkNetT<.9)return; /* v5_363 the 'bk' message already draws the real trail */
   const d=Math.hypot(nx-ox,ny-oy),col='#c7b8ff';
   if(d<=700)for(let j=0;j<=10;j++)spark(ox+(nx-ox)*j/10,oy+(ny-oy)*j/10,col,2,60,.4,2.4);
   ring(ox,oy,36,col);ring(nx,ny,50,col,'whirl');spark(nx,ny,col,10,200,.4,2.6);
@@ -6208,6 +6411,7 @@ function playFx(m){
       for(const g of an)if(typeof g==='number')projs.push({x,y,vx:Math.cos(g)*520,vy:Math.sin(g)*520,life:.7,l0:.7,dmg:0,hit:new Set(),ang:g,col,cos:true});
       if(q&&typeof an[0]==='number'){q.face=an[0];q.swing=.2}
       break}
+    case 'bk':blinkRemote(m.p,col);break; /* v5_363 another player's blink trail */
     case 'ri':ring(x,y,clamp(+m.r||100,20,400),col,m.q==='whirl'?'whirl':0);if(m.s)spark(x,y,col,18,240,.5,2.6);break;
     case 'mt':{const r=clamp(+m.r||110,20,400);ring(x,y,r,col);ring(x,y,r*.6,col);delayed.push({t:.7,f:()=>{ring(x,y,r,col,'whirl');spark(x,y,col,30,300,.7,3.2)}});break}
     case 'ch':{

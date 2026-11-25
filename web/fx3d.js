@@ -180,7 +180,7 @@ function C3(hex){let c=S.cc[hex];if(!c)c=S.cc[hex]=new S.T.Color(hex);return c}
 function uc(v){return {value:v}}
 function build(c){
   const T=c.THREE,sc=c.T3.sc,LOW=c.LOW,oct=LOW?3:4;
-  S={T,sc,n:LOW?10:36,pool:[],bm:[],cc:{},world:-1,bodies:[],mist:[],met:[],hor:new T.Color(),top:new T.Color(),mid:new T.Color(),tmp:new T.Color(),tmp2:new T.Color(),ccol:new T.Color(),
+  S={T,sc,n:LOW?16:56,pool:[],bm:[],cc:{},world:-1,bodies:[],mist:[],met:[],hor:new T.Color(),top:new T.Color(),mid:new T.Color(),tmp:new T.Color(),tmp2:new T.Color(),ccol:new T.Color(),
      sunDir:new T.Vector3(0,1,0),dirV:new T.Vector3(),nV:new T.Vector3(),rV:new T.Vector3(),uV:new T.Vector3(),mat:new T.Matrix4(),UP:new T.Vector3(0,1,0),
      lastT:0,nf:5,fl:0,fq:[],white:new T.Color(1,1,1),mr:7};
   const sky=new T.Group();sky.renderOrder=-1000;
@@ -308,6 +308,12 @@ function frame(c){
   const put=(x,y,z,size,col,op)=>{if(n>=lim||op<.03)return;const s=S.pool[n]||sprite();n++;s.visible=true;s.position.set(x,y,z);s.scale.set(size,size,1);
     if(s.userData.c!==col){s.userData.c=col;s.material.color.set(col)}s.material.opacity=op>1?1:op};
   const near=(o)=>Math.abs(o.x-P.x)<R&&Math.abs(o.y-P.y)<R;
+  for(const t of (c.blk||[])){ /* v5_363 flash blink trail: a row of glow sprites from the tail to the head, plus a white flash at the head */
+    const al=t.al;if(al<=.03)continue;const cnt=LOW?3:7;
+    for(let i=0;i<cnt;i++){const f=cnt>1?i/(cnt-1):1,q=t.tp+(t.hp-t.tp)*f,x=t.sx+(t.ex-t.sx)*q,y=t.sy+(t.ey-t.sy)*q;put(x-C,gh(x,y)+30,y-C,(70+90*f)*(.6+.4*al),t.col,.6*al*(.3+.7*f))}
+    if(t.t<t.dur+.12){const hx=t.sx+(t.ex-t.sx)*t.hp,hy=t.sy+(t.ey-t.sy)*t.hp;put(hx-C,gh(hx,hy)+30,hy-C,190,'#ffffff',.8*al)}
+    if(t.t<.2)put(t.sx-C,gh(t.sx,t.sy)+30,t.sy-C,170,t.col,.7*(1-t.t/.2));
+  }
   for(const p of c.projs){if(near(p))put(p.x-C,gh(p.x,p.y)+22,p.y-C,90,p.col||'#b4dcff',.6)}
   for(const m of c.mons){if(m.boss&&!m.dead&&near(m))put(m.x-C,gh(m.x,m.y)+(m.r||30)*1.1,m.y-C,(m.r||30)*6,'#ff5a3c',.22+.18*night)}
   if(!LOW){
