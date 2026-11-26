@@ -401,6 +401,31 @@ html.phone #lvUp{padding:10px 24px}html.phone #lvUp b{font-size:24px}html.phone 
 html.phone #party .pact button{min-width:26px;min-height:22px}
 #party .pb{height:calc(6*var(--u));background:rgba(33,7,8,.6);border-radius:calc(2*var(--u));overflow:hidden}
 #party .pb i{display:block;height:100%;background:linear-gradient(#e24a45,#a30f14)}
+#trInv{position:absolute;left:50%;top:calc(96*var(--u));transform:translateX(-50%);padding:calc(8*var(--u)) calc(12*var(--u));display:flex;align-items:center;gap:calc(10*var(--u));font-size:calc(12*var(--u));white-space:nowrap;pointer-events:auto;z-index:6}
+#trInv[hidden]{display:none}
+#trInv b{color:var(--gold)}
+#trInv button{font:700 calc(11*var(--u)) var(--body);padding:calc(4*var(--u)) calc(10*var(--u));border-radius:calc(6*var(--u));background:transparent}
+#trInv .yes{border:1px solid var(--jade);color:var(--jade)}
+#trInv .no{border:1px solid rgba(217,80,63,.7);color:#ff9a8a}
+/* v5_364 trade window + market board */
+.trwin{width:min(640px,100%);max-height:100%;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:12px;background:linear-gradient(#0d1c36,#08111f);border:1px solid #2a4a7a}
+.trwrap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.trcol{background:rgba(255,255,255,.04);border:1px solid #2a4a7a;border-radius:8px;padding:8px;min-width:0}
+.trcol.me{border-color:#e3b559}
+.trcol h3{margin:0 0 6px;font-size:14px;color:#e3b559}
+.trit{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.08);margin:3px 0;font-size:12px}
+.trit.click{cursor:pointer}.trit.click:hover,.trit.sel{background:rgba(227,181,89,.16);border-color:#e3b559}
+.trin{display:flex;flex-direction:column;min-width:0}.trin small{color:#9fb0c0;font-size:11px;white-space:normal}.trin .trsub{color:#8d9aa2}
+.trempty{color:#8d9aa2;font-size:12px;padding:6px}
+.trline{font-size:12px;margin:3px 0;display:flex;align-items:center;gap:6px}
+.tram{font-size:12px;margin:4px 0;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.tram input[type=number]{width:96px;background:#0a1220;color:#fff;border:1px solid #2a4a7a;border-radius:5px;padding:3px 5px}
+.tram select,.mkfilter select,.mkfilter input{background:#0a1220;color:#fff;border:1px solid #2a4a7a;border-radius:5px;padding:3px 5px;font-size:12px;max-width:100%}
+.trpick,.mklist{max-height:230px;overflow:auto;margin-top:4px}
+.trstat{text-align:center;font-size:12px;color:#e3b559}
+.mkfilter{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.btn.sm{padding:2px 8px;font-size:11px}
+@media (max-width:560px){.trwrap{grid-template-columns:1fr}}
 #pinv{position:absolute;left:50%;top:calc(66*var(--u));transform:translateX(-50%);padding:calc(8*var(--u)) calc(12*var(--u));display:flex;align-items:center;gap:calc(10*var(--u));font-size:calc(12*var(--u));white-space:nowrap;pointer-events:auto;z-index:6}
 #pinv b{color:var(--gold)}
 #pinv button{font:700 calc(11*var(--u)) var(--body);padding:calc(4*var(--u)) calc(10*var(--u));border-radius:calc(6*var(--u));background:transparent}
@@ -1151,6 +1176,7 @@ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padd
     <div id="pgear" class="panel" hidden></div>
     <div id="mgear" class="panel" hidden></div>
     <div id="finv" class="panel" hidden><span id="finvT"></span><button class="yes" id="finvY" type="button">Accept</button><button class="no" id="finvN" type="button">Decline</button></div>
+    <div id="trInv" class="panel" hidden><span id="trInvT"></span><button class="yes" id="trInvY" type="button">Accept</button><button class="no" id="trInvN" type="button">Decline</button></div>
     <div id="pinv" class="panel" hidden><span id="pinvT"></span><button class="yes" id="pinvY" type="button">Accept</button><button class="no" id="pinvN" type="button">Decline</button></div>
 
     <!-- top-centre: target frame + zone banner -->
@@ -1172,6 +1198,8 @@ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padd
       <button class="ic" id="bMap" type="button" title="Minimap (M)">&#9906;<span class="lb">Map</span></button>
       <button class="ic" id="bSkin" type="button" title="Wardrobe: skin, hair, outfit, headwear, aura (L)"><span>&#9786;</span><span class="lb">Look</span></button>
       <button class="ic" id="bNest" type="button" title="Pet Nest (U): hatch eggs and combine pets"><span>&#129370;</span><span class="lb">Nest</span></button>
+      <button class="ic" id="bTrade" type="button" title="Trade with another player (or type /trade name)"><span>&#8644;</span><span class="lb">Trade</span></button>
+      <button class="ic" id="bMkt" type="button" title="Market board: buy and sell gear for coins (or type /market)"><span>&#9878;</span><span class="lb">Market</span></button>
       <button class="ic" id="bBell" type="button" hidden>&#128276;</button>
       </div>
       <button class="ic" id="bTrT" type="button" title="Hide / show the buttons" aria-label="Hide / show the buttons" aria-expanded="true"><span>&#8250;</span></button>
@@ -1359,6 +1387,22 @@ html.phone #nest .nesttabs .btn,html.phone #nest .nbtns .btn{font-size:12px;padd
       </div>
       <div id="whInfo"></div>
       <div class="bagbtns"><button class="btn pri" id="whAll" type="button" title="Move every spare gear piece from the bag to the warehouse">Store all spare gear</button><button class="btn" id="whClose" type="button">Close</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="trade" hidden>
+    <div class="card panel trwin">
+      <div class="bagtop"><h2>Trade</h2><span id="trSub"></span></div>
+      <div id="trBody"></div>
+      <div class="bagbtns"><button class="btn" id="trClose" type="button">Close</button></div>
+    </div>
+  </div>
+
+  <div class="modal" id="mkt" hidden>
+    <div class="card panel trwin">
+      <div class="bagtop"><h2>Market board</h2><span>coins only, no fees</span></div>
+      <div id="mkBody"></div>
+      <div class="bagbtns"><button class="btn" id="mkClose" type="button">Close</button></div>
     </div>
   </div>
 
