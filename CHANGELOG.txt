@@ -1,3 +1,27 @@
+v5_367  FIX (properly): sale coins arrived in the bag AND again from the delivery box
+  - Every payout (sale coins, ore, eggs, pets) in the delivery box is now its own numbered entry, like an item. The client remembers the numbers it has collected and never collects one twice, and the server removes entries by number, so a lost, repeated or late message can no longer pay twice. Before, coins were one running total that the server only reduced if the "I took them" message arrived and was understood.
+  - Also: the client now sends that message even if saving the game throws an error.
+  - Files: trade.go (rebuild the server; the old market.json is still read), web-src/client/09_trade_market.js, web/game.js rebuilt.
+
+v5_366  FIX: coins from a sale arrived in the bag AND stayed in the delivery box (paid twice)
+  - Cause: the server rate limit (150 ms) silently dropped the client's "ack" (I took it) when it came right after another market message, so the box was never emptied and the next refresh paid it out again. The same limit could swallow a buy, a sell or a trade hand-over without any answer.
+  - Server (rebuild needed): "ack" is never rate limited; buy / sell inside the limit now get an error answer (coins refunded / item returned to the box); trade messages are only limited for invitations.
+  - Client: an ack that gets no answer for 5 s is sent again (up to 4 times) instead of collecting the box a second time.
+  - Files: trade.go, web-src/client/09_trade_market.js, web/game.js rebuilt.
+
+v5_365  FIX: a cancelled trade (or any box refresh) could add items from the previous transaction again
+  - Cause: the delivery box is asked for several times (after a trade ends, after market actions, every 45 s). A box reply that was already on its way could arrive after the items were collected but before the server had processed the "taken" message, so the same items were collected twice.
+  - Fix, client: every collected box item id is remembered and never added twice; while a "taken" message is waiting for the server's answer, older box replies are ignored. Fix, server: the answer to that message is flagged (ak). Files: trade.go, web-src/client/09_trade_market.js, web/game.js rebuilt. The server must be rebuilt.
+
+v5_364  TRADING: trade window + market board + delivery box   (NEEDS A SERVER REBUILD: new file trade.go, small edits in game.go / main.go / datadir.go)
+  - TRADE WINDOW: tap a player > Trade (or /trade name, or the Trade button). The other player accepts at the top of the screen. Both build an offer (spare gear, coins, ore, pet eggs, pets), check each other's, and press Ready. Any change clears both Ready marks. When both are ready each side hands its offer to the server and the server delivers it to the other player.
+  - MARKET BOARD: Market button or /market. Browse (search, rarity, sort), Sell (pick a gear piece, set a coin price, 6 / 24 / 72 h), My listings (cancel), Delivery box. No fees. Max 20 listings per player. Global (all worlds).
+  - DELIVERY BOX (data/market.json on the server): sold items, sale coins, cancelled / expired listings and finished trades all arrive here and are collected automatically (the client saves first, then tells the server what it took). If the bag is full the items wait in the box.
+  - Failed or interrupted things are returned to their owner's box: a cancelled / timed-out trade, a disconnect, a rejected listing. A failed purchase refunds the coins.
+  - Not tradable: equipped gear, potions, warehouse, premium gold (stored with the account), and any item flagged bound (it.bd; nothing is bound in the game yet).
+  - Files: trade.go (new), game.go, main.go, datadir.go, web-src/client/09_trade_market.js (new), 08_network_social.js, 09_chat_ui.js, 07_hud.js, web/index.html, web/game.js rebuilt.
+  - NOTE: the Go part could not be compiled where it was written. Build it once (build.bat / go build) and send any compiler message back.
+
 v5_363  FLASH BLINK: smooth glide + trails for every blink skill
   - Shadow Step, Leaping Slash, Umbral Rush, Iron Charge, Gale Step, Reaper's Verdict, Shadowless Massacre and Juggernaut Rush no longer pop you to the new spot. The skill still decides the hit and the destination at once; at the end of the skill blinkStart() puts you back on the start and glides you there in .13-.22 s (ease in/out, ~45-90 px per frame at 60 fps).
   - Trail: wide glowing streak with a white core, 4 crackling gold/white lightning bolts with forks, speed lines, 6 smeared afterimages along the path, flashes at both ends, rings and a spray of sparks. Fades in ~.6 s.

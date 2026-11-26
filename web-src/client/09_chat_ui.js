@@ -327,6 +327,8 @@ function cpSend(){
   if(/^\/(w|pm|msg|tell|whisper)(\s|$)/i.test(t)&&!online){say('Private messages need the multiplayer server.','#8d9aa2');inp.value='';return}
   const fc=t.match(/^\/(friend|friends|unfriend|addfriend)(?:\s+(.*))?$/i);
   if(fc){inp.value='';frCmd(fc[1].toLowerCase()==='addfriend'?'friend':fc[1].toLowerCase(),fc[2]);return}
+  const tc=t.match(/^\/(trade|market|mk)(?:\s+(.*))?$/i); /* v5_364 */
+  if(tc){inp.value='';if(tc[1].toLowerCase()==='trade')tradeRequest((tc[2]||'').trim().replace(/^"(.*)"$/,'$1'));else mkOpen();return}
   const pc=t.match(/^\/(invite|accept|decline|leave|kick|leader|promote|disband|party|p)(?:\s+(.*))?$/i);
   if(pc){inp.value='';partyCmd(pc[1].toLowerCase(),(pc[2]||'').trim().replace(/^"(.*)"$/,'$1'));return}
   const emc=t.match(/^\/(?:emote\s+|e\s+)?([a-z]+)\s*$/i);
@@ -379,6 +381,8 @@ function cpQuick(){
   for(const t of ['Anyone want to party?','Boss spotted!','Help, I need backup!','Thanks!','GG','Brb'])cpItem(p,t,undefined,()=>{cpPopHide();if(CP.cur==='sys')cpSwitch('world');$('cpIn').value=t;cpSend()});
   p.appendChild(cpEl('h5','','Commands'));
   cpItem(p,'/w name message','Whisper',()=>{cpPopHide();if(CP.cur==='sys')cpSwitch('world');const i=$('cpIn');i.value='/w ';i.focus()});
+  cpItem(p,'/trade name','Trade',()=>{cpPopHide();if(CP.cur==='sys')cpSwitch('world');const i=$('cpIn');i.value='/trade ';i.focus()});
+  cpItem(p,'/market','Market board',()=>{cpPopHide();mkOpen()});
   cpItem(p,'/r message','Reply',()=>{cpPopHide();if(CP.cur==='sys')cpSwitch('world');const i=$('cpIn');i.value='/r ';i.focus()});
 }
 /* clicking a shared "[Location] World (x, y)" message walks the character there (same world only) */

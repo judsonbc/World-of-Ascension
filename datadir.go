@@ -17,6 +17,7 @@ var (
 	couponsFile = "data/coupons.json"
 	friendsFile = "data/friends.json"
 	offlineFile = "data/whispers.json"
+	marketFile  = "data/market.json" // v5_364 market listings + delivery boxes (trade.go)
 )
 
 var legacyDataNames = []string{"users.json", "users.json.bak", "secret.key", "coupons.json", "friends.json", "whispers.json"}
@@ -37,6 +38,7 @@ func initDataDir(dir string) {
 	couponsFile = filepath.Join(dir, "coupons.json")
 	friendsFile = filepath.Join(dir, "friends.json")
 	offlineFile = filepath.Join(dir, "whispers.json")
+	marketFile = filepath.Join(dir, "market.json")
 	// one-time move of the old layout: files that sit next to the program (or next to the exe) are COPIED into the data folder
 	// when the data folder does not have them yet. The old files are left where they are.
 	srcs := []string{"."}

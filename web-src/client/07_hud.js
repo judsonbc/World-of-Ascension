@@ -180,7 +180,7 @@ window.addEventListener('resize',fitHud);fitHud();
 
 /* v5_240 CLOSE (X) BUTTONS: every pop-up window gets a round X at its top right. Windows (modals) click their own Close / Cancel button, so the same cleanup runs. */
 (function(){
-  const MAP={forge:'forgeClose',worlds:'worldClose',wardrobe:'wdClose',book:'bookClose',bag:'bagClose',wh:'whClose',nest:'nestClose',shop:'shopClose',buyDlg:'buyCancel',xcDlg:'xcCancel'};
+  const MAP={forge:'forgeClose',worlds:'worldClose',wardrobe:'wdClose',book:'bookClose',bag:'bagClose',wh:'whClose',nest:'nestClose',trade:'trClose',mkt:'mkClose',shop:'shopClose',buyDlg:'buyCancel',xcDlg:'xcCancel'};
   for(const id in MAP){
     const m=$(id),c=m&&m.querySelector('.card');if(!c)continue;
     const x=document.createElement('button');x.type='button';x.className='wx';x.textContent='\u2715';x.title='Close';x.setAttribute('aria-label','Close');

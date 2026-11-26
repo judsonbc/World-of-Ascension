@@ -365,6 +365,7 @@ function tgActRender(t){
   if(!inP)mk('\u2694 Attack','atk',()=>startPvp(t));
   if(!inP&&PARTY.m.length<4)mk('\uFF0B Party','',()=>partyCmd('invite',t.name));
   if(!isF&&!sent)mk('\u2665 Friend','',()=>frCmd('friend',t.name));
+  mk('\u21C4 Trade','',()=>tradeRequest(t.name)); /* v5_364 */
   mk('\u{1F4AC} Whisper','',()=>whisperTo(t.name));
   mk('\u2715','x',()=>{P.sel=null;P.target=null});
 }
@@ -504,6 +505,8 @@ function netMsg(m){
       if(q)setBubble(q,txt,'#8ff0b0',false);break}
     case 'pinv':pinvShow(m.n,m.s);break;
     case 'fl':setFriends(m);break;
+    case 'trade':tradeNet(m);break; /* v5_364 */
+    case 'mkt':mktNet(m);break; /* v5_364 */
     case 'freq':finvShow(m.n);break;
     case 'cmd':runCmd(String(m.m));break;
     case 'chat':{

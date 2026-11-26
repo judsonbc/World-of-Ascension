@@ -322,6 +322,11 @@ type Player struct {
 	pbuffAt float64 // v5_159 hub clock of the last shared party buff
 
 	party *Party       // nil when not in a party (see party.go)
+
+	trade    *Trade    // v5_364 the open direct trade window, if any (see trade.go)
+	tinvFrom *Player   // v5_364 who invited us to trade (until tinvT + tradeReqTTL)
+	tinvT    float64
+	lastTr   time.Time // last trade / market message (rate limit)
 	inv   *partyInvite // pending party invite, if any
 }
 
@@ -879,6 +884,9 @@ func (h *Hub) run() {
 func (h *Hub) step(dt float64, tick int) {
 	tm := h.clock()
 	extra := tick%tickHz == 0
+	if extra {
+		h.tradeTick(tm) // v5_364
+	}
 	for _, r := range h.realms {
 		for _, p := range r.players {
 			p.tokens = math.Min(60, p.tokens+40*dt)
@@ -1022,6 +1030,7 @@ func (h *Hub) onLeave(p *Player) {
 	h.partyDrop(p) // v5_316 keeps the party seat for partyGraceSecs instead of leaving the party at once
 	p.inv = nil
 	p.gone = true
+	h.tradeLeave(p) // v5_364 an open trade ends, what was handed in goes back to its owner's box
 	delete(h.players, p.id)
 	h.friendOffline(p)
 	close(p.out)
@@ -1096,6 +1105,7 @@ type inMsg struct {
 	Tx   string  `json:"tx"`
 	Tok  string  `json:"token"`
 	Sid  string  `json:"sid"` // v5_186 page id (see accounts.go sidIsOwner)
+	Tr   json.RawMessage `json:"tr"` // v5_364 trade / market payload (see trade.go)
 }
 
 func cleanName(s string) string {
@@ -1377,6 +1387,10 @@ func (h *Hub) onMsg(p *Player, raw []byte) {
 		h.onParty(p, &in)
 	case "friend":
 		h.onFriend(p, &in)
+	case "trade": // v5_364
+		h.onTrade(p, &in)
+	case "mkt": // v5_364
+		h.onMarket(p, &in)
 	case "pg":
 		// latency probe: echo the client's timestamp straight back
 		p.send([]byte(`{"t":"pg","i":` + itoa(in.I) + `}`))

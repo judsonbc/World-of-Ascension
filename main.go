@@ -102,6 +102,7 @@ func main() {
 	}
 	offl = loadOffline()
 	frs = loadFriends()
+	mkt = loadMarket() // v5_364
 	hub := newHub()
 	theHub = hub
 	go hub.run()
